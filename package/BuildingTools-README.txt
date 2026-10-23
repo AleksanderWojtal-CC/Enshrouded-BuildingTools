@@ -1,4 +1,4 @@
-Enshrouded Building Tools 0.13.2 (single player)
+Enshrouded Building Tools 0.13.3 (single player)
 ==============================================
 
 Files in the game folder

@@ -19,7 +19,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.13.2"
+#define MOD_VERSION "0.13.3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1034,6 +1034,22 @@ static bool aim_lookup(const CursorXf* place, uint32_t shape, CursorXf* out, con
         if (now - r.tick > 1500) continue;
         if (r.shape == shape && !memcmp(r.place, place->pos, sizeof(r.place))) { *out = r.aim; *how = "click record"; return true; }
     }
+    // The client skips its own placement prediction when its ghost is blocked (e.g. a
+    // big shape that overlaps blocks next to the aimed surface), so neither match above
+    // exists. The client cursor component still holds the live aim: accept it when it
+    // is close to the server's place cursor (the ghost sits next to the aimed shape).
+    if (c && readable(c + 0x300, 0x70) && !zero_pos(*(CursorXf*)(c + 0x338))) {
+        const CursorXf* a = (const CursorXf*)(c + 0x338);
+        int64_t lim = (int64_t)6 << 32;                       // 6 m
+        bool close = true;
+        for (int k = 0; k < 3; k++) { int64_t d = a->pos[k] - place->pos[k]; if (d < -lim || d > lim) close = false; }
+        if (close) { *out = *a; *how = "client cursor (near)"; return true; }
+    }
+    if (c && readable(c + 0x300, 0x70)) {
+        const CursorXf* cp = (const CursorXf*)(c + 0x300); const CursorXf* ca = (const CursorXf*)(c + 0x338);
+        LOG(.str("  aim lookup failed: client place (").fix(cp->pos[0]).c(',').fix(cp->pos[1]).c(',').fix(cp->pos[2])
+            .str(") client aim (").fix(ca->pos[0]).c(',').fix(ca->pos[1]).c(',').fix(ca->pos[2]).c(')'));
+    } else LOG(.str("  aim lookup failed: no client cursor known yet"));
     return false;
 }
 
