@@ -1,0 +1,54 @@
+name: Repair releases
+
+# One-off maintenance after the commit history was rewritten (author emails
+# anonymised): every release whose tag points to a commit that is no longer on
+# main is deleted and published again from the matching commit on main.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang lld mingw-w64-x86-64-dev zip
+      - name: Re-publish releases from rewritten history
+        run: |
+          git fetch --tags --force
+          for tag in $(gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName -q '.[].tagName'); do
+            sha=$(git rev-list -n 1 "$tag" 2>/dev/null || true)
+            if [ -n "$sha" ] && git merge-base --is-ancestor "$sha" HEAD; then
+              echo "$tag is fine"; continue
+            fi
+            v=${tag#v}
+            target=""
+            for c in $(git rev-list HEAD -- src/main.cpp); do
+              if git show "$c:src/main.cpp" | grep -q "^#define MOD_VERSION \"$v\""; then target=$c; break; fi
+            done
+            if [ -z "$target" ]; then echo "::warning::no commit on main for $tag"; continue; fi
+            echo "re-publishing $tag from $target"
+            gh release delete "$tag" -R "$GITHUB_REPOSITORY" --yes --cleanup-tag
+            rm -rf /tmp/wt && git worktree add -f /tmp/wt "$target"
+            (cd /tmp/wt && ./build.sh package)
+            zip="/tmp/wt/dist/EnshroudedBuildingTools-$v.zip"
+            (cd /tmp/wt/dist && sha256sum "EnshroudedBuildingTools-$v.zip" > "EnshroudedBuildingTools-$v.zip.sha256")
+            printf 'Enshrouded Building Tools %s for Enshrouded 1.0 (single player).\n\n**Install:** extract the zip into the game folder (next to `enshrouded.exe`).\n**Uninstall:** delete `dinput8.dll`.\n\nKeys and options: see `BuildingTools-README.txt` in the zip.\n' "$v" > notes.md
+            gh release create "$tag" "$zip" "$zip.sha256" -R "$GITHUB_REPOSITORY" \
+              --target "$target" --title "Building Tools $v" --notes-file notes.md
+            git worktree remove --force /tmp/wt
+          done
