@@ -271,3 +271,9 @@ list (new material) and restores the old voxels, the mod's refund of the old mat
 v0.13.2: per undo step (list ptr+data+count) remember the paid refund (prefab/full area) or
 rebuild it from per-shape voxel snapshots for the recorded shapes (partial area undo); in
 pay_hook, an undo refund of that list first charges those entries (refuse undo if missing).
+
+## Test 20 (v0.13.2): "no live aim" with 2 m shapes in flight mode
+The client world skips its placement prediction (so PlaceShape never runs there) when its
+ghost is blocked, so neither the exact client-cursor match nor a click record existed.
+v0.13.3 falls back to the client cursor component's live aim (+0x338) when it lies within
+6 m of the server place cursor, and logs both client transforms when the lookup fails.
