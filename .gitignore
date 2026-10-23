@@ -1,0 +1,12 @@
+build/
+dist/
+*.o
+*.dll
+*.zip
+# never commit game files or analysis caches
+enshrouded.exe
+tools/re/*.pkl
+tools/re/types.txt
+tools/re/sigs.json
+tools/re/pylib/
+__pycache__/
