@@ -1,43 +1,60 @@
 name: Release
 
+# A release is published automatically when main contains a MOD_VERSION
+# (src/main.cpp) that has no GitHub release yet. Pushing a tag vX.Y.Z or
+# running the workflow by hand does the same for that commit.
 on:
   push:
+    branches: [main]
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check tag matches MOD_VERSION
+      - name: Version
+        id: v
         run: |
           v=$(sed -n 's/^#define MOD_VERSION "\(.*\)"/\1/p' src/main.cpp)
-          if [ "v$v" != "$GITHUB_REF_NAME" ]; then
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "v$v" != "$GITHUB_REF_NAME" ]; then
             echo "::error::tag $GITHUB_REF_NAME does not match MOD_VERSION $v in src/main.cpp"; exit 1
           fi
-          echo "VERSION=$v" >> "$GITHUB_ENV"
+          if gh release view "v$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v$v already exists, nothing to do."
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          fi
       - name: Install toolchain
+        if: steps.v.outputs.skip != '1'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends clang lld mingw-w64-x86-64-dev zip
       - name: Build, test and package
+        if: steps.v.outputs.skip != '1'
         run: ./build.sh package
       - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
+        if: steps.v.outputs.skip != '1'
         run: |
           zip="dist/EnshroudedBuildingTools-$VERSION.zip"
           sha256sum "$zip" | tee "$zip.sha256"
           cat > notes.md <<NOTES
-          Enshrouded Building Tools $VERSION (single player, Enshrouded 1.0).
+          Enshrouded Building Tools $VERSION for Enshrouded 1.0 (single player).
 
           **Install:** extract the zip into the game folder (next to \`enshrouded.exe\`).
           **Uninstall:** delete \`dinput8.dll\`.
 
           Keys and options: see \`BuildingTools-README.txt\` in the zip.
           NOTES
-          gh release create "$GITHUB_REF_NAME" "$zip" "$zip.sha256" \
-            --title "Building Tools $VERSION" --notes-file notes.md
+          gh release create "v$VERSION" "$zip" "$zip.sha256" -R "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "Building Tools $VERSION" --notes-file notes.md

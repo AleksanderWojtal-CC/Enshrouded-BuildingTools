@@ -65,12 +65,15 @@ DLL.
 
 1. Set the version in `src/main.cpp` (`#define MOD_VERSION "x.y.z"`) and update
    `package/BuildingTools-README.txt` if features changed.
-2. Commit, then tag and push: `git tag v0.13.2 && git push origin v0.13.2`.
-3. The **Release** workflow checks that the tag matches `MOD_VERSION`, builds, runs the
-   tests, and publishes a GitHub release with `EnshroudedBuildingTools-<version>.zip`.
-   That zip is ready to upload to Nexus Mods; [NEXUS.md](NEXUS.md) has the page text.
+2. Commit and push to `main`.
+3. The **Release** workflow sees a version without a GitHub release, builds, runs the
+   tests and publishes release `vx.y.z` with `EnshroudedBuildingTools-x.y.z.zip`
+   (and its SHA-256). The zip is ready to upload to Nexus Mods; [NEXUS.md](NEXUS.md)
+   has the page text. Pushes that keep the same version publish nothing.
+   Pushing a tag `vx.y.z` or running the workflow by hand works too; a tag must match
+   `MOD_VERSION`.
 
-Every push and pull request runs the **Build** workflow, which uploads the zip as a
+Every push and pull request also runs the **Build** workflow, which uploads the zip as a
 workflow artifact.
 
 ## Updating for a new game version
