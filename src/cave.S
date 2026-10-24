@@ -7,7 +7,8 @@
 #
 # Materials: 0 = air, 1..0x7f = terrain, 0x80..0xff = building materials.
 # Building voxels are written by the WRITE path (material byte, second byte 0,
-# volume += 1.0 per voxel).
+# volume += 1.0 per voxel); terrain voxels by the density path (material byte,
+# density byte, volume += density / 255). CONT picks the path by the new material.
 #
 # Registers at the patch site: r11 = existing material (zero-extended),
 # r10 = blit parameters ([r10+0xa1] = material being placed), rcx = voxel index,
@@ -58,7 +59,13 @@ bt_cave_start:
     je 9f                                            # not removable here (protected)
     lea rax, [rip + bt_cave_vols]
     lock inc dword ptr [rax + r11*4]                 # refund tally
-    jmp qword ptr [rip + bt_cave_write]
+    # Continue where the game chooses the write path by the NEW material:
+    # a building material takes the block path (material byte, density byte 0);
+    # a terrain material ([r10+0xa0] != 0) the terrain path, which also writes the
+    # shape's density. (The block path with a terrain material left density 0,
+    # i.e. an empty voxel.) The terrain path sees the old building voxel as
+    # density 0, so it always writes.
+    jmp qword ptr [rip + bt_cave_cont]
 3:  # air or terrain: overlap only leaves it, full shape builds it as usual
     cmp byte ptr [rip + bt_cave_mode], 1
     je 9f
