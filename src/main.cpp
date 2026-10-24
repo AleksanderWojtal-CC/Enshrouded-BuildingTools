@@ -19,7 +19,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.13.3"
+#define MOD_VERSION "0.13.4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -460,9 +460,42 @@ static void find_text() {
 static uint8_t* find_unique(const char* name, const char* sig) {
     const uint8_t* hits[4];
     int n = core::scan(g_textBase, g_textSize, sig, hits, 4);
-    LOG(.str("signature ").str(name).str(": ").i(n).str(" match").str(n == 1 ? "" : "es")
-        .str(n >= 1 ? " at rva " : "").x(n >= 1 ? (uint64_t)(hits[0] - g_base) : 0));
+    if (n >= 1) LOG(.str("signature ").str(name).str(": ").i(n).str(n == 1 ? " match at rva " : " matches, first at rva ").x((uint64_t)(hits[0] - g_base)));
+    else LOG(.str("signature ").str(name).str(": not found"));
     return n == 1 ? (uint8_t*)hits[0] : nullptr;
+}
+
+// A function this mod hooks may already be hooked by another mod (its first bytes
+// replaced by a jump), so its signature no longer matches. Retry with the first
+// `stolen` bytes as wildcards and accept a match whose start is a jump (E9 rel32 or
+// FF 25 [rip]); hook() then chains to the other mod's hook.
+static uint8_t* find_hookable(const char* name, const char* sig, int stolen) {
+    uint8_t* p = find_unique(name, sig);
+    if (p) return p;
+    char pat[512]; int o = 0, tok = 0;
+    for (const char* q = sig; *q && o < (int)sizeof(pat) - 4; ) {
+        while (*q == ' ') q++;
+        if (!*q) break;
+        const char* e = q; while (*e && *e != ' ') e++;
+        if (o) pat[o++] = ' ';
+        if (tok < stolen) { pat[o++] = '?'; pat[o++] = '?'; }
+        else for (const char* c = q; c < e && o < (int)sizeof(pat) - 2; c++) pat[o++] = *c;
+        tok++; q = e;
+    }
+    pat[o] = 0;
+    const uint8_t* hits[8];
+    int n = core::scan(g_textBase, g_textSize, pat, hits, 8), k = 0;
+    uint8_t* found = nullptr;
+    for (int i = 0; i < n && i < 8; i++) {
+        const uint8_t* h = hits[i];
+        if (h[0] == 0xE9 || (h[0] == 0xFF && h[1] == 0x25)) { found = (uint8_t*)h; k++; }
+    }
+    if (k == 1) {
+        LOG(.str("  ").str(name).str(": found at rva ").x((uint64_t)(found - g_base))
+            .str(" but already hooked by another program (starts with a jump); chaining to it"));
+        return found;
+    }
+    return nullptr;
 }
 
 // ------------------------------------------------------------------ hooking
@@ -495,8 +528,19 @@ static void* hook(uint8_t* target, int stolen, void* detour) {
     uint8_t* relay = mem;            // jmp [rip] -> detour
     uint8_t* tramp = mem + 16;       // stolen bytes + jmp back
     put_absjmp(relay, detour);
-    memcpy(tramp, target, stolen);
-    put_absjmp(tramp + stolen, target + stolen);
+    if (target[0] == 0xE9) {
+        // already hooked by another program: our "original" is its jump target
+        uint8_t* to = target + 5 + *(int32_t*)(target + 1);
+        put_absjmp(tramp, to);
+        stolen = 5;
+    } else if (target[0] == 0xFF && target[1] == 0x25) {
+        uint8_t* to = *(uint8_t**)(target + 6 + *(int32_t*)(target + 2));
+        put_absjmp(tramp, to);
+        stolen = 6;
+    } else {
+        memcpy(tramp, target, stolen);
+        put_absjmp(tramp + stolen, target + stolen);
+    }
     DWORD old;
     if (!VirtualProtect(target, stolen, PAGE_EXECUTE_READWRITE, &old)) { LOG(.str("hook: VirtualProtect failed")); return nullptr; }
     uint8_t patch[16];
@@ -1576,22 +1620,22 @@ static DWORD WINAPI init_thread(void*) {
     if (g_hoverDist < 1.f) g_hoverDist = 1.f; if (g_hoverDist > 20.f) g_hoverDist = 20.f;
     LOG(.str(MOD_NAME " " MOD_VERSION " starting, image base ").x((uint64_t)g_base)
         .str(" .text size ").x(g_textSize));
-    uint8_t* place  = find_unique("PlaceShape", SIG_PLACE);
-    uint8_t* remove = find_unique("RemoveShape", SIG_REMOVE);
+    uint8_t* place  = find_hookable("PlaceShape", SIG_PLACE, 10);
+    uint8_t* remove = find_hookable("RemoveShape", SIG_REMOVE, 10);
     uint8_t* bounds = find_unique("ShapeBounds", SIG_BOUNDS);
     uint8_t* cc     = find_unique("CursorCall", SIG_CURSOR_CALL);
     uint8_t* pc     = find_unique("PlaceCall", SIG_PLACE_CALL);
     uint8_t* sc     = find_unique("ServerCheck", SIG_SERVER_CHECK);
-    uint8_t* pay    = find_unique("PayCost", SIG_PAY);
-    uint8_t* pcommit = find_unique("PlaceCommit", SIG_PLACE_COMMIT);
-    uint8_t* rcommit = find_unique("RemoveCommit", SIG_REMOVE_COMMIT);
+    uint8_t* pay    = find_hookable("PayCost", SIG_PAY, 7);
+    uint8_t* pcommit = find_hookable("PlaceCommit", SIG_PLACE_COMMIT, 5);
+    uint8_t* rcommit = find_hookable("RemoveCommit", SIG_REMOVE_COMMIT, 5);
     uint8_t* matItem = find_unique("MaterialItem", SIG_MATERIAL_ITEM);
     uint8_t* tearDown = find_unique("TearDownEvent", SIG_TEARDOWN_EVENT);
-    uint8_t* refundBuild = find_unique("RefundBuild", SIG_REFUND_BUILD);
+    uint8_t* refundBuild = find_hookable("RefundBuild", SIG_REFUND_BUILD, 5);
     uint8_t* blit = find_unique("BlitCheck", SIG_BLIT_CHECK);
     uint8_t* wtable = find_unique("WriteTable", SIG_WRITE_TABLE);
-    uint8_t* popUndo = find_unique("PopUndo", SIG_POP_UNDO);
-    uint8_t* hudUpd = find_unique("HudUpdate", SIG_HUD_UPDATE);
+    uint8_t* popUndo = find_hookable("PopUndo", SIG_POP_UNDO, 5);
+    uint8_t* hudUpd = find_hookable("HudUpdate", SIG_HUD_UPDATE, 5);
     uint8_t* uiSnd = find_unique("UiSound", SIG_UI_SOUND);
     uint8_t* cquery = find_unique("CursorQuery", SIG_CURSOR_QUERY);
     g_removeCommit = (CommitFn)rcommit;
@@ -1603,7 +1647,7 @@ static DWORD WINAPI init_thread(void*) {
     // the server/client branch must sit directly before the placement call
     g_worldLayoutOk = g_cursorLayoutOk && sc && sc + 81 == pc;
     if (!place || !bounds || !remove || !pay || !pcommit || !rcommit || !matItem || !refundBuild || !blit || !wtable || !g_worldLayoutOk) {
-        LOG(.str("required code not found; mod disabled (game version not supported). place=").i(place != nullptr)
+        LOG(.str("required code not found; mod disabled (game version not supported, or another mod changed this code). place=").i(place != nullptr)
             .str(" bounds=").i(bounds != nullptr).str(" remove=").i(remove != nullptr).str(" pay=").i(pay != nullptr)
             .str(" layout=").i(g_worldLayoutOk));
         flash("Building Tools: game version not supported");
@@ -1630,14 +1674,14 @@ static DWORD WINAPI init_thread(void*) {
     }
     LOG(.str("game sounds: ").str(g_playUiSound ? "yes" : "no (Windows sounds)"));
     (void)cquery;
-    uint8_t* sdeps = find_unique("SystemDeps", SIG_SYS_DEPS);
+    uint8_t* sdeps = find_hookable("SystemDeps", SIG_SYS_DEPS, 5);
     uint8_t* ddeps = find_unique("DismantleDeps", SIG_DISM_DEPS);
     if (sdeps && ddeps && ddeps + 0x15 + *(int32_t*)(ddeps + 0x11) == sdeps) {
         g_dismDepsRet = ddeps + 0x15;
         g_depsOrig = (DepsFn)hook(sdeps, 5, (void*)&deps_hook);
     }
     LOG(.str("refund pop-up: ").str(g_depsOrig ? "available" : "not available"));
-    uint8_t* cxf = find_unique("CursorTransform", SIG_CURSOR_XF);
+    uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
     g_placeCommitOrig = (CommitFn)hook(pcommit, 5, (void*)&place_commit_hook);
