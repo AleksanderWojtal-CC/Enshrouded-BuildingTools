@@ -76,10 +76,11 @@ DLL.
    [Nexus-Mods/upload-action](https://github.com/Nexus-Mods/upload-action). It needs,
    in the repository settings:
    - environment **Release** with the secret `NEXUS_API_KEY` (your Nexus Mods API key),
-   - `NEXUS_MOD_ID` (the number in the mod page URL, `nexusmods.com/enshrouded/mods/<id>`)
-     and `NEXUS_FILE_ID` (the main file's id: Files tab → the file's download link
-     `...?file_id=<id>`), as variables or secrets, in the repository or in the Release
-     environment.
+   - `NEXUS_MOD_ID` and `NEXUS_FILE_ID`, as variables or secrets, in the repository or in
+     the Release environment. Take both from the mod page's Files tab: "Advanced" under the
+     main file (or Manage Files → the file's menu → Advanced). The file id there is the
+     API id of the file; the number in the old download links does not work (404 "Mod file
+     not found").
    If one is missing, the upload is skipped with a warning naming it. To upload a version
    that is already released (for example after adding the settings), run the Release
    workflow by hand (Actions → Release → Run workflow) with "Upload the current version to
