@@ -24,7 +24,8 @@ Extends the Construction Hammer. Single player only.
 
 [b]Replace[/b] (F7)
 Aim at existing blocks and click: they take your current material. Two styles (F9):
-full shape, or overlap only (repaints just what is there, keeps its exact form).
+full shape, overlap only (repaints just what is there, keeps its exact form), or
+connected: a fill bucket that repaints every touching block of the clicked material.
 The old material is refunded with the normal item pop-up, and undo puts everything
 back exactly.
 
@@ -48,6 +49,7 @@ of; favourites and the other orders stay normal. Props, chests and crafting are 
 [list]
 [*]Costs, refunds and undo go through the game's own building code.
 [*]Game UI sounds, small info bar at the bottom of the screen, auto-hides.
+[*]F5 turns the whole mod off and on (vanilla game while off).
 [*]All keys and options in BuildingTools.ini (instructions inside).
 [*]Big areas: the game's undo memory is small, so undo covers the first ~30 blocks
 of a large area; use an area remove for the rest.

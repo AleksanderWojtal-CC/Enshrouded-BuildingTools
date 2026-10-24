@@ -3,6 +3,17 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.16.0
+
+- New: **F5 turns the whole mod off and on** (`ToggleMod` in the ini). Off is the
+  vanilla game: Prefab mode, Replace, free placement and creative building are off
+  and the other mod keys do nothing until you press it again.
+- New: **connected replace (fill bucket)**. F9 now cycles full shape / overlap only /
+  connected. With Replace on in Prefab mode, click a block: every touching block of
+  the same material is repainted with your current material, in steps of the
+  selected shape (0.5 m cube = block-exact), up to `FillLimit` shapes (default 500).
+  Other materials are never touched; costs, refunds and undo work as for Replace.
+
 ## 0.15.0
 
 - New: **creative building** (`CreativeBuilding=1` in the `[Creative]` section of

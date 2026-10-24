@@ -101,6 +101,23 @@ the old voxels. The mod remembers, per undo step, the refund it paid for the sha
 undo covers. When undo refunds that step, the mod first takes the old material back. If
 it is no longer in the inventory, the undo is refused.
 
+## Connected replace (fill bucket)
+
+With Replace style "connected" in Prefab mode, the click starts a breadth-first walk
+over a grid of cells the size of the selected shape, from the aimed shape along the six
+world axes. Each new cell is probed with a removal dry run (`RemoveShape` with refunds
+suppressed), which reports the volume of every material it would remove there; a cell
+joins when it contains the clicked material (the building material with the most volume
+in the first cell). The walk stops at `FillLimit` cells. The found cells are then priced
+and committed like an Area replace in overlap style, with the blit's allow table holding
+only the clicked material, so other materials in the same cells are left alone.
+
+## Off switch
+
+`ToggleMod` (F5) sets the mod back to vanilla: Prefab mode, Replace, free placement and
+creative building off, corners cleared. All hooks stay installed but pass everything
+through, and the other mod keys are ignored until the key is pressed again.
+
 ## Free placement
 
 The place cursor transform is computed in 28bc80 from the aim ray. With free placement
