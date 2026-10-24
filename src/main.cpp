@@ -425,9 +425,11 @@ static int64_t round_grid(double v, double grid) {           // v, grid in fixed
     double r = (double)(int64_t)(k < 0 ? k - 0.5 : k + 0.5);
     return (int64_t)(r * grid);
 }
+static volatile DWORD g_buildTick = 0;   // last frame the hammer's place cursor was computed
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
     uint8_t* r = g_cxOrig(out, sys, q, ray);
     if (!out || !sys || !q || q[3] != 4) return r;
+    g_buildTick = GetTickCount();
     float* rot = (float*)(out + 0x18);
     bool valid = out[0x28] != 0;
     if (valid) {
@@ -783,6 +785,11 @@ static uint8_t pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
             return r;
         }
     }
+    static volatile LONG s_refundDiag = 0;
+    if (!consume && list && InterlockedIncrement(&s_refundDiag) <= 20) {
+        uint8_t* ret = (uint8_t*)__builtin_return_address(0);
+        LOG(.str("refund call at rva ").x((uint64_t)(ret - 5 - g_base)).str(": ").u(list->count).str(" entries"));
+    }
     if (!consume && mode && mode[0] == 0 && list != g_refundList && InterlockedIncrement(&g_payDiag) <= 3) {
         uint8_t* inv = *(uint8_t**)(mode + 8);
         if (inv && readable(inv, 0x100))
@@ -900,7 +907,9 @@ static void add_all_materials(uint8_t* stocks, StocksCall* c) {
     static uint32_t set[4096];                 // ids already listed (open addressing, 0 = empty)
     for (int t = 0; t < 4; t++) {
         int st = t + 2;
-        if (!g_cN[t] || (c->onlyShown && stocks[0x2bf8] != st)) continue;
+        // only the list the picker shows, and only in its "backpack and magic chests"
+        // order (0): favourites, last used, amount and item sets stay as they are
+        if (!g_cN[t] || stocks[0x2bf8] != st || stocks[st * 0x648 + 0x638] != 0) continue;
         StockList* list = (StockList*)(stocks + st * 0x648);
         if (list->count > 2048) continue;
         memset(set, 0, sizeof(set));
@@ -941,9 +950,20 @@ static void add_all_materials(uint8_t* stocks, StocksCall* c) {
 }
 
 static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, void* e) {
-    if (g_cfg.creative && g_stockAdd && g_stocksTls != TLS_OUT_OF_INDEXES)
+    // only while the hammer is out (the lists are rebuilt every frame; longer lists
+    // cost the game time even when the picker is closed)
+    bool building = !g_cxOrig || GetTickCount() - g_buildTick < 1500;
+    if (g_cfg.creative && building && g_stockAdd && g_stocksTls != TLS_OUT_OF_INDEXES)
         add_all_materials((uint8_t*)stocks, (StocksCall*)TlsGetValue(g_stocksTls));
+    uint8_t* sb = (uint8_t*)stocks; int st = sb[0x2bf8];
+    uint64_t before = st < 7 ? ((StockList*)(sb + st * 0x648))->count : 0;
     g_stockFinalOrig(stocks, a, b, cc, d, e);
+    static DWORD s_diagTick = 0;
+    if (g_cfg.creative && st < 7 && GetTickCount() - s_diagTick > 10000) {
+        s_diagTick = GetTickCount();
+        LOG(.str("creative: picker list ").i(st).str(" sort ").i(sb[st * 0x648 + 0x638]).str(" entries ").u(before)
+            .str(" -> ").u(((StockList*)(sb + st * 0x648))->count).str(building ? " (hammer out)" : ""));
+    }
 }
 
 static uint8_t* cursor_component(CursorXf* xf) {
