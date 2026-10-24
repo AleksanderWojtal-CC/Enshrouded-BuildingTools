@@ -3,6 +3,9 @@ name: Release
 # A release is published automatically when main contains a MOD_VERSION
 # (src/main.cpp) that has no GitHub release yet. Pushing a tag vX.Y.Z or
 # running the workflow by hand does the same for that commit.
+# The release notes are the version's section of CHANGELOG.md. The nexus job then
+# uploads the same zip and changelog to Nexus Mods (needs the environment "Release"
+# with secret NEXUS_API_KEY and the variables NEXUS_MOD_ID and NEXUS_FILE_ID).
 on:
   push:
     branches: [main]
@@ -19,6 +22,9 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-24.04
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+      version: ${{ steps.v.outputs.version }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -28,6 +34,7 @@ jobs:
         run: |
           v=$(sed -n 's/^#define MOD_VERSION "\(.*\)"/\1/p' src/main.cpp)
           echo "VERSION=$v" >> "$GITHUB_ENV"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "v$v" != "$GITHUB_REF_NAME" ]; then
             echo "::error::tag $GITHUB_REF_NAME does not match MOD_VERSION $v in src/main.cpp"; exit 1
           fi
@@ -43,18 +50,73 @@ jobs:
       - name: Build, test and package
         if: steps.v.outputs.skip != '1'
         run: ./build.sh package
+      - name: Changelog section
+        if: steps.v.outputs.skip != '1'
+        run: |
+          awk -v v="$VERSION" '$0 ~ "^## " { if (f) exit; f = ($2 == v); next } f' CHANGELOG.md > changes.md
+          if ! grep -q '[^[:space:]]' changes.md; then
+            echo "::error::CHANGELOG.md has no section for $VERSION"; exit 1
+          fi
+          cat changes.md
       - name: Publish release
+        id: publish
         if: steps.v.outputs.skip != '1'
         run: |
           zip="dist/EnshroudedBuildingTools-$VERSION.zip"
           sha256sum "$zip" | tee "$zip.sha256"
-          cat > notes.md <<NOTES
-          Enshrouded Building Tools $VERSION for Enshrouded 1.0 (single player).
-
-          **Install:** extract the zip into the game folder (next to \`enshrouded.exe\`).
-          **Uninstall:** delete \`dinput8.dll\`.
-
-          Keys and options: see \`BuildingTools-README.txt\` in the zip.
-          NOTES
+          {
+            echo "Enshrouded Building Tools $VERSION for Enshrouded 1.0 (single player)."
+            echo
+            echo "## Changes"
+            cat changes.md
+            echo
+            echo "**Install:** extract the zip into the game folder (next to \`enshrouded.exe\`)."
+            echo "**Uninstall:** delete \`dinput8.dll\`."
+            echo
+            echo "Keys and options: see \`BuildingTools-README.txt\` in the zip."
+          } > notes.md
           gh release create "v$VERSION" "$zip" "$zip.sha256" -R "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" --title "Building Tools $VERSION" --notes-file notes.md
+          echo "published=1" >> "$GITHUB_OUTPUT"
+      - name: Keep zip and changelog for Nexus
+        if: steps.v.outputs.skip != '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: |
+            dist/EnshroudedBuildingTools-${{ env.VERSION }}.zip
+            changes.md
+
+  nexus:
+    needs: release
+    if: needs.release.outputs.published == '1' && vars.NEXUS_MOD_ID != '' && vars.NEXUS_FILE_ID != ''
+    runs-on: ubuntu-24.04
+    environment: Release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+      - name: Changelog text
+        id: cl
+        run: |
+          {
+            echo "text<<CHANGELOG_EOF"
+            # one line per bullet, without Markdown
+            awk '/^- /{ if (l) print l; l = substr($0, 3); next } /^[[:space:]]+[^[:space:]]/{ sub(/^[[:space:]]+/, ""); l = l " " $0; next } END { if (l) print l }' changes.md \
+              | sed -e 's/\*\*//g' -e 's/`//g'
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Upload to Nexus Mods
+        # Nexus-Mods/upload-action v1.0.0-beta.11
+        uses: Nexus-Mods/upload-action@98532f7670c27cbecc78fae03fa3e278147827e2
+        with:
+          api_key: ${{ secrets.NEXUS_API_KEY }}
+          mod_id: ${{ vars.NEXUS_MOD_ID }}
+          file_id: ${{ vars.NEXUS_FILE_ID }}
+          filename: EnshroudedBuildingTools-${{ needs.release.outputs.version }}.zip
+          version: ${{ needs.release.outputs.version }}
+          display_name: Building Tools ${{ needs.release.outputs.version }}
+          description: Enshrouded Building Tools ${{ needs.release.outputs.version }} - extract into the game folder (next to enshrouded.exe).
+          changelog: ${{ steps.cl.outputs.text }}
+          archive_existing_version: true
+          update_mod_version: true

@@ -83,12 +83,16 @@ Changing keys and settings
   Delete the ini to get all defaults back.
 
 Creative building
-  Set CreativeBuilding=1 in the [Creative] section of BuildingTools.ini.
-  Blocks then cost nothing, and removing them or undoing gives nothing back,
-  so your inventory is never touched. The material picker lists every
-  material, also ones you have none of. Props, crafting and chests stay normal.
-  Note: blocks built in creative still refund materials if you remove them
-  later with creative off.
+  Set CreativeBuilding=1 in the [Creative] section of BuildingTools.ini (close
+  the game first). Blocks, roofs, terrain and prefabs then cost nothing, and
+  removing or undoing gives nothing back, so your inventory is never touched.
+  Props, chests and crafting stay normal. The info bar shows "creative".
+  Material picker: in its "backpack and magic chests" order it lists every
+  block, roof, terrain and overgrowth material, also ones you have none of
+  (count 0). Favourites, last used, amount and item sets show the normal lists.
+  A type you have nothing of (e.g. no roof at all) can be built right away.
+  Blocks built in creative are refunded like any other block if you remove
+  them later with creative off.
 
 Uninstall
   Close the game and delete dinput8.dll (the ini and log can go too).

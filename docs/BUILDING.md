@@ -63,17 +63,25 @@ DLL.
 
 ## Releasing
 
-1. Set the version in `src/main.cpp` (`#define MOD_VERSION "x.y.z"`) and update
-   `package/BuildingTools-README.txt` if features changed.
-2. Commit and push to `main`.
-3. The **Release** workflow sees a version without a GitHub release, builds, runs the
-   tests and publishes release `vx.y.z` with `EnshroudedBuildingTools-x.y.z.zip`
-   (and its SHA-256). The zip is ready to upload to Nexus Mods; [NEXUS.md](NEXUS.md)
-   has the page text. Pushes that keep the same version publish nothing.
-   Pushing a tag `vx.y.z` or running the workflow by hand works too; a tag must match
-   `MOD_VERSION`.
+1. Set the version in `src/main.cpp` (`#define MOD_VERSION "x.y.z"`), add a `## x.y.z`
+   section at the top of [CHANGELOG.md](../CHANGELOG.md), and update
+   `package/BuildingTools-README.txt` and the docs if features changed.
+2. Merge to `main` (pull request). The **Release** workflow sees a `MOD_VERSION` that
+   has no GitHub release yet, builds, runs the tests and publishes the release
+   `vx.y.z` with `EnshroudedBuildingTools-x.y.z.zip`. The notes are the version's
+   changelog section. (Pushing a tag `vx.y.z` or running the workflow by hand does
+   the same.)
+3. The same workflow then uploads the zip to Nexus Mods as a new version of the
+   existing main file, with the changelog section, through
+   [Nexus-Mods/upload-action](https://github.com/Nexus-Mods/upload-action). It needs,
+   in the repository settings:
+   - environment **Release** with the secret `NEXUS_API_KEY` (your Nexus Mods API key),
+   - repository variables `NEXUS_MOD_ID` (the number in the mod page URL,
+     `nexusmods.com/enshrouded/mods/<id>`) and `NEXUS_FILE_ID` (the main file's id:
+     Files tab → the file's download link `...?file_id=<id>`).
+   Without the variables the Nexus step is skipped.
 
-Every push and pull request also runs the **Build** workflow, which uploads the zip as a
+Every push and pull request runs the **Build** workflow, which uploads the zip as a
 workflow artifact.
 
 ## Updating for a new game version

@@ -290,3 +290,27 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   highlight is surface-projected (invisible in air). Hammer cursor VFX references tried
   (ItemInfo+0x1e4/+0x29c/+0x354/+0x38c): only equipment cursorVfx showed, flickery and near the
   player, with debris effects -> not used.
+
+## v0.15.0: compatibility and creative building
+- Creative Mode (Phoenix 1355) scans `building.payCosts` (48eeb0) and `ecs.queryBegin`
+  (9bc1a0) by their first bytes; no other of its 168 patterns overlaps bytes the mod
+  patches. Both are now reached through redirected E8 calls (PayCost: 12 calls, 9bc1a0:
+  the dismantle call only).
+- PayCost callers: 2d39ab blueprints (place), 2d46b0 dismantle shape (-> RemoveCommit),
+  2d4b5a dismantle prefab (-> 488670), 2d4cc4 dismantle prop pickup, 2d5934/2d5991
+  place prop, 2d6040 undo, 2c8e6f/2c8eca, 3d3b89, 3e1ef7, 3e700e other systems.
+- Missing-materials check 2865e0 (one caller 2975f2; true -> cursor flag 0x1000).
+- `g38_items::updateInventoryStocks` 4076b0(stocks, ctx, onlyShown): 7 stock lists of
+  0x648 bytes at stocks + type*0x648 ({data, count, cap, grow}, entries {itemId,
+  slot u64 @+4, count u64 @+0x10} of 0x18), sort order byte +0x638 (0 spatial/backpack,
+  1 last used, 2 amount, 3 curated/item sets, 4 favourites), selected index +0x628 and
+  valid +0x630, shown type stocks+0x2bf8. Add 405140(list, &{id,count,0}, container,
+  index, keep). Item groups: e823f0(ctx[0x68]), iterated with 3f070/3f270, group type
+  byte 0x11..0x14 -> stock types 2..5 (terrain, default, roof, overgrowth), ids at
+  group+8+off32, count +0xc. Finalise 4070c0 (call at +0xa76) sets the selected index
+  from the chosen ids (405b90; types 2..5 read [ctx+8]+0xc8..0xd4).
+- Removal refunds: building materials go through a per-material remainder
+  (49fd70: acc += voxels; items = acc / rate), so a few 0.5 m blocks refund nothing.
+- client_cycle_inventory_stock (2af5f0) -> 406020 (call 2afa47): chosen id not in the
+  list -> selected/first entry, result 6 if its count is 0; result 0 + id -> 405270
+  writes ClientPlayerInputData.buildingStockCycleAction (+0xa0 version, +0xa4..+0xb0).
