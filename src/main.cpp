@@ -969,6 +969,14 @@ static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, 
     uint8_t* sb = (uint8_t*)stocks; int st = sb[0x2bf8];
     uint64_t before = st < 7 ? ((StockList*)(sb + st * 0x648))->count : 0;
     g_stockFinalOrig(stocks, a, b, cc, d, e);
+    // The game selects the entry of the material chosen last (+0x628 index, +0x630
+    // valid). With none of a type in the inventory nothing is chosen, so the picker
+    // cannot scroll and the hammer has no material: select the first entry instead.
+    if (g_cfg.creative && building && g_stockAdd)
+        for (int t = 2; t <= 5; t++) {
+            uint8_t* l = (uint8_t*)stocks + t * 0x648;
+            if (((StockList*)l)->count && !l[0x630]) { *(uint64_t*)(l + 0x628) = 0; l[0x630] = 1; }
+        }
     static DWORD s_diagTick = 0;
     if (g_cfg.creative && st < 7 && GetTickCount() - s_diagTick > 10000) {
         s_diagTick = GetTickCount();
