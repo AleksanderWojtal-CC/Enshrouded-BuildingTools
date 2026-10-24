@@ -5,12 +5,18 @@ name: Release
 # running the workflow by hand does the same for that commit.
 # The release notes are the version's section of CHANGELOG.md. The nexus job then
 # uploads the same zip and changelog to Nexus Mods (needs the environment "Release"
-# with secret NEXUS_API_KEY and the variables NEXUS_MOD_ID and NEXUS_FILE_ID).
+# with secret NEXUS_API_KEY; NEXUS_MOD_ID and NEXUS_FILE_ID as variables or secrets,
+# in the repository or in that environment).
 on:
   push:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      nexus:
+        description: "Upload the current version to Nexus Mods again (also when its GitHub release exists)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -23,7 +29,7 @@ jobs:
   release:
     runs-on: ubuntu-24.04
     outputs:
-      published: ${{ steps.publish.outputs.published }}
+      nexus: ${{ steps.nexus.outputs.upload }}
       version: ${{ steps.v.outputs.version }}
     env:
       GH_TOKEN: ${{ github.token }}
@@ -39,9 +45,14 @@ jobs:
             echo "::error::tag $GITHUB_REF_NAME does not match MOD_VERSION $v in src/main.cpp"; exit 1
           fi
           if gh release view "v$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release v$v already exists, nothing to do."
+            echo "Release v$v already exists, nothing to build."
             echo "skip=1" >> "$GITHUB_OUTPUT"
           fi
+      - name: Existing release for a manual Nexus upload
+        if: steps.v.outputs.skip == '1' && inputs.nexus
+        run: |
+          mkdir -p dist
+          gh release download "v$VERSION" -R "$GITHUB_REPOSITORY" -p "EnshroudedBuildingTools-$VERSION.zip" -D dist
       - name: Install toolchain
         if: steps.v.outputs.skip != '1'
         run: |
@@ -51,7 +62,7 @@ jobs:
         if: steps.v.outputs.skip != '1'
         run: ./build.sh package
       - name: Changelog section
-        if: steps.v.outputs.skip != '1'
+        if: steps.v.outputs.skip != '1' || inputs.nexus
         run: |
           awk -v v="$VERSION" '$0 ~ "^## " { if (f) exit; f = ($2 == v); next } f' CHANGELOG.md > changes.md
           if ! grep -q '[^[:space:]]' changes.md; then
@@ -78,8 +89,12 @@ jobs:
           gh release create "v$VERSION" "$zip" "$zip.sha256" -R "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" --title "Building Tools $VERSION" --notes-file notes.md
           echo "published=1" >> "$GITHUB_OUTPUT"
+      - name: Nexus upload wanted
+        id: nexus
+        if: steps.publish.outputs.published == '1' || (steps.v.outputs.skip == '1' && inputs.nexus)
+        run: echo "upload=1" >> "$GITHUB_OUTPUT"
       - name: Keep zip and changelog for Nexus
-        if: steps.v.outputs.skip != '1'
+        if: steps.nexus.outputs.upload == '1'
         uses: actions/upload-artifact@v4
         with:
           name: release
@@ -89,15 +104,35 @@ jobs:
 
   nexus:
     needs: release
-    if: needs.release.outputs.published == '1' && vars.NEXUS_MOD_ID != '' && vars.NEXUS_FILE_ID != ''
+    if: needs.release.outputs.nexus == '1'
     runs-on: ubuntu-24.04
     environment: Release
     steps:
+      - name: Nexus settings
+        id: ids
+        env:
+          MOD_ID: ${{ vars.NEXUS_MOD_ID || secrets.NEXUS_MOD_ID }}
+          FILE_ID: ${{ vars.NEXUS_FILE_ID || secrets.NEXUS_FILE_ID }}
+          HAS_KEY: ${{ secrets.NEXUS_API_KEY != '' }}
+        run: |
+          missing=""
+          [ "$HAS_KEY" = "true" ] || missing="$missing NEXUS_API_KEY"
+          [ -n "$MOD_ID" ] || missing="$missing NEXUS_MOD_ID"
+          [ -n "$FILE_ID" ] || missing="$missing NEXUS_FILE_ID"
+          if [ -n "$missing" ]; then
+            echo "::warning::Nexus upload skipped, not set:$missing (environment Release or repository settings)"
+            exit 0
+          fi
+          echo "ok=1" >> "$GITHUB_OUTPUT"
+          echo "mod_id=$MOD_ID" >> "$GITHUB_OUTPUT"
+          echo "file_id=$FILE_ID" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
+        if: steps.ids.outputs.ok == '1'
         with:
           name: release
       - name: Changelog text
         id: cl
+        if: steps.ids.outputs.ok == '1'
         run: |
           {
             echo "text<<CHANGELOG_EOF"
@@ -107,12 +142,13 @@ jobs:
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
       - name: Upload to Nexus Mods
+        if: steps.ids.outputs.ok == '1'
         # Nexus-Mods/upload-action v1.0.0-beta.11
         uses: Nexus-Mods/upload-action@98532f7670c27cbecc78fae03fa3e278147827e2
         with:
           api_key: ${{ secrets.NEXUS_API_KEY }}
-          mod_id: ${{ vars.NEXUS_MOD_ID }}
-          file_id: ${{ vars.NEXUS_FILE_ID }}
+          mod_id: ${{ steps.ids.outputs.mod_id }}
+          file_id: ${{ steps.ids.outputs.file_id }}
           filename: EnshroudedBuildingTools-${{ needs.release.outputs.version }}.zip
           version: ${{ needs.release.outputs.version }}
           display_name: Building Tools ${{ needs.release.outputs.version }}

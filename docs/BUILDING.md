@@ -76,10 +76,14 @@ DLL.
    [Nexus-Mods/upload-action](https://github.com/Nexus-Mods/upload-action). It needs,
    in the repository settings:
    - environment **Release** with the secret `NEXUS_API_KEY` (your Nexus Mods API key),
-   - repository variables `NEXUS_MOD_ID` (the number in the mod page URL,
-     `nexusmods.com/enshrouded/mods/<id>`) and `NEXUS_FILE_ID` (the main file's id:
-     Files tab → the file's download link `...?file_id=<id>`).
-   Without the variables the Nexus step is skipped.
+   - `NEXUS_MOD_ID` (the number in the mod page URL, `nexusmods.com/enshrouded/mods/<id>`)
+     and `NEXUS_FILE_ID` (the main file's id: Files tab → the file's download link
+     `...?file_id=<id>`), as variables or secrets, in the repository or in the Release
+     environment.
+   If one is missing, the upload is skipped with a warning naming it. To upload a version
+   that is already released (for example after adding the settings), run the Release
+   workflow by hand (Actions → Release → Run workflow) with "Upload the current version to
+   Nexus Mods again" ticked.
 
 Every push and pull request runs the **Build** workflow, which uploads the zip as a
 workflow artifact.
