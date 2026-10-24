@@ -19,7 +19,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.15.0"
+#define MOD_VERSION "0.16.0"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -107,6 +107,8 @@ struct Config {
     int panelTimeout = 5;      // seconds without change before the panel hides (0 = never)
     int panelKeys    = 1;      // key hint line
     int creative     = 0;      // building is free: no charge, no refund, no missing materials
+    int keyOff       = VK_F5;  // the whole mod off / on (vanilla game while off)
+    int fillLimit    = 500;    // most shapes one connected replace (fill bucket) may repaint
 };
 static Config g_cfg;
 
@@ -135,8 +137,9 @@ static void write_full_ini(const Config& c) {
      .t("; Prefab mode <-> Area mode\r\nToggleAreaMode=").i(c.keyStructure).t("\r\n")
      .t("; Replace on/off\r\nToggleReplace=").i(c.keyReplace).t("\r\n")
      .t("; Clear area corners\r\nCancelCorners=").i(c.keyCancel).t("\r\n")
-     .t("; Replace style: full shape / overlap only\r\nToggleReplaceStyle=").i(c.keyStyle).t("\r\n")
+     .t("; Replace style: full shape / overlap only / connected (fill bucket)\r\nToggleReplaceStyle=").i(c.keyStyle).t("\r\n")
      .t("; Area fill: solid / hollow room / walls only\r\nCycleAreaFill=").i(c.keyFill).t("\r\n")
+     .t("; Whole mod off / on (off = vanilla game; all other mod keys do nothing)\r\nToggleMod=").i(c.keyOff).t("\r\n")
      .t("; Free placement on/off\r\nToggleFreePlacement=").i(c.keyHover).t("\r\n")
      .t("; Free placement distance: hold this key + mouse wheel (81 = Q), or the two keys below\r\nFreePlacementWheelKey=").i(c.wheelKey).t("\r\n")
      .t("FreePlacementFarther=").i(c.keyFarther).t("\r\n")
@@ -151,6 +154,7 @@ static void write_full_ini(const Config& c) {
      .t("; Show the area being set up with the game's ghost highlight (1 = on)\r\nPreview=").i(c.preview).t("\r\n")
      .t("\r\n[Limits]\r\n")
      .t("; Most shapes one area action may build, replace or remove (max 20000)\r\nMaxShapes=").i(c.maxShapes).t("\r\n")
+     .t("; Most shapes one connected replace (fill bucket) repaints (max = MaxShapes)\r\nFillLimit=").i(c.fillLimit).t("\r\n")
      .t("\r\n[Interface]\r\n")
      .t("; Info panel at the bottom of the screen (0 = off)\r\nOverlay=").i(c.overlay).t("\r\n")
      .t("; Panel size in percent, lift from the bottom edge (pixels at 1080p)\r\nPanelScale=").i(c.panelScale).t("\r\n")
@@ -191,11 +195,16 @@ static void load_config() {
     g_cfg.panelTimeout = ini_int(L"Interface", L"PanelTimeout", 5);
     g_cfg.panelKeys    = ini_int(L"Interface", L"PanelKeys", 1);
     g_cfg.creative     = ini_int(L"Creative", L"CreativeBuilding", 0) != 0;
+    g_cfg.keyOff       = ini_int(L"Keys", L"ToggleMod", VK_F5);
+    g_cfg.fillLimit    = ini_int(L"Limits", L"FillLimit", 500);
     if (g_cfg.maxShapes < 1) g_cfg.maxShapes = 1;
     if (g_cfg.maxShapes > 20000) g_cfg.maxShapes = 20000;
+    if (g_cfg.fillLimit < 1) g_cfg.fillLimit = 1;
+    if (g_cfg.fillLimit > g_cfg.maxShapes) g_cfg.fillLimit = g_cfg.maxShapes;
     // first start or an ini from an older version: write every option (values kept)
     if (ini_int(L"Keys", L"CycleAreaFill", -1) == -1 || ini_int(L"Interface", L"RefundPopup", -1) == -1 ||
-        ini_int(L"Area", L"Preview", -1) == -1 || ini_int(L"Creative", L"CreativeBuilding", -1) == -1)
+        ini_int(L"Area", L"Preview", -1) == -1 || ini_int(L"Creative", L"CreativeBuilding", -1) == -1 ||
+        ini_int(L"Keys", L"ToggleMod", -1) == -1 || ini_int(L"Limits", L"FillLimit", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -305,7 +314,9 @@ static void write_table_hook(uint8_t* table, void* ctx, void* state) {
 }
 static volatile uint8_t* g_caveMode = nullptr;   // in the runtime copy
 static uint32_t* g_caveVols = nullptr;
-enum { STYLE_OVERLAP = 1, STYLE_FULL = 2 };
+enum { STYLE_OVERLAP = 1, STYLE_FULL = 2, STYLE_CONNECTED = 3 };   // cave modes 1 and 2; connected = overlap
+static volatile LONG g_modOff = 0;           // whole mod off (ToggleMod): vanilla game
+static bool creative_on() { return g_cfg.creative && !g_modOff; }
 static volatile LONG g_replaceStyle = STYLE_FULL;
 typedef void (*TearDownFn)(void* ctx, void* a, void* b, uint32_t c);
 static TearDownFn g_tearDownOrig = nullptr;
@@ -763,7 +774,7 @@ static bool creative_site(uint8_t* ret) {
     return false;
 }
 static uint8_t pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
-    if (g_cfg.creative && creative_site((uint8_t*)__builtin_return_address(0))) {
+    if (creative_on() && creative_site((uint8_t*)__builtin_return_address(0))) {
         // creative building: nothing is charged or given back
         if (list && list == g_refundList) { g_refundN = 0; g_refundDropped = 0; g_refundList = nullptr; }
         g_paidN = 0;
@@ -788,7 +799,7 @@ static uint8_t pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
             return r;
         }
     }
-    if (g_cfg.creative && consume && list) {
+    if (creative_on() && consume && list) {
         static volatile LONG s_other = 0;
         if (InterlockedIncrement(&s_other) <= 10)
             LOG(.str("creative: charge at another call, rva ").x((uint64_t)((uint8_t*)__builtin_return_address(0) - 5 - g_base))
@@ -842,7 +853,7 @@ typedef uint8_t (*MissingFn)(void* cursor, uint8_t* sel, float scale);
 static MissingFn g_missingOrig = nullptr;
 static uint8_t missing_hook(void* cursor, uint8_t* sel, float scale) {
     uint8_t r = g_missingOrig(cursor, sel, scale);
-    if (r && g_cfg.creative && sel && readable(sel + 0x60, 8)) {
+    if (r && creative_on() && sel && readable(sel + 0x60, 8)) {
         uint8_t* bp = *(uint8_t**)(sel + 0x60);
         if (bp && readable(bp + 0x458, 0x20) &&
             (*(uint64_t*)(bp + 0x458) | *(uint64_t*)(bp + 0x460) | *(uint64_t*)(bp + 0x468) | *(uint64_t*)(bp + 0x470)))
@@ -971,7 +982,7 @@ typedef uint8_t* (*PickFn)(uint8_t* res, uint8_t* list, uint64_t a, uint64_t b, 
 static PickFn g_pickOrig = nullptr;
 static uint8_t* pick_hook(uint8_t* res, uint8_t* list, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f) {
     uint8_t* r = g_pickOrig(res, list, a, b, c, d, e, f);
-    if (g_cfg.creative && res && res[0] == 6 && list) {
+    if (creative_on() && res && res[0] == 6 && list) {
         StockList* l = (StockList*)list;
         uint64_t k = list[0x630] && *(uint64_t*)(list + 0x628) < l->count ? *(uint64_t*)(list + 0x628) : 0;
         if (k < l->count) {
@@ -985,7 +996,7 @@ static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, 
     // only while the hammer is out (the lists are rebuilt every frame; longer lists
     // cost the game time even when the picker is closed)
     bool building = !g_cxOrig || GetTickCount() - g_buildTick < 1500;
-    if (g_cfg.creative && building && g_stockAdd && g_stocksTls != TLS_OUT_OF_INDEXES)
+    if (creative_on() && building && g_stockAdd && g_stocksTls != TLS_OUT_OF_INDEXES)
         add_all_materials((uint8_t*)stocks, (StocksCall*)TlsGetValue(g_stocksTls));
     uint8_t* sb = (uint8_t*)stocks; int st = sb[0x2bf8];
     uint64_t before = st < 7 ? ((StockList*)(sb + st * 0x648))->count : 0;
@@ -993,13 +1004,13 @@ static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, 
     // The game selects the entry of the material chosen last (+0x628 index, +0x630
     // valid). With none of a type in the inventory nothing is chosen, so the picker
     // cannot scroll and the hammer has no material: select the first entry instead.
-    if (g_cfg.creative && building && g_stockAdd)
+    if (creative_on() && building && g_stockAdd)
         for (int t = 2; t <= 5; t++) {
             uint8_t* l = (uint8_t*)stocks + t * 0x648;
             if (((StockList*)l)->count && !l[0x630]) { *(uint64_t*)(l + 0x628) = 0; l[0x630] = 1; }
         }
     static DWORD s_diagTick = 0;
-    if (g_cfg.creative && st < 7 && GetTickCount() - s_diagTick > 10000) {
+    if (creative_on() && st < 7 && GetTickCount() - s_diagTick > 10000) {
         s_diagTick = GetTickCount();
         LOG(.str("creative: picker list ").i(st).str(" sort ").i(sb[st * 0x648 + 0x638]).str(" entries ").u(before)
             .str(" -> ").u(((StockList*)(sb + st * 0x648))->count).str(building ? " (hammer out)" : ""));
@@ -1121,7 +1132,8 @@ static Pending g_pend;
 
 static void pend_begin(void* ctx, const CursorXf& tmpl, bool replace, uint32_t shape) {
     g_pend.ctx = ctx; g_pend.tid = GetCurrentThreadId(); g_pend.tick = GetTickCount();
-    g_pend.n = 0; g_pend.replace = replace; g_pend.shape = shape; g_pend.style = g_replaceStyle;
+    g_pend.n = 0; g_pend.replace = replace; g_pend.shape = shape;
+    g_pend.style = g_replaceStyle == STYLE_CONNECTED ? STYLE_OVERLAP : g_replaceStyle;   // cave mode
     memset(g_allow, 0, sizeof(g_allow));
     if (g_caveAllow) memset(g_caveAllow, 0, 256);
     if (g_caveHits) { g_caveHits[0] = 0; g_caveHits[1] = 0; }
@@ -1135,11 +1147,14 @@ static void pend_add(const int64_t* pos) {
 // With Replace, the dry run runs with the replace blit, so the game measures (and
 // prices) exactly what will be written, and the old material of every repainted
 // voxel is tallied in the cave's volume table for the refund.
+static int g_onlyMaterial = 0;     // connected replace: the only material repainted
 static bool price_shape(CostList* list, void* ctx, void* state, void* pdata, CursorXf* xf, bool replace) {
     if (replace) {
         memset(g_remVols, 0, sizeof(g_remVols));
         price_removal(list, ctx, state, xf);                         // what is removable here
         for (int m = 1; m < 0x100; m++) if (g_remVols[m] > 0.f) { g_allow[m] = 1; g_caveAllow[m] = 1; }
+        if (g_onlyMaterial)                 // connected replace: repaint only the clicked material
+            for (int m = 1; m < 0x100; m++) if (m != g_onlyMaterial) { g_allow[m] = 0; g_caveAllow[m] = 0; }
         *g_caveMode = (uint8_t)g_pend.style;
         g_tableForceTid = GetCurrentThreadId();
     }
@@ -1229,7 +1244,7 @@ static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
         g_paidN = 0;
     }
     if (pd.replace) LOG(.str("  commit blit: voxels ").u(g_caveHits[0] - h0).str(" solid ").u(g_caveHits[1] - h1));
-    LOG(.str("commit: ").i(pd.n).str(" shapes, written ").i(placed).str(pd.replace ? (pd.style == STYLE_OVERLAP ? " (replace overlap)" : " (replace full)") : ""));
+    LOG(.str("commit: ").i(pd.n).str(" shapes, written ").i(placed).str(pd.replace ? (pd.style == STYLE_OVERLAP ? " (replace overlap / connected)" : " (replace full)") : ""));
     if (pd.n > 1) { Buf b; b.str("Placed ").i(placed).str(" shapes");
         if (us.recorded < pd.n) b.str("  |  undo covers ").i(us.recorded);
         flash(b.z()); }
@@ -1278,6 +1293,84 @@ static uint8_t structure_fill(CostList* list, void* ctx, void* state, void* pdat
     LOG(.str("fill: priced ").i(priced).str(" of ").i(pl.total).str(" cost entries=").u(list->count)
         .str(" refund entries=").i(g_refundN));
     if (!priced) { g_pend.n = 0; return 0; }
+    return g_pend.n > 0 ? 1 : 0;
+}
+
+// ---- connected replace (fill bucket, server)
+// Starting at the aimed shape, walks the grid of shape-sized cells (6 neighbours,
+// world axes) through every cell that contains the clicked material, up to
+// FillLimit cells. Each cell is probed with a removal dry run, which reports the
+// materials it would remove there. The found cells are then replaced like an area
+// in overlap style, with only the clicked material allowed, so nothing else is
+// touched and the shape's own form does not matter.
+static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdata, const CursorXf& start) {
+    Aabb box; shape_bounds(state, &start, &box);
+    int64_t step[3];
+    for (int a = 0; a < 3; a++) {          // shape size, snapped to 1/16 m against float noise
+        double sz = (double)(box.mx[a] - box.mn[a]);
+        step[a] = (int64_t)((double)(int64_t)(sz * 16.0 + 0.5) * (core::kFix / 16.0));
+    }
+    if (step[0] <= 0 || step[1] <= 0 || step[2] <= 0) return 0;
+    // the clicked material: the building material with the most volume in the first cell
+    CursorXf xf = start;
+    memset(g_remVols, 0, sizeof(g_remVols));
+    price_removal(list, ctx, state, &xf);
+    int target = 0; float best = 0.f;
+    for (int m = 0x80; m < 0x100; m++) if (g_remVols[m] > best) { best = g_remVols[m]; target = m; }
+    const int mine = pdata ? ((uint8_t*)pdata)[0x454] : 0;           // the material being placed
+    LOG(.str("connected replace: clicked material ").x(target).str(" volume ").f(best).str(", new material ").x(mine));
+    if (!target) { flash("Connected replace: no building block there"); beep(MB_ICONHAND); return 0; }
+    if (target == mine) { flash("Connected replace: that is already your material"); beep(MB_ICONHAND); return 0; }
+    // breadth-first over cells (i,j,k relative to the start)
+    const int limit = g_cfg.fillLimit;
+    static int32_t q[kMaxPending][3];
+    static uint64_t seen[1 << 16];                      // open addressing, 0 = empty
+    memset(seen, 0, sizeof(seen));
+    auto key = [](int i, int j, int k) -> uint64_t {
+        return ((uint64_t)(uint32_t)(i + 0x100000) << 42) | ((uint64_t)(uint32_t)(j + 0x100000) << 21) | (uint64_t)(uint32_t)(k + 0x100000) | (1ull << 63);
+    };
+    auto visit = [&](int i, int j, int k) -> bool {     // false if seen before (or table full)
+        uint64_t kk = key(i, j, k); uint32_t h = (uint32_t)((kk * 0x9E3779B97F4A7C15ull) >> 48);
+        for (int n = 0; n < (1 << 16); n++, h = (h + 1) & 0xffff) {
+            if (seen[h] == kk) return false;
+            if (!seen[h]) { seen[h] = kk; return true; }
+        }
+        return false;
+    };
+    int head = 0, tail = 0, probes = 0;
+    bool capped = false;
+    visit(0, 0, 0); q[tail][0] = 0; q[tail][1] = 0; q[tail][2] = 0; tail++;
+    static const int dirs[6][3] = { {1,0,0}, {-1,0,0}, {0,1,0}, {0,-1,0}, {0,0,1}, {0,0,-1} };
+    while (head < tail) {
+        int32_t* c = q[head++];
+        for (const auto& d : dirs) {
+            int i = c[0] + d[0], j = c[1] + d[1], k = c[2] + d[2];
+            if (!visit(i, j, k)) continue;
+            if (tail >= limit || tail >= kMaxPending) { capped = true; continue; }
+            xf.pos[0] = start.pos[0] + i * step[0]; xf.pos[1] = start.pos[1] + j * step[1]; xf.pos[2] = start.pos[2] + k * step[2];
+            memset(g_remVols, 0, sizeof(g_remVols));
+            price_removal(list, ctx, state, &xf); probes++;
+            if (g_remVols[target] > 0.f) { q[tail][0] = i; q[tail][1] = j; q[tail][2] = k; tail++; }
+        }
+    }
+    LOG(.str("connected replace: ").i(tail).str(" cells, ").i(probes).str(" probes").str(capped ? ", stopped at FillLimit" : ""));
+    // price and queue every found cell (overlap style, only the clicked material)
+    pend_begin(ctx, start, true, state ? *(uint32_t*)state : 0);
+    g_pend.style = STYLE_OVERLAP;
+    refund_reset();
+    g_onlyMaterial = target;
+    long priced = 0;
+    for (int n = 0; n < tail; n++) {
+        xf.pos[0] = start.pos[0] + q[n][0] * step[0]; xf.pos[1] = start.pos[1] + q[n][1] * step[1]; xf.pos[2] = start.pos[2] + q[n][2] * step[2];
+        if (price_shape(list, ctx, state, pdata, &xf, true)) priced++;
+    }
+    g_onlyMaterial = 0;
+    g_pendCost[g_pend.n] = (uint32_t)list->count;
+    if (priced) refund_build(list, ctx);
+    LOG(.str("connected replace: priced ").i(priced).str(" of ").i(tail).str(" cost entries=").u(list->count)
+        .str(" refund entries=").i(g_refundN));
+    if (capped) { Buf b; b.str("Connected replace stopped at ").i(limit).str(" shapes (FillLimit)"); flash(b.z()); }
+    if (!priced) { g_pend.n = 0; flash("Nothing to replace there"); return 0; }
     return g_pend.n > 0 ? 1 : 0;
 }
 
@@ -1518,6 +1611,12 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
     }
 
     uint8_t r = 0;
+    if (mode == MODE_PREFAB && g_replaceStyle == STYLE_CONNECTED) {
+        r = connected_fill(list, ctx, state, pdata, target);
+        LeaveCriticalSection(&g_stateLock);
+        if (r) beep(MB_ICONASTERISK);
+        return r;
+    }
     if (mode == MODE_PREFAB) {
         pend_begin(ctx, target, true, shape);
         refund_reset();
@@ -1777,9 +1876,9 @@ static void compose_overlay(char* out, int cap) {
              .str("  ").i(g_corners).c('/').i(g_cfg.corners);
             live_size(b);
         } else b.str(g_replace ? "Prefab replace" : "Prefab");
-        if (g_replace) b.str(g_replaceStyle == STYLE_FULL ? "  |  full shape" : "  |  overlap");
+        if (g_replace) b.str(g_replaceStyle == STYLE_FULL ? "  |  full shape" : g_replaceStyle == STYLE_CONNECTED ? "  |  connected" : "  |  overlap");
         if (g_hover) { int t = (int)(g_hoverDist * 10.f + 0.5f); b.str("  |  free ").i(t / 10).c('.').i(t % 10).str(" m"); }
-        if (g_cfg.creative) b.str("  |  creative");
+        if (creative_on()) b.str("  |  creative");
     }
     // line 2: keys
     if (g_cfg.panelKeys) {
@@ -1789,6 +1888,7 @@ static void compose_overlay(char* out, int cap) {
         b.str("\n").str(k[0]).str(" area  ").str(k[1]).str(" replace  ").str(k[2]).str(" clear  ")
          .str(k[3]).str(" style  ").str(k[4]).str(" free  ").str(k[5]).str(" fill");
         if (g_hover) b.str("  Q+wheel dist");
+        if (g_cfg.keyOff > 0) { char ko[16]; vk_name(g_cfg.keyOff, ko); b.str("  ").str(ko).str(" off"); }
     }
     lstrcpynA(out, b.z(), cap);
 }
@@ -1891,11 +1991,28 @@ static DWORD WINAPI wheel_thread(void*) {
 
 // ------------------------------------------------------------------ hotkeys
 static DWORD WINAPI input_thread(void*) {
-    bool prev[8] = {};
+    bool prev[8] = {}, prevOff = false;
     for (;;) {
         Sleep(15);
         if (!g_active) continue;
         bool focus = game_focused();
+        {   // whole mod off / on
+            bool down = focus && g_cfg.keyOff > 0 && (GetAsyncKeyState(g_cfg.keyOff) & 0x8000);
+            if (down && !prevOff) {
+                LONG off = !g_modOff;
+                if (off) {      // back to the vanilla game
+                    g_mode = MODE_PREFAB; g_replace = 0; g_hover = 0; g_corners = 0; g_cancelReq = 1;
+                }
+                g_modOff = off;
+                char k[16]; vk_name(g_cfg.keyOff, k);
+                Buf b; b.str(off ? "Building Tools OFF (vanilla game)  |  " : "Building Tools ON  |  ").str(k).str(off ? " turns it on" : " turns it off");
+                flash(b.z());
+                LOG(.str("key: mod -> ").str(off ? "off" : "on"));
+                beep(MB_ICONQUESTION);
+            }
+            prevOff = down;
+            if (g_modOff) { for (bool& p : prev) p = false; continue; }
+        }
         int keys[8] = { g_cfg.keyStructure, g_cfg.keyReplace, g_cfg.keyCancel, g_cfg.keyStyle, g_cfg.keyHover,
                         g_hover ? g_cfg.keyFarther : 0, g_hover ? g_cfg.keyCloser : 0, g_cfg.keyFill };
         for (int k = 0; k < 8; k++) {
@@ -1911,9 +2028,11 @@ static DWORD WINAPI input_thread(void*) {
                     flash(r ? "Replace ON" : "Replace OFF");
                     LOG(.str("key: replace -> ").i(r));
                 } else if (k == 3) {
-                    LONG st = g_replaceStyle == STYLE_FULL ? STYLE_OVERLAP : STYLE_FULL; g_replaceStyle = st;
-                    flash(st == STYLE_FULL ? "Replace style: full shape" : "Replace style: overlap only");
-                    LOG(.str("key: replace style -> ").str(st == STYLE_FULL ? "full" : "overlap"));
+                    LONG st = g_replaceStyle == STYLE_FULL ? STYLE_OVERLAP : g_replaceStyle == STYLE_OVERLAP ? STYLE_CONNECTED : STYLE_FULL;
+                    g_replaceStyle = st;
+                    flash(st == STYLE_FULL ? "Replace style: full shape" : st == STYLE_OVERLAP ? "Replace style: overlap only"
+                          : "Replace style: connected (fill bucket, Prefab mode)");
+                    LOG(.str("key: replace style -> ").str(st == STYLE_FULL ? "full" : st == STYLE_OVERLAP ? "overlap" : "connected"));
                 } else if (k == 7) {
                     LONG f = (g_fill + 1) % core::FILL_COUNT; g_fill = f;
                     flash(f == core::FILL_SOLID ? "Area fill: solid" : f == core::FILL_HOLLOW ? "Area fill: hollow room (walls, floor, ceiling)" : "Area fill: walls only");

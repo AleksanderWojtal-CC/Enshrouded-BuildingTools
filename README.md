@@ -2,8 +2,9 @@
 
 A client-side mod for **Enshrouded 1.0 (single player)** that extends the Construction Hammer:
 
-- **Replace**: repaint existing blocks with your current material, as a full shape or
-  only where the shape overlaps existing blocks. Old material is refunded, with the game's item pop-up.
+- **Replace**: repaint existing blocks with your current material, as a full shape,
+  only where the shape overlaps existing blocks, or **connected** (fill bucket: every
+  touching block of the clicked material, up to a limit). Old material is refunded, with the game's item pop-up.
   Undo restores everything, including taking the refund back.
 - **Area mode**: click two opposite corners and the selected shape is repeated over a
   line, floor, wall or box. You can build, replace or remove the area in one action.
@@ -40,9 +41,10 @@ which is also shipped in the zip.
 | F6 | Prefab mode (vanilla) / Area mode |
 | F7 | Replace on/off |
 | F8 | Clear area corners |
-| F9 | Replace style: full shape / overlap only |
+| F9 | Replace style: full shape / overlap only / connected (fill bucket) |
 | F10 | Free placement on/off (Q + wheel: distance) |
 | F11 | Area fill: solid / hollow room / walls only |
+| F5 | Whole mod off / on (off = vanilla game) |
 
 What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 

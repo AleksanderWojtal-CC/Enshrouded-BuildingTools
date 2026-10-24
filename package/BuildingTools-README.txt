@@ -10,7 +10,8 @@ Keys (with the Construction Hammer)
   F6  switch Prefab mode (vanilla) <-> Area mode
   F7  Replace on/off (works in both modes)
   F8  clear area corners
-  F9  Replace style: full shape <-> overlap only
+  F5  whole mod off / on (off = vanilla game, other mod keys do nothing)
+  F9  Replace style: full shape -> overlap only -> connected (fill bucket)
   F10 Free placement on/off: the ghost hovers in front of you (snapped to the
       0.5 m building grid) instead of sticking to the surface you aim at
       Hold Q + mouse wheel (or Page Up / Page Down): farther / closer, 0.5 m steps
@@ -24,6 +25,13 @@ Prefab mode
                    the shape is built as well
     overlap only - only what already exists inside the shape is repainted; its
                    exact form is kept and nothing new is built
+    connected    - fill bucket: click a block and every touching block of the
+                   same material gets your material, nothing else changes. It
+                   spreads in steps of the selected shape, so a 0.5 m cube
+                   follows the blocks exactly and a bigger cube is faster but
+                   coarser. Stops at FillLimit shapes ([Limits] in the ini,
+                   default 500). Prefab mode only (in Area mode it works like
+                   overlap only).
 
 Area mode (2 corners)
   Click two opposite corners; the current shape is repeated over the area
