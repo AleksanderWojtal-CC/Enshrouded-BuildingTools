@@ -53,5 +53,12 @@ Built for the 1.0 client (2026-10-20). After a game update the mod disables itse
 safely if the game code changed; check BuildingTools.log.
 Not for dedicated/online servers (the server does not run the mod).
 
+[b]With Creative Mode / XHL mods[/b]
+They also ship a dinput8.dll. Keep the XHL dinput8.dll, rename ours to BuildingTools.dll
+and Creative Mode's to CreativeModeLoader.dll, and create dinput8-chain.ini:
+[code][Chain]
+CreativeMode=CreativeModeLoader.dll
+BuildingTools=BuildingTools.dll[/code]
+
 Source code and build instructions: <GitHub URL>
 ```

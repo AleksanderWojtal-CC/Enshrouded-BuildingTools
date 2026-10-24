@@ -19,7 +19,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.14.1"
+#define MOD_VERSION "0.14.2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -557,6 +557,41 @@ static void* hook(uint8_t* target, int stolen, void* detour) {
     VirtualProtect(target, stolen, old, &old);
     FlushInstructionCache(GetCurrentProcess(), target, stolen);
     return tramp;
+}
+
+// Redirects direct calls (E8 rel32) to `target` instead of patching its first bytes.
+// Used for functions other mods hook or scan by their prologue (Creative Mode looks
+// for PayCost and 9bc1a0 by their first bytes): the function itself stays untouched,
+// so the order in which the mods start does not matter. `sites` lists the call
+// instructions; with sites == nullptr every call in .text is redirected.
+// Returns the number of calls redirected.
+static int hook_calls(uint8_t* target, void* detour, uint8_t* const* sites, int nSites) {
+    if (!target || !g_textBase) return 0;
+    uint8_t* relay = alloc_near(target, 16);
+    if (!relay) { LOG(.str("hook_calls: no memory near target")); return 0; }
+    put_absjmp(relay, detour);
+    auto patch = [&](uint8_t* at) -> bool {
+        if (at < g_textBase || at + 5 > g_textBase + g_textSize || at[0] != 0xE8) return false;
+        if (at + 5 + *(int32_t*)(at + 1) != target) return false;
+        int64_t d = relay - (at + 5);
+        if (d != (int32_t)d) return false;
+        DWORD old;
+        if (!VirtualProtect(at, 5, PAGE_EXECUTE_READWRITE, &old)) return false;
+        int32_t rel = (int32_t)d;
+        memcpy(at + 1, &rel, 4);
+        VirtualProtect(at, 5, old, &old);
+        FlushInstructionCache(GetCurrentProcess(), at, 5);
+        return true;
+    };
+    int n = 0;
+    if (sites) {
+        for (int k = 0; k < nSites; k++) n += patch(sites[k]);
+    } else {
+        uint8_t* end = g_textBase + g_textSize - 5;
+        for (uint8_t* p = g_textBase; p < end; p++)
+            if (p[0] == 0xE8 && p + 5 + *(int32_t*)(p + 1) == target) n += patch(p);
+    }
+    return n;
 }
 
 // ------------------------------------------------------------ building logic
@@ -1799,8 +1834,14 @@ static DWORD WINAPI init_thread(void*) {
         flash("Building Tools: game version not supported");
         return 0;
     }
-    g_payOrig = (PayFn)hook(pay, 7, (void*)&pay_hook);
-    if (!g_payOrig) { LOG(.str("pay hook failed; mod disabled")); return 0; }
+    // PayCost is redirected at its call sites, not hooked at its entry: Creative Mode
+    // scans for its first bytes and hooks it too.
+    {
+        int calls = hook_calls(pay, (void*)&pay_hook, nullptr, 0);
+        LOG(.str("PayCost: ").i(calls).str(" calls redirected"));
+        if (calls <= 0 || calls > 64) { LOG(.str("pay hook failed; mod disabled")); return 0; }
+        g_payOrig = (PayFn)pay;
+    }
     (void)tearDown;
     g_remove = (RemoveFn)hook(remove, 10, (void*)&remove_hook);
     if (!g_remove) { LOG(.str("remove hook failed; mod disabled")); return 0; }
@@ -1820,11 +1861,15 @@ static DWORD WINAPI init_thread(void*) {
     }
     LOG(.str("game sounds: ").str(g_playUiSound ? "yes" : "no (Windows sounds)"));
     (void)cquery;
+    // only the dismantle system's own call is redirected; 9bc1a0 itself is left
+    // untouched (Creative Mode looks for its first bytes)
     uint8_t* sdeps = find_hookable("SystemDeps", SIG_SYS_DEPS, 5);
     uint8_t* ddeps = find_unique("DismantleDeps", SIG_DISM_DEPS);
-    if (sdeps && ddeps && ddeps + 0x15 + *(int32_t*)(ddeps + 0x11) == sdeps) {
+    if (sdeps && ddeps && ddeps[0x10] == 0xE8 && ddeps + 0x15 + *(int32_t*)(ddeps + 0x11) == sdeps) {
         g_dismDepsRet = ddeps + 0x15;
-        g_depsOrig = (DepsFn)hook(sdeps, 5, (void*)&deps_hook);
+        uint8_t* site = ddeps + 0x10;
+        g_depsOrig = (DepsFn)sdeps;
+        if (hook_calls(sdeps, (void*)&deps_hook, &site, 1) != 1) g_depsOrig = nullptr;
     }
     LOG(.str("refund pop-up: ").str(g_depsOrig ? "available" : "not available"));
     uint8_t* hfx = find_hookable("HoverFx", SIG_HOVER_FX, 5);

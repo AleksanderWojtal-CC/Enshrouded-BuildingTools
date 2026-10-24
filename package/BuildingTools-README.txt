@@ -84,3 +84,19 @@ Changing keys and settings
 
 Uninstall
   Close the game and delete dinput8.dll (the ini and log can go too).
+
+With other mods that ship a dinput8.dll (Creative Mode, XHL mods)
+  Only one file can be called dinput8.dll. Use the XHL Native Core (the
+  dinput8.dll from any XHL mod, e.g. XHL Creative Mode Fix) as dinput8.dll and
+  let it load the others:
+  1. Rename this mod's dinput8.dll to BuildingTools.dll.
+  2. If you use Creative Mode: rename its dinput8.dll to CreativeModeLoader.dll
+     (do this before the XHL dinput8.dll overwrites it).
+  3. Put the XHL dinput8.dll in the game folder.
+  4. Create dinput8-chain.ini in the game folder:
+       [Chain]
+       CreativeMode=CreativeModeLoader.dll
+       BuildingTools=BuildingTools.dll
+     (leave out the CreativeMode line if you don't use it).
+  XHL-Native-Plugin-Host.log shows what it loaded; BuildingTools.log should end
+  with "ready".

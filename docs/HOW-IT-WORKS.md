@@ -18,7 +18,15 @@ a *proxy DLL*. It exports `DirectInput8Create`, which loads the real
 
 No C runtime is linked. The DLL has its own entry point, `memcpy`/`memset` and a stack probe.
 Hooks are 5–10 byte inline jumps to a relay allocated within ±2 GB of the target, plus a
-trampoline holding the stolen instructions.
+trampoline holding the stolen instructions. If another mod already put a jump at a
+function's entry, the hook chains to that jump. Two functions that Creative Mode also
+finds by their first bytes (`PayCost` and 9bc1a0) are not patched at all: the mod
+retargets the `call` instructions that reach them instead, so both mods work whichever
+starts first.
+
+The DLL also works when loaded by another loader (for example as `BuildingTools.dll`
+listed in the XHL Native Core's `dinput8-chain.ini`): everything starts from `DllMain`,
+and the ini and log are kept next to `enshrouded.exe`.
 
 ## The game's building pipeline
 

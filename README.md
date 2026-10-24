@@ -60,6 +60,21 @@ byte signatures. If an update changes that code, the mod turns itself off safely
 `BuildingTools.log` says which signature was not found. It is single player only.
 Online, the server does not run the mod.
 
+**Other mods with a `dinput8.dll`** (Creative Mode, XHL mods): only one file can have
+that name. Use the XHL Native Core (the `dinput8.dll` from an XHL mod) and chain the
+others with a `dinput8-chain.ini` in the game folder, after renaming this mod's DLL to
+`BuildingTools.dll` and Creative Mode's to `CreativeModeLoader.dll`:
+
+```ini
+[Chain]
+CreativeMode=CreativeModeLoader.dll
+BuildingTools=BuildingTools.dll
+```
+
+Building Tools redirects the calls to the two functions Creative Mode also hooks
+(`PayCost`, `9bc1a0`) at their call sites and leaves their first bytes alone, so the two mods
+can start in either order.
+
 ## License
 
 MIT, see [LICENSE](LICENSE). This project is not affiliated with Keen Games.
