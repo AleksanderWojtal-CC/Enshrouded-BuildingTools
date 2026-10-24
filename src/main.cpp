@@ -241,8 +241,7 @@ static const char* SIG_CURSOR_XF = "48 8B C4 55 53 56 57 41 56 48 8D 6C 24 90 48
 // System dependency copy, and the dismantle system's call of it (writer at +0x180)
 static const char* SIG_SYS_DEPS = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 60 4C 8B 09 48 8B D9";
 static const char* SIG_DISM_DEPS = "41 B8 90 01 00 00 48 8D 95 F0 01 00 00 4C 8B E9 E8";
-// Voxel list of the cursor ghost (blueprint hover VFX)
-static const char* SIG_GHOST_LIST = "48 8B C4 48 89 58 10 48 89 70 18 55 57 41 54 41 56 41 57 48 8D A8 38 FF FF FF 48 81 EC A0 01 00 00 F2 41 0F 10 41 2C";
+// Client cursor hover highlight (runs every frame)
 static const char* SIG_HOVER_FX = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 70 F2 FF FF";
 static const char* SIG_WRITE_TABLE = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 C7 44 24 40 00 00 00 00 49 8B D8";
 // Item id of a building material (used to price a shape).
@@ -1394,41 +1393,34 @@ static void live_size(Buf& b) {
 }
 
 // ---- in-game area preview
-// The client cursor shows the ghost of the selected shape as one looped VFX per
-// covered voxel (ClientCursor.blueprintHoverVfx, at most 256). The voxel list is
-// built by a8a290 (called only from 28e2f0); while an area is being set up the mod
-// replaces that list with the area's surface voxels, or its edges for big areas.
-// Voxel coordinates: floor(world metres * 2).
-struct VoxList { uint32_t* data; uint64_t count; uint64_t cap; void* grow; };
-typedef void (*GhostListFn)(VoxList* list, void* a, void* b, void* c);
-static GhostListFn g_ghostListOrig = nullptr;
-static volatile LONG g_previewCount = 0;
-static volatile LONG g_hoverCalls = 0, g_listCalls = 0, g_listOrigN = 0, g_listActive = 0;
-typedef void (*HoverFxFn)(void* a, void* b, void* c);
+// The client cursor's hover function (28e2f0) runs every frame. When the hammer
+// hovers an existing block it highlights that block's voxels with one looped VFX
+// each (guid b0718612-..., started by 29d3d0, stopped by 29d420, time from 9b9490).
+// While an area is being set up, the mod runs its own set of those highlights on
+// the area's surface voxels (or its 12 edges for big areas), from the same function
+// and thread. Voxel coordinates: floor(world metres * 2); VFX at the voxel centre.
+typedef void (*HoverFxFn)(uint8_t* ctx, void* b, void* c);
+typedef uint64_t* (*GameTimeFn)(void* world, void* out);
+typedef uint32_t (*VfxStartFn)(void* sys, uint64_t time, const void* guid, const float* pos, const float* rot,
+                               const void* global, void* params);
+typedef void (*VfxStopFn)(void* sys, uint32_t* handle, uint64_t time, const void* extra);
 static HoverFxFn g_hoverFxOrig = nullptr;
-static void hover_fx_hook(void* a, void* b, void* c) { InterlockedIncrement(&g_hoverCalls); g_hoverFxOrig(a, b, c); }
-// diagnostics for the preview, logged by the overlay thread every few seconds
-static void preview_diag() {
-    static DWORD next = 0; static LONG lh = -1, ll = -1;
-    if (!g_cfg.log || GetTickCount() < next) return;
-    next = GetTickCount() + 3000;
-    LONG h = g_hoverCalls, l = g_listCalls;
-    if (h == lh && l == ll) return;
-    lh = h; ll = l;
-    core::Plan pl; float st[3]; bool ok = false;
-    bool live = area_plan_live(&pl, st, &ok);
-    LOG(.str("preview diag: hover fn calls ").i(h).str(", voxel list calls ").i(l).str(", game voxels ").i(g_listOrigN)
-        .str(", area active ").i(live && ok).str(", replaced with ").i(g_previewCount).str(" (active calls ").i(g_listActive).c(')'));
-}
+static GameTimeFn g_gameTime = nullptr;
+static VfxStartFn g_vfxStart = nullptr;
+static VfxStopFn g_vfxStop = nullptr;
+static const void* g_vfxGlobal = nullptr;
+static const uint32_t kHoverVfxGuid[4] = { 0xb0718612, 0x4e1327b1, 0xca143cbf, 0x9a608f41 };
+static const int kPreviewMax = 256;
+struct PreviewSlot { uint32_t v[3]; uint32_t handle; };
+static PreviewSlot g_pv[kPreviewMax];
+static volatile LONG g_previewCount = 0;
+static volatile LONG g_pvStarted = 0, g_pvActiveFrames = 0;
 
-static void ghost_list_hook(VoxList* l, void* a, void* b, void* c) {
-    g_ghostListOrig(l, a, b, c);
-    InterlockedIncrement(&g_listCalls);
-    if (l) g_listOrigN = (LONG)l->count;
-    if (!g_cfg.preview || !l || !l->data || l->cap == 0) return;
+// surface voxels of the area (or its edges); returns the count
+static int preview_voxels(uint32_t out[][3], int cap) {
     core::Plan pl; float step[3]; bool ok = false;
-    if (!area_plan_live(&pl, step, &ok) || !ok) return;
-    if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return;
+    if (!g_cfg.preview || !area_plan_live(&pl, step, &ok) || !ok) return 0;
+    if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return 0;
     int64_t v0[3], v1[3];
     for (int a = 0; a < 3; a++) {
         int64_t e = pl.origin[a] + pl.stepFix[a] * (pl.count[a] - 1);
@@ -1436,29 +1428,26 @@ static void ghost_list_hook(VoxList* l, void* a, void* b, void* c) {
         int64_t half = (int64_t)(step[a] * 0.5 * core::kFix);
         lo -= half; hi += half;
         v0[a] = lo >> 31;                                   // floor(m * 2)
-        v1[a] = ((hi - 1) >> 31);                           // last voxel inside
+        v1[a] = (hi - 1) >> 31;                             // last voxel inside
         if (v1[a] < v0[a]) v1[a] = v0[a];
-        if (v0[a] < 0) return;
+        if (v0[a] < 0) return 0;
     }
-    const uint64_t cap = l->cap < 256 ? l->cap : 256;
     int64_t d[3] = { v1[0] - v0[0] + 1, v1[1] - v0[1] + 1, v1[2] - v0[2] + 1 };
     int64_t inner = (d[0] > 2 ? d[0] - 2 : 0) * (d[1] > 2 ? d[1] - 2 : 0) * (d[2] > 2 ? d[2] - 2 : 0);
     int64_t surface = d[0] * d[1] * d[2] - inner;
-    uint64_t n = 0;
+    int n = 0;
     auto put = [&](int64_t x, int64_t y, int64_t z) {
         if (n >= cap) return;
-        uint32_t* e = l->data + n * 3;
-        e[0] = (uint32_t)x; e[1] = (uint32_t)y; e[2] = (uint32_t)z; n++;
+        out[n][0] = (uint32_t)x; out[n][1] = (uint32_t)y; out[n][2] = (uint32_t)z; n++;
     };
-    if (surface <= (int64_t)cap) {
+    if (surface <= cap) {
         for (int64_t x = v0[0]; x <= v1[0]; x++)
             for (int64_t y = v0[1]; y <= v1[1]; y++)
                 for (int64_t z = v0[2]; z <= v1[2]; z++)
                     if (x == v0[0] || x == v1[0] || y == v0[1] || y == v1[1] || z == v0[2] || z == v1[2]) put(x, y, z);
     } else {
-        // the 12 edges, thinned evenly when they do not fit
         int64_t edges = 4 * (d[0] + d[1] + d[2]);
-        int64_t stride = (edges + (int64_t)cap - 9) / ((int64_t)cap - 8);
+        int64_t stride = (edges + cap - 9) / (cap - 8);
         if (stride < 1) stride = 1;
         for (int a = 0; a < 3; a++) {
             int b1 = (a + 1) % 3, b2 = (a + 2) % 3;
@@ -1471,9 +1460,52 @@ static void ghost_list_hook(VoxList* l, void* a, void* b, void* c) {
             }
         }
     }
-    l->count = n;
-    g_previewCount = (LONG)n;
-    InterlockedIncrement(&g_listActive);
+    return n;
+}
+
+static void hover_fx_hook(uint8_t* ctx, void* b, void* c) {
+    g_hoverFxOrig(ctx, b, c);
+    if (!ctx || !g_vfxStart || !g_vfxStop || !g_gameTime) return;
+    void* world = *(void**)ctx;
+    void* sys = *(void**)(ctx + 0x168);
+    if (!world || !sys) return;
+    static uint32_t want[kPreviewMax][3];
+    int n = preview_voxels(want, kPreviewMax);
+    static int have = 0;
+    if (n == 0 && have == 0) return;
+    uint64_t tbuf[4] = {};
+    uint64_t* tp = g_gameTime(world, tbuf);
+    uint64_t now = tp ? *tp : 0;
+    alignas(16) uint8_t extra[16] = {};
+    alignas(16) uint8_t params[0x80] = {};
+    alignas(16) static const float rot[4] = { 0.f, 0.f, 0.f, 1.f };
+    int top = n > have ? n : have;
+    for (int i = 0; i < top; i++) {
+        PreviewSlot& s = g_pv[i];
+        if (i < n && s.handle && !memcmp(s.v, want[i], 12)) continue;          // unchanged
+        if (s.handle) g_vfxStop(sys, &s.handle, now, extra);
+        s.handle = 0;
+        if (i < n) {
+            memcpy(s.v, want[i], 12);
+            alignas(16) float pos[4] = { want[i][0] * 0.5f + 0.25f, want[i][1] * 0.5f + 0.25f, want[i][2] * 0.5f + 0.25f, 0.f };
+            memset(params, 0, sizeof(params));
+            s.handle = g_vfxStart(sys, now, kHoverVfxGuid, pos, rot, g_vfxGlobal, params);
+            InterlockedIncrement(&g_pvStarted);
+        }
+    }
+    have = n;
+    g_previewCount = n;
+    if (n) InterlockedIncrement(&g_pvActiveFrames);
+}
+
+static void preview_diag() {
+    static DWORD next = 0; static LONG last = -1;
+    if (!g_cfg.log || GetTickCount() < next) return;
+    next = GetTickCount() + 3000;
+    LONG f = g_pvActiveFrames;
+    if (f == last) return;
+    last = f;
+    LOG(.str("preview: ").i(g_previewCount).str(" highlights, started ").i(g_pvStarted).str(", active frames ").i(f));
 }
 
 static void vk_name(int vk, char* out) {
@@ -1780,11 +1812,23 @@ static DWORD WINAPI init_thread(void*) {
         g_depsOrig = (DepsFn)hook(sdeps, 5, (void*)&deps_hook);
     }
     LOG(.str("refund pop-up: ").str(g_depsOrig ? "available" : "not available"));
-    uint8_t* glist = find_hookable("GhostVoxels", SIG_GHOST_LIST, 7);
-    if (glist) g_ghostListOrig = (GhostListFn)hook(glist, 7, (void*)&ghost_list_hook);
     uint8_t* hfx = find_hookable("HoverFx", SIG_HOVER_FX, 5);
-    if (hfx) g_hoverFxOrig = (HoverFxFn)hook(hfx, 5, (void*)&hover_fx_hook);
-    LOG(.str("area preview: ").str(g_ghostListOrig ? "available" : "not available"));
+    if (hfx) {
+        // the hover function's own calls: game time (+0x4fd), stop (+0x51d), start (+0x607),
+        // lea of the spawn defaults (+0x5e7) and the highlight VFX guid (+0x432)
+        auto rel = [](uint8_t* at) -> uint8_t* { return at + 5 + *(int32_t*)(at + 1); };
+        bool layout = hfx[0x4fd] == 0xE8 && hfx[0x51d] == 0xE8 && hfx[0x607] == 0xE8 &&
+                      hfx[0x5e7] == 0x48 && hfx[0x5e8] == 0x8D && hfx[0x5e9] == 0x0D &&
+                      *(uint32_t*)(hfx + 0x432 + 4) == kHoverVfxGuid[0];
+        if (layout) {
+            g_gameTime = (GameTimeFn)rel(hfx + 0x4fd);
+            g_vfxStop = (VfxStopFn)rel(hfx + 0x51d);
+            g_vfxStart = (VfxStartFn)rel(hfx + 0x607);
+            g_vfxGlobal = hfx + 0x5e7 + 7 + *(int32_t*)(hfx + 0x5e7 + 3);
+            g_hoverFxOrig = (HoverFxFn)hook(hfx, 5, (void*)&hover_fx_hook);
+        }
+    }
+    LOG(.str("area preview: ").str(g_hoverFxOrig ? "available" : "not available"));
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
