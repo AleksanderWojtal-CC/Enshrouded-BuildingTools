@@ -314,3 +314,14 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
 - client_cycle_inventory_stock (2af5f0) -> 406020 (call 2afa47): chosen id not in the
   list -> selected/first entry, result 6 if its count is 0; result 0 + id -> 405270
   writes ClientPlayerInputData.buildingStockCycleAction (+0xa0 version, +0xa4..+0xb0).
+
+## v0.16.0: off switch, connected replace, terrain as the new material
+- Blit callback a81080, after the existing-material checks (a81373): [params+0xa0] != 0
+  (terrain material placed) -> density path a81381..a81400 (density from the shape mask,
+  existing terrain density from byte 1, building/air count as 0; writes material + density,
+  volume += delta / xmm2); else block path a81402 (material, density byte 0, volume += 1).
+  The cave used to jump straight to a81402, so a terrain material got density 0 = air;
+  it now jumps to a81373.
+- Connected replace probes cells with the mod's removal dry run (RemoveShape, refunds
+  suppressed; per-material removed volume from the 48ae10 hook). In game: 500 cells with
+  791 probes plus pricing took about 50 ms on the server thread.

@@ -7,10 +7,10 @@ Files in the game folder
   BuildingTools.log     what the mod did (previous session: BuildingTools.prev.log)
 
 Keys (with the Construction Hammer)
+  F5  whole mod off / on (off = vanilla game, other mod keys do nothing)
   F6  switch Prefab mode (vanilla) <-> Area mode
   F7  Replace on/off (works in both modes)
   F8  clear area corners
-  F5  whole mod off / on (off = vanilla game, other mod keys do nothing)
   F9  Replace style: full shape -> overlap only -> connected (fill bucket)
   F10 Free placement on/off: the ghost hovers in front of you (snapped to the
       0.5 m building grid) instead of sticking to the surface you aim at
@@ -31,7 +31,11 @@ Prefab mode
                    follows the blocks exactly and a bigger cube is faster but
                    coarser. Stops at FillLimit shapes ([Limits] in the ini,
                    default 500). Prefab mode only (in Area mode it works like
-                   overlap only).
+                   overlap only). The clicked block's material is the one that
+                   spreads; clicking ground (terrain) does nothing.
+  Replace repaints blocks (building materials) only; the ground is never
+  touched. Any material can be the new one, also a terrain material (the
+  blocks then become that terrain).
 
 Area mode (2 corners)
   Click two opposite corners; the current shape is repeated over the area
@@ -86,9 +90,15 @@ Changing keys and settings
   kept). Close the game, open the file with Notepad, change a number, save.
   Keys are Windows key codes: F1..F12 = 112..123, A..Z = 65..90, 0..9 = 48..57,
   Page Up 33, Page Down 34, Insert 45, Delete 46, Home 36, End 35,
-  Numpad 0..9 = 96..105. 0 turns a key off. Example: to use F5 for Area mode,
-  set ToggleAreaMode=116. The comments in the file explain each option.
+  Numpad 0..9 = 96..105. 0 turns a key off. Example: to use F4 for Area mode,
+  set ToggleAreaMode=115. The comments in the file explain each option.
   Delete the ini to get all defaults back.
+
+Turning the mod off
+  F5 (ToggleMod in the ini) switches the whole mod off: Prefab mode, Replace,
+  free placement and creative building turn off, the info panel stays hidden
+  and the other mod keys do nothing. The game then plays exactly as without the
+  mod. Press F5 again to turn it back on (the banner says which).
 
 Creative building
   Set CreativeBuilding=1 in the [Creative] section of BuildingTools.ini (close

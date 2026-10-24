@@ -82,8 +82,10 @@ render, which the mod does not reuse.
 Placement normally never touches existing building voxels. Materials 0x80–0xff are
 building materials, 1–0x7f terrain, 0 air. The mod patches the existing-material checks in
 the voxel blit callback (a81350) with `src/cave.S`. In Replace mode an existing building
-voxel of another material is sent to the building write path and its old material is
-counted. Materials the game would not let you remove at that spot are left alone: they
+voxel of another material is counted and handed back to the point where the game picks
+the write path by the new material: a building material takes the block path (material
+byte, density byte 0), a terrain material the terrain path (material and density byte).
+The terrain path sees the old block as density 0, so it always writes. Materials the game would not let you remove at that spot are left alone: they
 are found by a removal dry run, which feeds the `allow[]` table.
 
 The dry run runs with the patch active, so the game prices exactly what will be written.
