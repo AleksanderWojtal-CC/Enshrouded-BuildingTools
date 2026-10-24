@@ -61,6 +61,14 @@ therefore records undo only while the current step's own records clearly fit. Th
 is committed without undo, and the step's cost list is trimmed so undo refunds exactly
 what it takes back. A hook on the "drop undo step" function (492480) detects any loss.
 
+**Preview.** The client cursor's hover function (28e2f0) runs every frame. When the
+hammer aims at an existing block, it highlights that block's voxels with one looped VFX
+per voxel. The mod starts its own set of the same highlight, using the same start,
+stop and time functions on the same thread, along the 12 edges of the area being set
+up. Up to 256 voxels are used, thinned evenly. The effect is drawn on block surfaces,
+so edges in open air stay invisible. The game's own blue ghost block is a tinted model
+render, which the mod does not reuse.
+
 ## Replace
 
 Placement normally never touches existing building voxels. Materials 0x80–0xff are

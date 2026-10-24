@@ -8,7 +8,7 @@ A client-side mod for **Enshrouded 1.0 (single player)** that extends the Constr
 - **Area mode**: click two opposite corners and the selected shape is repeated over a
   line, floor, wall or box. You can build, replace or remove the area in one action.
   Fills: solid, hollow room (walls + floor + ceiling) or walls only. A live size readout
-  shows what the next click will make.
+  and an in-game edge highlight show what the next click will make.
 - **Free placement**: the block ghost hovers in front of you, snapped to the 0.5 m
   building grid, instead of sticking to surfaces. Hold Q and turn the mouse wheel to set
   the distance.

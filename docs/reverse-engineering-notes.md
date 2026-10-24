@@ -277,3 +277,16 @@ The client world skips its placement prediction (so PlaceShape never runs there)
 ghost is blocked, so neither the exact client-cursor match nor a click record existed.
 v0.13.3 falls back to the client cursor component's live aim (+0x338) when it lies within
 6 m of the server place cursor, and logs both client transforms when the lookup fails.
+
+## v0.14.0: area preview
+- The blue ghost block is a tinted model render (not VFX).
+- Client cursor hover function 28e2f0 (called every frame from client_cursor) highlights the
+  voxels of an aimed existing block: voxel list built by a8a290 only while hovering a block;
+  per voxel a looped VFX guid {b0718612,4e1327b1,ca143cbf,9a608f41} started with
+  29d3d0(fxSys = ctx+0x168, time = *9b9490(ctx[0]), &guid, &pos centre, &rot identity,
+  &defaults 150ba30, &params) and stopped with 29d420(fxSys, &handle, time, &extra16).
+  Voxel coords = floor(world m * 2); centre = v*0.5 + 0.25. ClientCursor keeps 256 slots.
+- The mod runs its own 256 slots from a hook on 28e2f0 along the area's edges. The
+  highlight is surface-projected (invisible in air). Hammer cursor VFX references tried
+  (ItemInfo+0x1e4/+0x29c/+0x354/+0x38c): only equipment cursorVfx showed, flickery and near the
+  player, with debris effects -> not used.
