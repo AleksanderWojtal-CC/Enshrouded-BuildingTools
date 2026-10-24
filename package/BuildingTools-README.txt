@@ -82,6 +82,13 @@ Changing keys and settings
   set ToggleAreaMode=116. The comments in the file explain each option.
   Delete the ini to get all defaults back.
 
+Creative building
+  Set CreativeBuilding=1 in the [Creative] section of BuildingTools.ini.
+  Blocks then cost nothing, and removing them or undoing gives nothing back,
+  so your inventory is never touched. Props, crafting and chests stay normal.
+  Note: blocks built in creative still refund materials if you remove them
+  later with creative off.
+
 Uninstall
   Close the game and delete dinput8.dll (the ini and log can go too).
 

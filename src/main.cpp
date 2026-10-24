@@ -19,7 +19,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.14.2"
+#define MOD_VERSION "0.15.0"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -106,6 +106,7 @@ struct Config {
     int panelBottom  = 0;      // panel distance from the bottom edge (pixels at 1080p)
     int panelTimeout = 5;      // seconds without change before the panel hides (0 = never)
     int panelKeys    = 1;      // key hint line
+    int creative     = 0;      // building is free: no charge, no refund, no missing materials
 };
 static Config g_cfg;
 
@@ -140,6 +141,10 @@ static void write_full_ini(const Config& c) {
      .t("; Free placement distance: hold this key + mouse wheel (81 = Q), or the two keys below\r\nFreePlacementWheelKey=").i(c.wheelKey).t("\r\n")
      .t("FreePlacementFarther=").i(c.keyFarther).t("\r\n")
      .t("FreePlacementCloser=").i(c.keyCloser).t("\r\n")
+     .t("\r\n[Creative]\r\n")
+     .t("; 1 = creative building: blocks cost nothing, removing or undoing gives nothing back,\r\n")
+     .t(";     so your inventory is never touched (props, crafting and chests stay normal)\r\n")
+     .t("CreativeBuilding=").i(c.creative).t("\r\n")
      .t("\r\n[Area]\r\n")
      .t("; 2 = two opposite corners, 3 = two base corners then the height\r\nCorners=").i(c.corners).t("\r\n")
      .t("; Free placement start distance in tenths of a metre (40 = 4 m)\r\nFreePlacementDistance=").i(c.hoverDist10).t("\r\n")
@@ -185,11 +190,12 @@ static void load_config() {
     g_cfg.panelBottom  = ini_int(L"Interface", L"PanelBottom", 0);
     g_cfg.panelTimeout = ini_int(L"Interface", L"PanelTimeout", 5);
     g_cfg.panelKeys    = ini_int(L"Interface", L"PanelKeys", 1);
+    g_cfg.creative     = ini_int(L"Creative", L"CreativeBuilding", 0) != 0;
     if (g_cfg.maxShapes < 1) g_cfg.maxShapes = 1;
     if (g_cfg.maxShapes > 20000) g_cfg.maxShapes = 20000;
     // first start or an ini from an older version: write every option (values kept)
     if (ini_int(L"Keys", L"CycleAreaFill", -1) == -1 || ini_int(L"Interface", L"RefundPopup", -1) == -1 ||
-        ini_int(L"Area", L"Preview", -1) == -1)
+        ini_int(L"Area", L"Preview", -1) == -1 || ini_int(L"Creative", L"CreativeBuilding", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -245,6 +251,13 @@ static const char* SIG_DISM_DEPS = "41 B8 90 01 00 00 48 8D 95 F0 01 00 00 4C 8B
 static const char* SIG_HOVER_FX = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 70 F2 FF FF";
 static const char* SIG_WRITE_TABLE = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 C7 44 24 40 00 00 00 00 49 8B D8";
 // Item id of a building material (used to price a shape).
+// Creative building: the PayCost calls of the building systems (blueprints = place,
+// dismantle = remove a shape / a prefab, undo) and the preview's missing-materials check.
+static const char* SIG_PAY_PLACE   = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 4D F8 48 8B 45 B8 48 89 85 98 01 00 00";
+static const char* SIG_PAY_REMOVE  = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 44 8B 06 48 8D 54 24 70 0F 57 C0";
+static const char* SIG_PAY_REMOVE_PREFAB = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 44 8B 07 48 8D 54 24 70 48 8D 4D 30";
+static const char* SIG_PAY_UNDO    = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 8D 40 01 00 00 E8 ?? ?? ?? ??";
+static const char* SIG_MISSING_CALL = "E8 ?? ?? ?? ?? 8B 13 8B CA 0F BA F1 0C 0F BA EA 0C 84 C0 0F 44 D1 89 13";
 static const char* SIG_MATERIAL_ITEM = "48 83 EC 28 44 0F B6 DA 41 8D 43 FF 3C 7E 77 74 4C 8B 49 38 4D 85 C9 74 3B";
 
 // Cost list each shape action appends to (0x18-byte entries).
@@ -736,7 +749,22 @@ static void* pickup_writer_for(uint8_t* inv) {
     for (int k = 0; k < 8; k++) if (g_pickWriters[k].world == world) return g_pickWriters[k].writer;
     return nullptr;
 }
+static uint8_t* g_creativeSites[4];          // return addresses of the building PayCost calls
+static volatile LONG g_creativeLog = 0;
+static bool creative_site(uint8_t* ret) {
+    for (uint8_t* s : g_creativeSites) if (s && s == ret) return true;
+    return false;
+}
 static uint8_t pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
+    if (g_cfg.creative && creative_site((uint8_t*)__builtin_return_address(0))) {
+        // creative building: nothing is charged or given back
+        if (list && list == g_refundList) { g_refundN = 0; g_refundDropped = 0; g_refundList = nullptr; }
+        g_paidN = 0;
+        if (InterlockedIncrement(&g_creativeLog) <= 5)
+            LOG(.str("creative: ").str(consume ? "charge" : "refund").str(" of ").u(list ? list->count : 0)
+                .str(" entries skipped (call at rva ").x((uint64_t)((uint8_t*)__builtin_return_address(0) - 5 - g_base)).c(')'));
+        return 1;
+    }
     if (!consume && list && list != g_refundList) {
         if (UndoRefund* u = undo_refund_find(list)) {           // undo of a Replace step
             CostList take = { u->e, (uint64_t)u->n, (uint64_t)u->n, nullptr };
@@ -790,6 +818,21 @@ static uint8_t pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
 }
 
 // The game's live ServerCursor component, derived from the caller's frame.
+// The build preview's material check (true = too few materials: red preview,
+// "Missing Materials", Build greyed out). Creative building: shapes never miss any.
+typedef uint8_t (*MissingFn)(void* cursor, uint8_t* sel, float scale);
+static MissingFn g_missingOrig = nullptr;
+static uint8_t missing_hook(void* cursor, uint8_t* sel, float scale) {
+    uint8_t r = g_missingOrig(cursor, sel, scale);
+    if (r && g_cfg.creative && sel && readable(sel + 0x60, 8)) {
+        uint8_t* bp = *(uint8_t**)(sel + 0x60);
+        if (bp && readable(bp + 0x458, 0x20) &&
+            (*(uint64_t*)(bp + 0x458) | *(uint64_t*)(bp + 0x460) | *(uint64_t*)(bp + 0x468) | *(uint64_t*)(bp + 0x470)))
+            return 0;      // a building shape or prefab (props keep the normal check)
+    }
+    return r;
+}
+
 static uint8_t* cursor_component(CursorXf* xf) {
     if (!g_cursorLayoutOk) return nullptr;
     uint8_t** slot = (uint8_t**)((uint8_t*)xf - 0x118);
@@ -1563,6 +1606,7 @@ static void compose_overlay(char* out, int cap) {
         } else b.str(g_replace ? "Prefab replace" : "Prefab");
         if (g_replace) b.str(g_replaceStyle == STYLE_FULL ? "  |  full shape" : "  |  overlap");
         if (g_hover) { int t = (int)(g_hoverDist * 10.f + 0.5f); b.str("  |  free ").i(t / 10).c('.').i(t % 10).str(" m"); }
+        if (g_cfg.creative) b.str("  |  creative");
     }
     // line 2: keys
     if (g_cfg.panelKeys) {
@@ -1834,6 +1878,24 @@ static DWORD WINAPI init_thread(void*) {
         flash("Building Tools: game version not supported");
         return 0;
     }
+    {
+        const char* names[4] = { "PayPlace", "PayRemove", "PayRemovePrefab", "PayUndo" };
+        const char* sigs[4] = { SIG_PAY_PLACE, SIG_PAY_REMOVE, SIG_PAY_REMOVE_PREFAB, SIG_PAY_UNDO };
+        int ok = 0;
+        for (int k = 0; k < 4; k++) {
+            uint8_t* at = find_unique(names[k], sigs[k]);
+            // must be one of the redirected PayCost calls
+            if (at && at[0] == 0xE8 && at + 5 + *(int32_t*)(at + 1) == pay) { g_creativeSites[k] = at + 5; ok++; }
+        }
+        uint8_t* mc = find_unique("MissingCall", SIG_MISSING_CALL);
+        if (mc && mc[0] == 0xE8) {
+            uint8_t* fn = mc + 5 + *(int32_t*)(mc + 1);
+            g_missingOrig = (MissingFn)fn;
+            if (hook_calls(fn, (void*)&missing_hook, &mc, 1) != 1) g_missingOrig = nullptr;
+        }
+        LOG(.str("creative building: ").str(g_cfg.creative ? "on" : "off").str(", ").i(ok)
+            .str("/4 payment calls, preview check ").str(g_missingOrig ? "yes" : "no"));
+    }
     // PayCost is redirected at its call sites, not hooked at its entry: Creative Mode
     // scans for its first bytes and hooks it too.
     {
@@ -1899,7 +1961,7 @@ static DWORD WINAPI init_thread(void*) {
     g_active = 1;
     LOG(.str("ready. keys: area=").i(g_cfg.keyStructure).str(" replace=").i(g_cfg.keyReplace).str(" style=").i(g_cfg.keyStyle)
         .str(" cancel=").i(g_cfg.keyCancel).str(" maxShapes=").i(g_cfg.maxShapes));
-    flash("Building Tools " MOD_VERSION " ready");
+    flash(g_cfg.creative ? "Building Tools " MOD_VERSION " ready (creative building)" : "Building Tools " MOD_VERSION " ready");
     return 0;
 }
 
