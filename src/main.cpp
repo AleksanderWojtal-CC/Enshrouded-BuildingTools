@@ -19,7 +19,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.14.0"
+#define MOD_VERSION "0.14.1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1584,7 +1584,11 @@ static DWORD WINAPI overlay_thread(void*) {
             int w = (tr.right - tr.left) + px * 2, h = (tr.bottom - tr.top) + px / 2 + 3;
             int x = r.left + ((r.right - r.left) - w) / 2, y = r.bottom - (int)(g_cfg.panelBottom * sc) - h;
             if (x < r.left) x = r.left; if (y < r.top) y = r.top;
-            SetWindowPos(g_overlay, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            static RECT lastPos = { 0, 0, 0, 0 };
+            if (!shown || lastPos.left != x || lastPos.top != y || lastPos.right != w || lastPos.bottom != h) {
+                SetWindowPos(g_overlay, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                lastPos = { x, y, w, h };
+            }
             if (!shown || lstrcmpA(last, g_overlayText) != 0) { InvalidateRect(g_overlay, nullptr, FALSE); lstrcpyA(last, g_overlayText); }
             shown = true;
         } else if (shown) {
@@ -1611,12 +1615,26 @@ static LRESULT CALLBACK wheel_proc(int code, WPARAM w, LPARAM l) {
     }
     return CallNextHookEx(nullptr, code, w, l);
 }
+// A low-level mouse hook sits in the path of every mouse event on the system, so it
+// is installed only while free placement is on and the game has focus (the only
+// time Q + wheel is used), and removed otherwise. The thread runs at high priority
+// and pumps messages continuously, so the hook never delays mouse input.
 static DWORD WINAPI wheel_thread(void*) {
-    HHOOK h = SetWindowsHookExW(WH_MOUSE_LL, wheel_proc, GetModuleHandleW(nullptr), 0);
-    LOG(.str("mouse wheel hook: ").str(h ? "ok" : "failed"));
-    MSG m;
-    while (GetMessageW(&m, nullptr, 0, 0) > 0) { TranslateMessage(&m); DispatchMessageW(&m); }
-    return 0;
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+    HHOOK h = nullptr;
+    for (;;) {
+        bool want = g_active && g_hover && g_cfg.wheelKey > 0 && game_focused();
+        if (want && !h) {
+            h = SetWindowsHookExW(WH_MOUSE_LL, wheel_proc, GetModuleHandleW(nullptr), 0);
+            LOG(.str("mouse wheel hook ").str(h ? "on" : "failed"));
+        } else if (!want && h) {
+            UnhookWindowsHookEx(h); h = nullptr;
+            LOG(.str("mouse wheel hook off"));
+        }
+        MsgWaitForMultipleObjects(0, nullptr, FALSE, 100, QS_ALLINPUT);
+        MSG m;
+        while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&m); DispatchMessageW(&m); }
+    }
 }
 
 // ------------------------------------------------------------------ hotkeys
