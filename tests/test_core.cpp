@@ -53,7 +53,7 @@ static void binary_checks(const char* exe) {
         {"SIG_PLACE", 0x48a660}, {"SIG_REMOVE", 0x48b180}, {"SIG_BOUNDS", 0x48e8a0},
         {"SIG_CURSOR_CALL", 0x2d33fb}, {"SIG_PLACE_CALL", 0x2d3743},
         {"SIG_SERVER_CHECK", 0x2d36f2}, {"SIG_PAY", 0x48eeb0},
-        {"SIG_PLACE_COMMIT", 0x487270}, {"SIG_REMOVE_COMMIT", 0x487af0}, {"SIG_MATERIAL_ITEM", 0xe75240}, {"SIG_TEARDOWN_EVENT", 0x490540}, {"SIG_REFUND_BUILD", 0x48ae10}, {"SIG_BLIT_CHECK", 0xa81327}, {"SIG_WRITE_TABLE", 0x48f1c0}, {"SIG_BEGIN_UNDO", 0x4919a0}, {"SIG_POP_UNDO", 0x492480}, {"SIG_HUD_UPDATE", 0xb25350}, {"SIG_UI_SOUND", 0xb26b8f}, {"SIG_CURSOR_QUERY", 0x287b10}, {"SIG_CURSOR_XF", 0x28bc80}, {"SIG_SYS_DEPS", 0x9bc1a0}, {"SIG_GHOST_LIST", 0xa8a290}, {"SIG_HOVER_FX", 0x28e2f0}, {"SIG_DISM_DEPS", 0x2d3c99},
+        {"SIG_PLACE_COMMIT", 0x487270}, {"SIG_REMOVE_COMMIT", 0x487af0}, {"SIG_MATERIAL_ITEM", 0xe75240}, {"SIG_TEARDOWN_EVENT", 0x490540}, {"SIG_REFUND_BUILD", 0x48ae10}, {"SIG_BLIT_CHECK", 0xa81327}, {"SIG_WRITE_TABLE", 0x48f1c0}, {"SIG_BEGIN_UNDO", 0x4919a0}, {"SIG_POP_UNDO", 0x492480}, {"SIG_HUD_UPDATE", 0xb25350}, {"SIG_UI_SOUND", 0xb26b8f}, {"SIG_CURSOR_QUERY", 0x287b10}, {"SIG_CURSOR_XF", 0x28bc80}, {"SIG_SYS_DEPS", 0x9bc1a0}, {"SIG_HOVER_FX", 0x28e2f0}, {"SIG_DISM_DEPS", 0x2d3c99},
     };
     CHECK(sigs.size() == expect.size(), "all signatures extracted");
     for (auto& [name, rva] : expect) {
@@ -84,8 +84,11 @@ static void binary_checks(const char* exe) {
     CHECK(!memcmp(&img[0x287b10], "\x48\x89\x5C\x24\x18", 5), "cursor query hook steals mov [rsp+18h],rbx");
     CHECK(0x2d3c99 + 0x15 + *(int32_t*)&img[0x2d3c99 + 0x11] == 0x9bc1a0, "dismantle deps call targets 9bc1a0");
     CHECK(!memcmp(&img[0x2d4197], "\x48\x8B\x85\x70\x03\x00\x00", 7), "dismantle reads pickup writer at deps+0x180 (rbp+0x370)");
-    CHECK(!memcmp(&img[0xa8a290], "\x48\x8B\xC4\x48\x89\x58\x10", 7), "ghost list hook steals mov rax,rsp; mov [rax+10h],rbx");
-    CHECK(0x28e5ef + 5 + *(int32_t*)&img[0x28e5ef + 1] == 0xa8a290, "ghost list built only by the cursor hover function");
+    { const uint32_t h = 0x28e2f0;
+      auto rel = [&](uint32_t at) { return at + 5 + *(int32_t*)&img[at + 1]; };
+      CHECK(rel(h + 0x4fd) == 0x9b9490 && rel(h + 0x51d) == 0x29d420 && rel(h + 0x607) == 0x29d3d0, "hover fn: time / stop / start calls");
+      CHECK(h + 0x5e7 + 7 + *(int32_t*)&img[h + 0x5e7 + 3] == 0x150ba30 && *(uint32_t*)&img[h + 0x436] == 0xb0718612, "hover fn: spawn defaults and highlight guid");
+      CHECK(!memcmp(&img[h], "\x48\x89\x5C\x24\x10", 5), "hover fn hook steals mov [rsp+10h],rbx"); }
     const uint8_t popStolen[5] = {0x48,0x89,0x5C,0x24,0x10};
     CHECK(!memcmp(&img[0x492480], popStolen, 5), "pop hook steals mov [rsp+10h],rbx");
     const uint8_t commitStolen[5] = {0x48,0x8B,0xC4,0x55,0x53};
