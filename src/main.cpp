@@ -785,6 +785,12 @@ static uint8_t pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
             return r;
         }
     }
+    if (g_cfg.creative && consume && list) {
+        static volatile LONG s_other = 0;
+        if (InterlockedIncrement(&s_other) <= 10)
+            LOG(.str("creative: charge at another call, rva ").x((uint64_t)((uint8_t*)__builtin_return_address(0) - 5 - g_base))
+                .str(", ").u(list->count).str(" entries (paid normally)"));
+    }
     static volatile LONG s_refundDiag = 0;
     if (!consume && list && InterlockedIncrement(&s_refundDiag) <= 20) {
         uint8_t* ret = (uint8_t*)__builtin_return_address(0);
@@ -838,6 +844,11 @@ static uint8_t missing_hook(void* cursor, uint8_t* sel, float scale) {
         if (bp && readable(bp + 0x458, 0x20) &&
             (*(uint64_t*)(bp + 0x458) | *(uint64_t*)(bp + 0x460) | *(uint64_t*)(bp + 0x468) | *(uint64_t*)(bp + 0x470)))
             return 0;      // a building shape or prefab (props keep the normal check)
+        static volatile LONG s_n = 0;
+        if (InterlockedIncrement(&s_n) <= 8)
+            LOG(.str("creative: preview still missing materials, blueprint ").x((uint64_t)bp)
+                .str(bp && readable(bp + 0x5d8, 4) ? " flags " : "").x(bp && readable(bp + 0x5d8, 4) ? *(uint32_t*)(bp + 0x5d8) : 0)
+                .str(" sel+0x68 ").x(readable(sel + 0x68, 8) ? *(uint64_t*)(sel + 0x68) : 0));
     }
     return r;
 }
