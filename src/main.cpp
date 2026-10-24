@@ -243,6 +243,7 @@ static const char* SIG_SYS_DEPS = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 
 static const char* SIG_DISM_DEPS = "41 B8 90 01 00 00 48 8D 95 F0 01 00 00 4C 8B E9 E8";
 // Voxel list of the cursor ghost (blueprint hover VFX)
 static const char* SIG_GHOST_LIST = "48 8B C4 48 89 58 10 48 89 70 18 55 57 41 54 41 56 41 57 48 8D A8 38 FF FF FF 48 81 EC A0 01 00 00 F2 41 0F 10 41 2C";
+static const char* SIG_HOVER_FX = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 70 F2 FF FF";
 static const char* SIG_WRITE_TABLE = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 C7 44 24 40 00 00 00 00 49 8B D8";
 // Item id of a building material (used to price a shape).
 static const char* SIG_MATERIAL_ITEM = "48 83 EC 28 44 0F B6 DA 41 8D 43 FF 3C 7E 77 74 4C 8B 49 38 4D 85 C9 74 3B";
@@ -1402,9 +1403,28 @@ struct VoxList { uint32_t* data; uint64_t count; uint64_t cap; void* grow; };
 typedef void (*GhostListFn)(VoxList* list, void* a, void* b, void* c);
 static GhostListFn g_ghostListOrig = nullptr;
 static volatile LONG g_previewCount = 0;
+static volatile LONG g_hoverCalls = 0, g_listCalls = 0, g_listOrigN = 0, g_listActive = 0;
+typedef void (*HoverFxFn)(void* a, void* b, void* c);
+static HoverFxFn g_hoverFxOrig = nullptr;
+static void hover_fx_hook(void* a, void* b, void* c) { InterlockedIncrement(&g_hoverCalls); g_hoverFxOrig(a, b, c); }
+// diagnostics for the preview, logged by the overlay thread every few seconds
+static void preview_diag() {
+    static DWORD next = 0; static LONG lh = -1, ll = -1;
+    if (!g_cfg.log || GetTickCount() < next) return;
+    next = GetTickCount() + 3000;
+    LONG h = g_hoverCalls, l = g_listCalls;
+    if (h == lh && l == ll) return;
+    lh = h; ll = l;
+    core::Plan pl; float st[3]; bool ok = false;
+    bool live = area_plan_live(&pl, st, &ok);
+    LOG(.str("preview diag: hover fn calls ").i(h).str(", voxel list calls ").i(l).str(", game voxels ").i(g_listOrigN)
+        .str(", area active ").i(live && ok).str(", replaced with ").i(g_previewCount).str(" (active calls ").i(g_listActive).c(')'));
+}
 
 static void ghost_list_hook(VoxList* l, void* a, void* b, void* c) {
     g_ghostListOrig(l, a, b, c);
+    InterlockedIncrement(&g_listCalls);
+    if (l) g_listOrigN = (LONG)l->count;
     if (!g_cfg.preview || !l || !l->data || l->cap == 0) return;
     core::Plan pl; float step[3]; bool ok = false;
     if (!area_plan_live(&pl, step, &ok) || !ok) return;
@@ -1453,6 +1473,7 @@ static void ghost_list_hook(VoxList* l, void* a, void* b, void* c) {
     }
     l->count = n;
     g_previewCount = (LONG)n;
+    InterlockedIncrement(&g_listActive);
 }
 
 static void vk_name(int vk, char* out) {
@@ -1507,6 +1528,7 @@ static DWORD WINAPI overlay_thread(void*) {
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
         compose_overlay(g_overlayText, sizeof(g_overlayText));
+        preview_diag();
         DWORD now = GetTickCount();
         if (lstrcmpA(changed, g_overlayText) != 0) { lstrcpyA(changed, g_overlayText); changedAt = now; }
         bool idle = g_cfg.panelTimeout > 0 && now - changedAt > (DWORD)g_cfg.panelTimeout * 1000 && now >= g_flashUntil;
@@ -1760,6 +1782,8 @@ static DWORD WINAPI init_thread(void*) {
     LOG(.str("refund pop-up: ").str(g_depsOrig ? "available" : "not available"));
     uint8_t* glist = find_hookable("GhostVoxels", SIG_GHOST_LIST, 7);
     if (glist) g_ghostListOrig = (GhostListFn)hook(glist, 7, (void*)&ghost_list_hook);
+    uint8_t* hfx = find_hookable("HoverFx", SIG_HOVER_FX, 5);
+    if (hfx) g_hoverFxOrig = (HoverFxFn)hook(hfx, 5, (void*)&hover_fx_hook);
     LOG(.str("area preview: ").str(g_ghostListOrig ? "available" : "not available"));
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
