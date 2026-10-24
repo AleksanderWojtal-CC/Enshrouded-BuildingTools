@@ -12,10 +12,11 @@ A client-side mod for **Enshrouded 1.0 (single player)** that extends the Constr
 - **Free placement**: the block ghost hovers in front of you, snapped to the 0.5 m
   building grid, instead of sticking to surfaces. Hold Q and turn the mouse wheel to set
   the distance.
-- **Creative building** (optional, `CreativeBuilding=1` in `BuildingTools.ini`): blocks
-  cost nothing and removing or undoing gives nothing back, so the inventory is never
-  touched, and the material picker lists every block, roof, terrain and overgrowth
-  material. Props, crafting and chests work as normal.
+- **Creative building** (optional, `CreativeBuilding=1` in `BuildingTools.ini`): blocks,
+  roofs, terrain and prefabs cost nothing and removing or undoing gives nothing back, so
+  the inventory is never touched. The material picker's "backpack and magic chests"
+  order lists every material, also ones you have none of; favourites and the other
+  orders stay normal. Props, crafting and chests work as normal.
 - The mod uses the game's own UI sounds and adds a small info bar at the bottom of the screen.
   Keys and options live in `BuildingTools.ini`.
 
@@ -42,6 +43,8 @@ which is also shipped in the zip.
 | F9 | Replace style: full shape / overlap only |
 | F10 | Free placement on/off (Q + wheel: distance) |
 | F11 | Area fill: solid / hollow room / walls only |
+
+What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 ## Build
 

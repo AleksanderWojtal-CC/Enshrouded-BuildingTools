@@ -1,6 +1,9 @@
 # Nexus Mods page
 
-Upload `EnshroudedBuildingTools-<version>.zip` from the GitHub release as the main file.
+New versions are uploaded automatically by the Release workflow (see
+[BUILDING.md](BUILDING.md#releasing)); this page text is for the first upload and for
+editing the description. Manual upload: `EnshroudedBuildingTools-<version>.zip` from the
+GitHub release as the main file.
 The zip root is the game folder, so Vortex and manual installs put `dinput8.dll` next to
 `enshrouded.exe`.
 
@@ -36,8 +39,10 @@ The block ghost hovers in front of you instead of sticking to surfaces.
 Hold Q and turn the mouse wheel to move it closer or farther.
 
 [b]Creative building[/b] (optional)
-CreativeBuilding=1 in BuildingTools.ini: blocks cost nothing, removing or undoing gives
-nothing back, inventory untouched, and the material picker lists every material.
+CreativeBuilding=1 in BuildingTools.ini: blocks, roofs, terrain and prefabs cost nothing,
+removing or undoing gives nothing back, so your inventory is never touched. The material
+picker ("backpack and magic chests" order) lists every material, also ones you have none
+of; favourites and the other orders stay normal. Props, chests and crafting are unchanged.
 
 [b]Details[/b]
 [list]

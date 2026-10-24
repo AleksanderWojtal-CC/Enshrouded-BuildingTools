@@ -109,6 +109,27 @@ on and a building shape selected, a post-hook replaces the position with
 snapped to the 0.5 m grid, with the last valid rotation, and marks the transform valid.
 The game then shows its normal ghost there and places at it.
 
+## Creative building
+
+With `CreativeBuilding=1`:
+
+- **Payment.** `PayCost` is reached through redirected `call` instructions, so the mod
+  knows which game system is paying (the return address). For the calls of the
+  blueprint (place), dismantle (shape and prefab) and undo systems it returns success
+  without touching the inventory; every other caller (props, crafting, chests) pays
+  normally. Replace's own refund of the old material is skipped too.
+- **Preview.** The client's "missing materials" check (red ghost, Build greyed out) is
+  answered with "enough" for building shapes and prefabs.
+- **Material picker.** The picker's lists are rebuilt every frame by
+  `updateInventoryStocks` (4076b0) from the backpack, the magic chests and the
+  favourites. While the hammer is out, the mod adds every item of the terrain, block,
+  roof and overgrowth item groups (count 0) to the list on screen, in its "backpack and
+  magic chests" order only, just before the game finalises it. The ids are collected
+  once; each frame only missing entries are appended.
+- **Empty types.** When the material chosen last is not in a list, the game picks the
+  selected entry and sends it as the new choice, but refuses an entry with count 0
+  (406020). The mod accepts it, so a type with nothing in the inventory gets a material.
+
 ## Sounds and info bar
 
 UI sounds come from the game's UI bundle (`FbUiBundle.sounds`). They are played through
