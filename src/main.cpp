@@ -257,6 +257,8 @@ static const char* SIG_PAY_PLACE   = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 
 static const char* SIG_PAY_REMOVE  = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 44 8B 06 48 8D 54 24 70 0F 57 C0";
 static const char* SIG_PAY_REMOVE_PREFAB = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 44 8B 07 48 8D 54 24 70 48 8D 4D 30";
 static const char* SIG_PAY_UNDO    = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 8D 40 01 00 00 E8 ?? ?? ?? ??";
+// The material picker's item lists (g38_items::updateInventoryStocks)
+static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56";
 static const char* SIG_MISSING_CALL = "E8 ?? ?? ?? ?? 8B 13 8B CA 0F BA F1 0C 0F BA EA 0C 84 C0 0F 44 D1 89 13";
 static const char* SIG_MATERIAL_ITEM = "48 83 EC 28 44 0F B6 DA 41 8D 43 FF 3C 7E 77 74 4C 8B 49 38 4D 85 C9 74 3B";
 
@@ -831,6 +833,68 @@ static uint8_t missing_hook(void* cursor, uint8_t* sel, float scale) {
             return 0;      // a building shape or prefab (props keep the normal check)
     }
     return r;
+}
+
+// ---- creative: the material picker lists every building material
+// The game builds the picker's lists in updateInventoryStocks (4076b0): seven stock
+// lists of 0x648 bytes (entries {itemId, slot, count} of 0x18 bytes), filled from the
+// backpack, the magic chests and the favourites. In creative building the mod adds
+// every item of the terrain, block, roof and overgrowth item groups (count 0), with
+// the game's own add function, right before the lists are finalised.
+struct StockList { uint8_t* data; uint64_t count; uint64_t cap; void* grow; };
+typedef void (*StocksFn)(void* stocks, void* ctx, uint8_t onlyShown);
+typedef void (*StockFinalFn)(void* stocks, void* a, void* b, void* c, void* d, void* e);
+typedef void (*StockAddFn)(void* list, const uint32_t* item, uint32_t container, uint64_t index, uint8_t keep);
+typedef uint8_t* (*RegistryFn)(void* src);
+typedef uint64_t (*IterBeginFn)(void* set);
+typedef uint64_t (*IterNextFn)(void* set, uint64_t at);
+static StocksFn g_stocksOrig; static StockFinalFn g_stockFinalOrig; static StockAddFn g_stockAdd;
+static RegistryFn g_itemGroups; static IterBeginFn g_iterBegin; static IterNextFn g_iterNext;
+static uint32_t* g_noContainer; static DWORD g_stocksTls = TLS_OUT_OF_INDEXES;
+static volatile LONG g_stocksLog = 0;
+struct StocksCall { uint8_t* ctx; uint8_t onlyShown; };
+static void stocks_hook(void* stocks, void* ctx, uint8_t onlyShown) {
+    StocksCall c = { (uint8_t*)ctx, onlyShown };
+    TlsSetValue(g_stocksTls, &c);
+    g_stocksOrig(stocks, ctx, onlyShown);
+    TlsSetValue(g_stocksTls, nullptr);
+}
+static void add_all_materials(uint8_t* stocks, StocksCall* c) {
+    if (!c || !c->ctx || !readable(c->ctx + 0x68, 8)) return;
+    uint8_t* reg = g_itemGroups(*(void**)(c->ctx + 0x68));
+    if (!reg || !readable(reg, 0x48)) return;
+    int added = 0;
+    uint64_t end = *(uint64_t*)(reg + 0x10);
+    int guard = 0;
+    for (uint64_t at = g_iterBegin(reg + 8); at != end && guard < 100000; at = g_iterNext(reg + 8, at), guard++) {
+        uint8_t* g = (*(uint8_t***)(reg + 0x40))[at];
+        if (!g || !readable(g, 0x10)) continue;
+        int type = g[0] - 0xe;                 // item group -> stock type (as the game maps it)
+        static const int8_t map[7] = { 0, 1, 6, 2, 3, 4, 5 };
+        if (type < 0 || type > 6) continue;
+        int st = map[type];
+        if (st < 2 || st > 5) continue;        // terrain, blocks, roof, overgrowth
+        if (c->onlyShown && stocks[0x2bf8] != st) continue;
+        int32_t off = *(int32_t*)(g + 8); uint32_t n = *(uint32_t*)(g + 0xc);
+        if (!off || !n) continue;
+        uint32_t* ids = (uint32_t*)(g + 8 + off);
+        StockList* list = (StockList*)(stocks + st * 0x648);
+        for (uint32_t k = 0; k < n; k++) {
+            if (!ids[k]) continue;
+            if (list->count + 1 > list->cap && !list->grow) break;   // fixed list full
+            uint32_t item[3] = { ids[k], 0, 0 };
+            uint64_t before = list->count;
+            g_stockAdd(list, item, *g_noContainer, 0, 1);
+            added += (int)(list->count - before);
+        }
+    }
+    if (added && InterlockedIncrement(&g_stocksLog) <= 3)
+        LOG(.str("creative: material picker +").i(added).str(" materials"));
+}
+static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, void* e) {
+    if (g_cfg.creative && g_stockAdd && g_stocksTls != TLS_OUT_OF_INDEXES)
+        add_all_materials((uint8_t*)stocks, (StocksCall*)TlsGetValue(g_stocksTls));
+    g_stockFinalOrig(stocks, a, b, cc, d, e);
 }
 
 static uint8_t* cursor_component(CursorXf* xf) {
@@ -1893,8 +1957,27 @@ static DWORD WINAPI init_thread(void*) {
             g_missingOrig = (MissingFn)fn;
             if (hook_calls(fn, (void*)&missing_hook, &mc, 1) != 1) g_missingOrig = nullptr;
         }
+        uint8_t* st = find_unique("Stocks", SIG_STOCKS);
+        auto rel = [](uint8_t* at) -> uint8_t* { return at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
+        if (st && memcmp(st + 0x867, "\x48\x69\xC8\x48\x06\x00\x00", 7) == 0 &&
+            memcmp(st + 0x78f, "\x48\x8D\xBE\xF8\x2B\x00\x00", 7) == 0 &&
+            st[0x194] == 0x44 && st[0x195] == 0x8B && st[0x196] == 0x05 &&
+            rel(st + 0x876) && rel(st + 0x705) && rel(st + 0x721) && rel(st + 0x89d) && rel(st + 0xa76)) {
+            g_stockAdd = (StockAddFn)rel(st + 0x876);
+            g_itemGroups = (RegistryFn)rel(st + 0x705);
+            g_iterBegin = (IterBeginFn)rel(st + 0x721);
+            g_iterNext = (IterNextFn)rel(st + 0x89d);
+            g_noContainer = (uint32_t*)(st + 0x194 + 7 + *(int32_t*)(st + 0x197));
+            g_stocksTls = TlsAlloc();
+            uint8_t* fin = rel(st + 0xa76); uint8_t* finSite = st + 0xa76;
+            g_stockFinalOrig = (StockFinalFn)fin;
+            g_stocksOrig = (StocksFn)st;
+            if (g_stocksTls == TLS_OUT_OF_INDEXES || hook_calls(st, (void*)&stocks_hook, nullptr, 0) <= 0 ||
+                hook_calls(fin, (void*)&stock_final_hook, &finSite, 1) != 1) g_stockAdd = nullptr;
+        }
         LOG(.str("creative building: ").str(g_cfg.creative ? "on" : "off").str(", ").i(ok)
-            .str("/4 payment calls, preview check ").str(g_missingOrig ? "yes" : "no"));
+            .str("/4 payment calls, preview check ").str(g_missingOrig ? "yes" : "no")
+            .str(", full material list ").str(g_stockAdd ? "yes" : "no"));
     }
     // PayCost is redirected at its call sites, not hooked at its entry: Creative Mode
     // scans for its first bytes and hooks it too.
