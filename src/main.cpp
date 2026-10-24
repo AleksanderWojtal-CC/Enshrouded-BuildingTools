@@ -19,7 +19,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.13.4"
+#define MOD_VERSION "0.14.0"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -100,6 +100,7 @@ struct Config {
     int wheelKey     = 'Q';        // hold + mouse wheel = free placement distance
     int keyFill      = VK_F11;     // area fill: solid / hollow / walls
     int refundPopup  = 1;          // show the game's item pop-up for refunds
+    int preview      = 1;          // show the area with the game's ghost highlight
     int hoverDist10  = 40;         // free placement distance in tenths of a metre
     int panelScale   = 100;        // info panel size in percent
     int panelBottom  = 0;      // panel distance from the bottom edge (pixels at 1080p)
@@ -142,6 +143,7 @@ static void write_full_ini(const Config& c) {
      .t("\r\n[Area]\r\n")
      .t("; 2 = two opposite corners, 3 = two base corners then the height\r\nCorners=").i(c.corners).t("\r\n")
      .t("; Free placement start distance in tenths of a metre (40 = 4 m)\r\nFreePlacementDistance=").i(c.hoverDist10).t("\r\n")
+     .t("; Show the area being set up with the game's ghost highlight (1 = on)\r\nPreview=").i(c.preview).t("\r\n")
      .t("\r\n[Limits]\r\n")
      .t("; Most shapes one area action may build, replace or remove (max 20000)\r\nMaxShapes=").i(c.maxShapes).t("\r\n")
      .t("\r\n[Interface]\r\n")
@@ -175,6 +177,7 @@ static void load_config() {
     g_cfg.wheelKey     = ini_int(L"Keys", L"FreePlacementWheelKey", 'Q');
     g_cfg.keyFill      = ini_int(L"Keys", L"CycleAreaFill", VK_F11);
     g_cfg.refundPopup  = ini_int(L"Interface", L"RefundPopup", 1);
+    g_cfg.preview      = ini_int(L"Area", L"Preview", 1);
     g_cfg.hoverDist10  = ini_int(L"Area", L"FreePlacementDistance", 40);
     g_cfg.panelScale   = ini_int(L"Interface", L"PanelScale", 100);
     if (g_cfg.panelScale < 50) g_cfg.panelScale = 50;
@@ -185,7 +188,8 @@ static void load_config() {
     if (g_cfg.maxShapes < 1) g_cfg.maxShapes = 1;
     if (g_cfg.maxShapes > 20000) g_cfg.maxShapes = 20000;
     // first start or an ini from an older version: write every option (values kept)
-    if (ini_int(L"Keys", L"CycleAreaFill", -1) == -1 || ini_int(L"Interface", L"RefundPopup", -1) == -1)
+    if (ini_int(L"Keys", L"CycleAreaFill", -1) == -1 || ini_int(L"Interface", L"RefundPopup", -1) == -1 ||
+        ini_int(L"Area", L"Preview", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -237,6 +241,8 @@ static const char* SIG_CURSOR_XF = "48 8B C4 55 53 56 57 41 56 48 8D 6C 24 90 48
 // System dependency copy, and the dismantle system's call of it (writer at +0x180)
 static const char* SIG_SYS_DEPS = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 60 4C 8B 09 48 8B D9";
 static const char* SIG_DISM_DEPS = "41 B8 90 01 00 00 48 8D 95 F0 01 00 00 4C 8B E9 E8";
+// Voxel list of the cursor ghost (blueprint hover VFX)
+static const char* SIG_GHOST_LIST = "48 8B C4 48 89 58 10 48 89 70 18 55 57 41 54 41 56 41 57 48 8D A8 38 FF FF FF 48 81 EC A0 01 00 00 F2 41 0F 10 41 2C";
 static const char* SIG_WRITE_TABLE = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 C7 44 24 40 00 00 00 00 49 8B D8";
 // Item id of a building material (used to price a shape).
 static const char* SIG_MATERIAL_ITEM = "48 83 EC 28 44 0F B6 DA 41 8D 43 FF 3C 7E 77 74 4C 8B 49 38 4D 85 C9 74 3B";
@@ -1356,26 +1362,97 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
 }
 
 // Size the area would have if the next corner were clicked where the cursor is now.
-static void live_size(Buf& b) {
+// The area the next corner click would make, from the corners set so far and the
+// live client cursor. false when no area is being set up.
+static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
     LONG nc = g_corners;
     uint8_t* cc = g_clientCC;
-    if (nc < 1 || nc > g_cfg.corners - 1 || !cc) return;
+    if (g_mode != MODE_AREA || nc < 1 || nc > g_cfg.corners - 1 || !cc) return false;
     LONG off = g_scCursorOff;
-    if (!readable(cc + off, 0x18)) return;
+    if (!readable(cc + off, 0x18)) return false;
     int64_t* p = (int64_t*)(cc + off);
-    if (!p[0] && !p[1] && !p[2]) return;
+    if (!p[0] && !p[1] && !p[2]) return false;
     I3 live{ p[0] + g_scOff[0], p[1] + g_scOff[1], p[2] + g_scOff[2] };
     I3 c[3];
     const int64_t tol = (int64_t)(0.1 * core::kFix);
     if (nc == 1) { c[0] = g_scPos[0]; c[1] = live; c[2] = live; }   // 2-corner mode: the final size
     else { c[0] = g_scPos[0]; c[1] = g_scPos[1]; c[2] = core::lock_third(g_scPos[0], g_scPos[1], live, tol); }
-    float step[3] = { g_scStep[0], g_scStep[1], g_scStep[2] };
-    if (step[0] <= 0.f || step[1] <= 0.f || step[2] <= 0.f) return;
-    core::Plan pl = {};
-    bool ok = core::plan_fill(c, 3, step, 50000000, &pl);
+    for (int a = 0; a < 3; a++) step[a] = g_scStep[a];
+    if (step[0] <= 0.f || step[1] <= 0.f || step[2] <= 0.f) return false;
+    *pl = core::Plan{};
+    *ok = core::plan_fill(c, 3, step, 50000000, pl);
+    return true;
+}
+
+static void live_size(Buf& b) {
+    core::Plan pl; float step[3]; bool ok = false;
+    if (!area_plan_live(&pl, step, &ok)) return;
     long n = ok ? core::fill_count(pl, g_fill) : 0;
     if (!ok || n > g_cfg.maxShapes) { b.str("  |  TOO BIG (max ").i(g_cfg.maxShapes).c(')'); return; }
     b.str("  |  ").i(pl.count[0]).str("x").i(pl.count[2]).str(" h").i(pl.count[1]).str(" = ").i(n);
+}
+
+// ---- in-game area preview
+// The client cursor shows the ghost of the selected shape as one looped VFX per
+// covered voxel (ClientCursor.blueprintHoverVfx, at most 256). The voxel list is
+// built by a8a290 (called only from 28e2f0); while an area is being set up the mod
+// replaces that list with the area's surface voxels, or its edges for big areas.
+// Voxel coordinates: floor(world metres * 2).
+struct VoxList { uint32_t* data; uint64_t count; uint64_t cap; void* grow; };
+typedef void (*GhostListFn)(VoxList* list, void* a, void* b, void* c);
+static GhostListFn g_ghostListOrig = nullptr;
+static volatile LONG g_previewCount = 0;
+
+static void ghost_list_hook(VoxList* l, void* a, void* b, void* c) {
+    g_ghostListOrig(l, a, b, c);
+    if (!g_cfg.preview || !l || !l->data || l->cap == 0) return;
+    core::Plan pl; float step[3]; bool ok = false;
+    if (!area_plan_live(&pl, step, &ok) || !ok) return;
+    if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return;
+    int64_t v0[3], v1[3];
+    for (int a = 0; a < 3; a++) {
+        int64_t e = pl.origin[a] + pl.stepFix[a] * (pl.count[a] - 1);
+        int64_t lo = e < pl.origin[a] ? e : pl.origin[a], hi = e < pl.origin[a] ? pl.origin[a] : e;
+        int64_t half = (int64_t)(step[a] * 0.5 * core::kFix);
+        lo -= half; hi += half;
+        v0[a] = lo >> 31;                                   // floor(m * 2)
+        v1[a] = ((hi - 1) >> 31);                           // last voxel inside
+        if (v1[a] < v0[a]) v1[a] = v0[a];
+        if (v0[a] < 0) return;
+    }
+    const uint64_t cap = l->cap < 256 ? l->cap : 256;
+    int64_t d[3] = { v1[0] - v0[0] + 1, v1[1] - v0[1] + 1, v1[2] - v0[2] + 1 };
+    int64_t inner = (d[0] > 2 ? d[0] - 2 : 0) * (d[1] > 2 ? d[1] - 2 : 0) * (d[2] > 2 ? d[2] - 2 : 0);
+    int64_t surface = d[0] * d[1] * d[2] - inner;
+    uint64_t n = 0;
+    auto put = [&](int64_t x, int64_t y, int64_t z) {
+        if (n >= cap) return;
+        uint32_t* e = l->data + n * 3;
+        e[0] = (uint32_t)x; e[1] = (uint32_t)y; e[2] = (uint32_t)z; n++;
+    };
+    if (surface <= (int64_t)cap) {
+        for (int64_t x = v0[0]; x <= v1[0]; x++)
+            for (int64_t y = v0[1]; y <= v1[1]; y++)
+                for (int64_t z = v0[2]; z <= v1[2]; z++)
+                    if (x == v0[0] || x == v1[0] || y == v0[1] || y == v1[1] || z == v0[2] || z == v1[2]) put(x, y, z);
+    } else {
+        // the 12 edges, thinned evenly when they do not fit
+        int64_t edges = 4 * (d[0] + d[1] + d[2]);
+        int64_t stride = (edges + (int64_t)cap - 9) / ((int64_t)cap - 8);
+        if (stride < 1) stride = 1;
+        for (int a = 0; a < 3; a++) {
+            int b1 = (a + 1) % 3, b2 = (a + 2) % 3;
+            for (int k = 0; k < 4; k++) {
+                int64_t q1 = (k & 1) ? v1[b1] : v0[b1], q2 = (k & 2) ? v1[b2] : v0[b2];
+                for (int64_t t = v0[a]; t <= v1[a]; t += stride) {
+                    int64_t pp[3]; pp[a] = t; pp[b1] = q1; pp[b2] = q2; put(pp[0], pp[1], pp[2]);
+                }
+                int64_t pp[3]; pp[a] = v1[a]; pp[b1] = q1; pp[b2] = q2; put(pp[0], pp[1], pp[2]);   // corner
+            }
+        }
+    }
+    l->count = n;
+    g_previewCount = (LONG)n;
 }
 
 static void vk_name(int vk, char* out) {
@@ -1681,6 +1758,9 @@ static DWORD WINAPI init_thread(void*) {
         g_depsOrig = (DepsFn)hook(sdeps, 5, (void*)&deps_hook);
     }
     LOG(.str("refund pop-up: ").str(g_depsOrig ? "available" : "not available"));
+    uint8_t* glist = find_hookable("GhostVoxels", SIG_GHOST_LIST, 7);
+    if (glist) g_ghostListOrig = (GhostListFn)hook(glist, 7, (void*)&ghost_list_hook);
+    LOG(.str("area preview: ").str(g_ghostListOrig ? "available" : "not available"));
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
