@@ -35,6 +35,10 @@ The info bar shows the live size and block count before you confirm.
 The block ghost hovers in front of you instead of sticking to surfaces.
 Hold Q and turn the mouse wheel to move it closer or farther.
 
+[b]Creative building[/b] (optional)
+CreativeBuilding=1 in BuildingTools.ini: blocks cost nothing, removing or undoing gives
+nothing back, inventory untouched.
+
 [b]Details[/b]
 [list]
 [*]Costs, refunds and undo go through the game's own building code.
