@@ -99,6 +99,7 @@ struct Config {
     int keyCloser    = VK_NEXT;    // Page Down
     int wheelKey     = 'Q';        // hold + mouse wheel = free placement distance
     int keyFill      = VK_F11;     // area fill: solid / hollow / walls
+    int keyVfx       = VK_HOME;    // test: cycle the preview effect
     int refundPopup  = 1;          // show the game's item pop-up for refunds
     int preview      = 1;          // show the area with the game's ghost highlight
     int hoverDist10  = 40;         // free placement distance in tenths of a metre
@@ -176,6 +177,7 @@ static void load_config() {
     g_cfg.keyCloser    = ini_int(L"Keys", L"FreePlacementCloser", VK_NEXT);
     g_cfg.wheelKey     = ini_int(L"Keys", L"FreePlacementWheelKey", 'Q');
     g_cfg.keyFill      = ini_int(L"Keys", L"CycleAreaFill", VK_F11);
+    g_cfg.keyVfx       = ini_int(L"Keys", L"CyclePreviewEffect", VK_HOME);
     g_cfg.refundPopup  = ini_int(L"Interface", L"RefundPopup", 1);
     g_cfg.preview      = ini_int(L"Area", L"Preview", 1);
     g_cfg.hoverDist10  = ini_int(L"Area", L"FreePlacementDistance", 40);
@@ -1410,13 +1412,41 @@ static VfxStartFn g_vfxStart = nullptr;
 static VfxStopFn g_vfxStop = nullptr;
 static const void* g_vfxGlobal = nullptr;
 static const uint32_t kHoverVfxGuid[4] = { 0xb0718612, 0x4e1327b1, 0xca143cbf, 0x9a608f41 };
+// Effect used for the preview. 0 = the block-hover highlight (drawn on surfaces
+// only); others are the VFX references of the equipped hammer's cursor config
+// (read at runtime), cycled with a test key to find one that shows in the air.
+static const int kVfxCands = 6;
+static uint32_t g_vfxCand[kVfxCands][4];
+static const char* kVfxCandName[kVfxCands] = { "block hover highlight", "cursor add fx", "cursor remove fx",
+                                               "cursor default vfx", "equipment cursor vfx", "cursor add fx (2)" };
+static volatile LONG g_vfxPick = 0;
+static volatile LONG g_vfxPickChanged = 0;
+static uint8_t* volatile g_hammerItem = nullptr;
+typedef void (*CursorQueryFn)(uint8_t* q, void* sys, uint8_t* item, void* buildItem, uint8_t a5, uint8_t primary);
+static CursorQueryFn g_cqOrig = nullptr;
+static void cursor_query_hook(uint8_t* q, void* sys, uint8_t* item, void* buildItem, uint8_t a5, uint8_t primary) {
+    g_cqOrig(q, sys, item, buildItem, a5, primary);
+    if (primary && item) g_hammerItem = item;
+}
+// VfxReference fields of the equipped item (ItemInfo: equipment @0x104, cursorConfig @+0x68,
+// addFxConfig @+0x58 / subFxConfig @+0x110 with oneShotVfx @+0x20, defaultCursorVfx @+0x1e8,
+// equipment.cursorVfx @+0x288)
+static void vfx_candidates() {
+    memcpy(g_vfxCand[0], kHoverVfxGuid, 16);
+    uint8_t* it = g_hammerItem;
+    static const uint32_t offs[kVfxCands] = { 0, 0x16c + 0x58 + 0x20, 0x16c + 0x110 + 0x20, 0x16c + 0x1e8, 0x104 + 0x288, 0x16c + 0x58 + 0x0 };
+    for (int k = 1; k < kVfxCands; k++) {
+        if (it && readable(it + offs[k], 16)) memcpy(g_vfxCand[k], it + offs[k], 16);
+        else memset(g_vfxCand[k], 0, 16);
+    }
+}
 static const int kPreviewMax = 256;
 struct PreviewSlot { uint32_t v[3]; uint32_t handle; };
 static PreviewSlot g_pv[kPreviewMax];
 static volatile LONG g_previewCount = 0;
 static volatile LONG g_pvStarted = 0, g_pvActiveFrames = 0;
 
-// surface voxels of the area (or its edges); returns the count
+// voxels along the 12 edges of the area box (thinned evenly when they do not fit)
 static int preview_voxels(uint32_t out[][3], int cap) {
     core::Plan pl; float step[3]; bool ok = false;
     if (!g_cfg.preview || !area_plan_live(&pl, step, &ok) || !ok) return 0;
@@ -1440,12 +1470,8 @@ static int preview_voxels(uint32_t out[][3], int cap) {
         if (n >= cap) return;
         out[n][0] = (uint32_t)x; out[n][1] = (uint32_t)y; out[n][2] = (uint32_t)z; n++;
     };
-    if (surface <= cap) {
-        for (int64_t x = v0[0]; x <= v1[0]; x++)
-            for (int64_t y = v0[1]; y <= v1[1]; y++)
-                for (int64_t z = v0[2]; z <= v1[2]; z++)
-                    if (x == v0[0] || x == v1[0] || y == v0[1] || y == v1[1] || z == v0[2] || z == v1[2]) put(x, y, z);
-    } else {
+    (void)surface;
+    {
         int64_t edges = 4 * (d[0] + d[1] + d[2]);
         int64_t stride = (edges + cap - 9) / (cap - 8);
         if (stride < 1) stride = 1;
@@ -1479,17 +1505,25 @@ static void hover_fx_hook(uint8_t* ctx, void* b, void* c) {
     alignas(16) uint8_t extra[16] = {};
     alignas(16) uint8_t params[0x80] = {};
     alignas(16) static const float rot[4] = { 0.f, 0.f, 0.f, 1.f };
+    bool restart = InterlockedExchange(&g_vfxPickChanged, 0) != 0;
+    if (restart) vfx_candidates();
+    static uint32_t guid[4] = { 0xb0718612, 0x4e1327b1, 0xca143cbf, 0x9a608f41 };
+    if (restart) {
+        LONG k = g_vfxPick % kVfxCands;
+        memcpy(guid, g_vfxCand[k], 16);
+        LOG(.str("preview effect ").i(k).str(" (").str(kVfxCandName[k]).str("): ").x(guid[0]).c('-').x(guid[1]).c('-').x(guid[2]).c('-').x(guid[3]));
+    }
     int top = n > have ? n : have;
     for (int i = 0; i < top; i++) {
         PreviewSlot& s = g_pv[i];
-        if (i < n && s.handle && !memcmp(s.v, want[i], 12)) continue;          // unchanged
+        if (!restart && i < n && s.handle && !memcmp(s.v, want[i], 12)) continue;   // unchanged
         if (s.handle) g_vfxStop(sys, &s.handle, now, extra);
         s.handle = 0;
         if (i < n) {
             memcpy(s.v, want[i], 12);
             alignas(16) float pos[4] = { want[i][0] * 0.5f + 0.25f, want[i][1] * 0.5f + 0.25f, want[i][2] * 0.5f + 0.25f, 0.f };
             memset(params, 0, sizeof(params));
-            s.handle = g_vfxStart(sys, now, kHoverVfxGuid, pos, rot, g_vfxGlobal, params);
+            if (guid[0] | guid[1] | guid[2] | guid[3]) s.handle = g_vfxStart(sys, now, guid, pos, rot, g_vfxGlobal, params);
             InterlockedIncrement(&g_pvStarted);
         }
     }
@@ -1624,14 +1658,14 @@ static DWORD WINAPI wheel_thread(void*) {
 
 // ------------------------------------------------------------------ hotkeys
 static DWORD WINAPI input_thread(void*) {
-    bool prev[8] = {};
+    bool prev[9] = {};
     for (;;) {
         Sleep(15);
         if (!g_active) continue;
         bool focus = game_focused();
-        int keys[8] = { g_cfg.keyStructure, g_cfg.keyReplace, g_cfg.keyCancel, g_cfg.keyStyle, g_cfg.keyHover,
-                        g_hover ? g_cfg.keyFarther : 0, g_hover ? g_cfg.keyCloser : 0, g_cfg.keyFill };
-        for (int k = 0; k < 8; k++) {
+        int keys[9] = { g_cfg.keyStructure, g_cfg.keyReplace, g_cfg.keyCancel, g_cfg.keyStyle, g_cfg.keyHover,
+                        g_hover ? g_cfg.keyFarther : 0, g_hover ? g_cfg.keyCloser : 0, g_cfg.keyFill, g_cfg.keyVfx };
+        for (int k = 0; k < 9; k++) {
             bool down = focus && keys[k] > 0 && (GetAsyncKeyState(keys[k]) & 0x8000);
             if (down && !prev[k]) {
                 if (k == 0) {
@@ -1647,6 +1681,9 @@ static DWORD WINAPI input_thread(void*) {
                     LONG st = g_replaceStyle == STYLE_FULL ? STYLE_OVERLAP : STYLE_FULL; g_replaceStyle = st;
                     flash(st == STYLE_FULL ? "Replace style: full shape" : "Replace style: overlap only");
                     LOG(.str("key: replace style -> ").str(st == STYLE_FULL ? "full" : "overlap"));
+                } else if (k == 8) {
+                    LONG v = (g_vfxPick + 1) % kVfxCands; g_vfxPick = v; g_vfxPickChanged = 1;
+                    Buf b; b.str("Preview effect ").i(v + 1).c('/').i(kVfxCands).str(": ").str(kVfxCandName[v]); flash(b.z());
                 } else if (k == 7) {
                     LONG f = (g_fill + 1) % core::FILL_COUNT; g_fill = f;
                     flash(f == core::FILL_SOLID ? "Area fill: solid" : f == core::FILL_HOLLOW ? "Area fill: hollow room (walls, floor, ceiling)" : "Area fill: walls only");
@@ -1662,7 +1699,7 @@ static DWORD WINAPI input_thread(void*) {
                     flash("Corners cleared");
                     LOG(.str("key: corners cleared"));
                 }
-                if (k < 5 || k == 7) beep(MB_ICONQUESTION);
+                if (k < 5 || k >= 7) beep(MB_ICONQUESTION);
             }
             prev[k] = down;
         }
@@ -1804,7 +1841,7 @@ static DWORD WINAPI init_thread(void*) {
         if (!g_hudOrig) g_playUiSound = nullptr;
     }
     LOG(.str("game sounds: ").str(g_playUiSound ? "yes" : "no (Windows sounds)"));
-    (void)cquery;
+    if (cquery) g_cqOrig = (CursorQueryFn)hook(cquery, 5, (void*)&cursor_query_hook);
     uint8_t* sdeps = find_hookable("SystemDeps", SIG_SYS_DEPS, 5);
     uint8_t* ddeps = find_unique("DismantleDeps", SIG_DISM_DEPS);
     if (sdeps && ddeps && ddeps + 0x15 + *(int32_t*)(ddeps + 0x11) == sdeps) {
