@@ -37,7 +37,7 @@ Hold Q and turn the mouse wheel to move it closer or farther.
 
 [b]Creative building[/b] (optional)
 CreativeBuilding=1 in BuildingTools.ini: blocks cost nothing, removing or undoing gives
-nothing back, inventory untouched.
+nothing back, inventory untouched, and the material picker lists every material.
 
 [b]Details[/b]
 [list]

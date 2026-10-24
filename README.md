@@ -14,7 +14,8 @@ A client-side mod for **Enshrouded 1.0 (single player)** that extends the Constr
   the distance.
 - **Creative building** (optional, `CreativeBuilding=1` in `BuildingTools.ini`): blocks
   cost nothing and removing or undoing gives nothing back, so the inventory is never
-  touched. Props, crafting and chests work as normal.
+  touched, and the material picker lists every block, roof, terrain and overgrowth
+  material. Props, crafting and chests work as normal.
 - The mod uses the game's own UI sounds and adds a small info bar at the bottom of the screen.
   Keys and options live in `BuildingTools.ini`.
 
