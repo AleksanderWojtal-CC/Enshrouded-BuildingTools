@@ -85,7 +85,8 @@ Changing keys and settings
 Creative building
   Set CreativeBuilding=1 in the [Creative] section of BuildingTools.ini.
   Blocks then cost nothing, and removing them or undoing gives nothing back,
-  so your inventory is never touched. Props, crafting and chests stay normal.
+  so your inventory is never touched. The material picker lists every
+  material, also ones you have none of. Props, crafting and chests stay normal.
   Note: blocks built in creative still refund materials if you remove them
   later with creative off.
 
