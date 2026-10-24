@@ -859,14 +859,18 @@ static void stocks_hook(void* stocks, void* ctx, uint8_t onlyShown) {
     g_stocksOrig(stocks, ctx, onlyShown);
     TlsSetValue(g_stocksTls, nullptr);
 }
-static void add_all_materials(uint8_t* stocks, StocksCall* c) {
-    if (!c || !c->ctx || !readable(c->ctx + 0x68, 8)) return;
-    uint8_t* reg = g_itemGroups(*(void**)(c->ctx + 0x68));
-    if (!reg || !readable(reg, 0x48)) return;
-    int added = 0;
+// The item groups never change while the game runs, so their material ids are
+// collected once per registry. The lists are rebuilt every frame: missing ids are
+// found with a small hash set and appended directly (the game's add searches the
+// list for every item, which cost ~20 fps for a few hundred materials).
+static const int kMaxCreativeIds = 2048;
+static uint32_t g_cIds[4][kMaxCreativeIds]; static int g_cN[4];
+static uint8_t* g_cReg = nullptr;
+static void collect_materials(uint8_t* reg) {
+    for (int t = 0; t < 4; t++) g_cN[t] = 0;
     uint64_t end = *(uint64_t*)(reg + 0x10);
     int guard = 0;
-    for (uint64_t at = g_iterBegin(reg + 8); at != end && guard < 100000; at = g_iterNext(reg + 8, at), guard++) {
+    for (uint64_t at = g_iterBegin(reg + 8); at != end && guard < 200000; at = g_iterNext(reg + 8, at), guard++) {
         uint8_t* g = (*(uint8_t***)(reg + 0x40))[at];
         if (!g || !readable(g, 0x10)) continue;
         int type = g[0] - 0xe;                 // item group -> stock type (as the game maps it)
@@ -874,23 +878,68 @@ static void add_all_materials(uint8_t* stocks, StocksCall* c) {
         if (type < 0 || type > 6) continue;
         int st = map[type];
         if (st < 2 || st > 5) continue;        // terrain, blocks, roof, overgrowth
-        if (c->onlyShown && stocks[0x2bf8] != st) continue;
         int32_t off = *(int32_t*)(g + 8); uint32_t n = *(uint32_t*)(g + 0xc);
         if (!off || !n) continue;
         uint32_t* ids = (uint32_t*)(g + 8 + off);
-        StockList* list = (StockList*)(stocks + st * 0x648);
         for (uint32_t k = 0; k < n; k++) {
-            if (!ids[k]) continue;
-            if (list->count + 1 > list->cap && !list->grow) break;   // fixed list full
-            uint32_t item[3] = { ids[k], 0, 0 };
-            uint64_t before = list->count;
-            g_stockAdd(list, item, *g_noContainer, 0, 1);
-            added += (int)(list->count - before);
+            uint32_t id = ids[k]; if (!id) continue;
+            int t = st - 2; bool dup = false;
+            for (int j = 0; j < g_cN[t] && !dup; j++) dup = g_cIds[t][j] == id;
+            if (!dup && g_cN[t] < kMaxCreativeIds) g_cIds[t][g_cN[t]++] = id;
         }
     }
-    if (added && InterlockedIncrement(&g_stocksLog) <= 3)
-        LOG(.str("creative: material picker +").i(added).str(" materials"));
+    g_cReg = reg;
+    LOG(.str("creative: materials terrain ").i(g_cN[0]).str(" blocks ").i(g_cN[1]).str(" roof ").i(g_cN[2])
+        .str(" overgrowth ").i(g_cN[3]));
 }
+static void add_all_materials(uint8_t* stocks, StocksCall* c) {
+    if (!c || !c->ctx || !readable(c->ctx + 0x68, 8)) return;
+    uint8_t* reg = g_itemGroups(*(void**)(c->ctx + 0x68));
+    if (!reg || !readable(reg, 0x48)) return;
+    if (reg != g_cReg) collect_materials(reg);
+    static uint32_t set[4096];                 // ids already listed (open addressing, 0 = empty)
+    for (int t = 0; t < 4; t++) {
+        int st = t + 2;
+        if (!g_cN[t] || (c->onlyShown && stocks[0x2bf8] != st)) continue;
+        StockList* list = (StockList*)(stocks + st * 0x648);
+        if (list->count > 2048) continue;
+        memset(set, 0, sizeof(set));
+        for (uint64_t k = 0; k < list->count; k++) {
+            uint32_t id = *(uint32_t*)(list->data + k * 0x18);
+            uint32_t h = (id * 2654435761u) & 4095;
+            while (set[h] && set[h] != id) h = (h + 1) & 4095;
+            set[h] = id;
+        }
+        for (int k = 0; k < g_cN[t]; k++) {
+            uint32_t id = g_cIds[t][k];
+            uint32_t h = (id * 2654435761u) & 4095;
+            while (set[h] && set[h] != id) h = (h + 1) & 4095;
+            if (set[h] == id) continue;
+            set[h] = id;
+            if (list->count == 0 || list->count + 1 > list->cap) {
+                // first entry or the list must grow: the game's add (it can reallocate)
+                if (list->count + 1 > list->cap && !list->grow) break;
+                uint32_t item[3] = { id, 0, 0 };
+                g_stockAdd(list, item, *g_noContainer, 0, 1);
+                continue;
+            }
+            // same entry the game's add writes for an item with no slot: {id, slot, count 0};
+            // the slot value is copied from an entry the game added the same way
+            uint8_t* e = list->data + list->count * 0x18;
+            static uint64_t noSlot = 0; static bool haveSlot = false;
+            if (!haveSlot) {
+                uint32_t item[3] = { id, 0, 0 };
+                uint64_t before = list->count;
+                g_stockAdd(list, item, *g_noContainer, 0, 1);
+                if (list->count == before + 1) { noSlot = *(uint64_t*)(list->data + before * 0x18 + 4); haveSlot = true; }
+                continue;
+            }
+            *(uint32_t*)e = id; *(uint64_t*)(e + 4) = noSlot; *(uint64_t*)(e + 0x10) = 0;
+            list->count++;
+        }
+    }
+}
+
 static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, void* e) {
     if (g_cfg.creative && g_stockAdd && g_stocksTls != TLS_OUT_OF_INDEXES)
         add_all_materials((uint8_t*)stocks, (StocksCall*)TlsGetValue(g_stocksTls));
