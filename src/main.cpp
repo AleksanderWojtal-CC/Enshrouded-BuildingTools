@@ -259,6 +259,9 @@ static const char* SIG_PAY_REMOVE_PREFAB = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? 
 static const char* SIG_PAY_UNDO    = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 8D 40 01 00 00 E8 ?? ?? ?? ??";
 // The material picker's item lists (g38_items::updateInventoryStocks)
 static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56";
+// The picker's "selected material is not in the list" fallback, called by
+// client_cycle_inventory_stock (it sends the chosen material like a scroll)
+static const char* SIG_PICK_CALL = "E8 ?? ?? ?? ?? 80 7D 00 00 75 59 48 8B CE E8 ?? ?? ?? ?? 48 8B 4D C0 44 8B F0";
 static const char* SIG_MISSING_CALL = "E8 ?? ?? ?? ?? 8B 13 8B CA 0F BA F1 0C 0F BA EA 0C 84 C0 0F 44 D1 89 13";
 static const char* SIG_MATERIAL_ITEM = "48 83 EC 28 44 0F B6 DA 41 8D 43 FF 3C 7E 77 74 4C 8B 49 38 4D 85 C9 74 3B";
 
@@ -960,6 +963,24 @@ static void add_all_materials(uint8_t* stocks, StocksCall* c) {
     }
 }
 
+// 406020: when the material chosen last is not in the list, the game picks the
+// selected entry (or the first) and sends it as the new choice, but refuses an entry
+// with count 0 (result 6). Creative building accepts it, so a type with nothing in the
+// inventory still gets a material without scrolling first.
+typedef uint8_t* (*PickFn)(uint8_t* res, uint8_t* list, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f);
+static PickFn g_pickOrig = nullptr;
+static uint8_t* pick_hook(uint8_t* res, uint8_t* list, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f) {
+    uint8_t* r = g_pickOrig(res, list, a, b, c, d, e, f);
+    if (g_cfg.creative && res && res[0] == 6 && list) {
+        StockList* l = (StockList*)list;
+        uint64_t k = list[0x630] && *(uint64_t*)(list + 0x628) < l->count ? *(uint64_t*)(list + 0x628) : 0;
+        if (k < l->count) {
+            list[0x630] = 1; *(uint64_t*)(list + 0x628) = k;
+            res[0] = 0; *(uint32_t*)(res + 4) = 0; *(uint32_t*)(res + 8) = *(uint32_t*)(l->data + k * 0x18);
+        }
+    }
+    return r;
+}
 static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, void* e) {
     // only while the hammer is out (the lists are rebuilt every frame; longer lists
     // cost the game time even when the picker is closed)
@@ -2063,9 +2084,15 @@ static DWORD WINAPI init_thread(void*) {
             if (g_stocksTls == TLS_OUT_OF_INDEXES || hook_calls(st, (void*)&stocks_hook, nullptr, 0) <= 0 ||
                 hook_calls(fin, (void*)&stock_final_hook, &finSite, 1) != 1) g_stockAdd = nullptr;
         }
+        uint8_t* pc = find_unique("PickCall", SIG_PICK_CALL);
+        if (pc && pc[0] == 0xE8) {
+            uint8_t* fn = pc + 5 + *(int32_t*)(pc + 1);
+            g_pickOrig = (PickFn)fn;
+            if (hook_calls(fn, (void*)&pick_hook, &pc, 1) != 1) g_pickOrig = nullptr;
+        }
         LOG(.str("creative building: ").str(g_cfg.creative ? "on" : "off").str(", ").i(ok)
             .str("/4 payment calls, preview check ").str(g_missingOrig ? "yes" : "no")
-            .str(", full material list ").str(g_stockAdd ? "yes" : "no"));
+            .str(", full material list ").str(g_stockAdd ? "yes" : "no").str(", empty-type pick ").str(g_pickOrig ? "yes" : "no"));
     }
     // PayCost is redirected at its call sites, not hooked at its entry: Creative Mode
     // scans for its first bytes and hooks it too.
