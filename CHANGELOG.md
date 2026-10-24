@@ -13,7 +13,10 @@ changelog on Nexus Mods, so keep it short and written for players.
   the same material is repainted with your current material, in steps of the
   selected shape (0.5 m cube = block-exact), up to `FillLimit` shapes (default 500).
   Other materials are never touched; costs, refunds and undo work as for Replace.
-- Fix: Replace with a terrain material removed the blocks instead of repainting them.
+- Fix: Replace with a terrain material as the new material removed the blocks
+  instead of repainting them; they now become that terrain.
+- `BuildingTools.ini` gets the new options (`ToggleMod`, `FillLimit`) on the first
+  start; your settings are kept. If F5 clashes with another key, change `ToggleMod`.
 
 ## 0.15.0
 

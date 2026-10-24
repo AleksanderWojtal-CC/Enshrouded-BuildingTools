@@ -23,9 +23,10 @@ costs, refunds and undo.
 Extends the Construction Hammer. Single player only.
 
 [b]Replace[/b] (F7)
-Aim at existing blocks and click: they take your current material. Two styles (F9):
-full shape, overlap only (repaints just what is there, keeps its exact form), or
-connected: a fill bucket that repaints every touching block of the clicked material.
+Aim at existing blocks and click: they take your current material, also a terrain
+material. Three styles (F9): full shape, overlap only (repaints just what is there,
+keeps its exact form), or connected: a fill bucket that repaints every touching block of
+the clicked material (up to FillLimit, default 500), leaving other materials alone.
 The old material is refunded with the normal item pop-up, and undo puts everything
 back exactly.
 
