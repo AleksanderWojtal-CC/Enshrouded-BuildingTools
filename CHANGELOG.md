@@ -13,6 +13,7 @@ changelog on Nexus Mods, so keep it short and written for players.
   the same material is repainted with your current material, in steps of the
   selected shape (0.5 m cube = block-exact), up to `FillLimit` shapes (default 500).
   Other materials are never touched; costs, refunds and undo work as for Replace.
+- Fix: Replace with a terrain material removed the blocks instead of repainting them.
 
 ## 0.15.0
 
