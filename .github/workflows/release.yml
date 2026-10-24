@@ -149,7 +149,7 @@ jobs:
           api_key: ${{ secrets.NEXUS_API_KEY }}
           mod_id: ${{ steps.ids.outputs.mod_id }}
           file_id: ${{ steps.ids.outputs.file_id }}
-          filename: EnshroudedBuildingTools-${{ needs.release.outputs.version }}.zip
+          filename: dist/EnshroudedBuildingTools-${{ needs.release.outputs.version }}.zip
           version: ${{ needs.release.outputs.version }}
           display_name: Building Tools ${{ needs.release.outputs.version }}
           description: Enshrouded Building Tools ${{ needs.release.outputs.version }} - extract into the game folder (next to enshrouded.exe).
