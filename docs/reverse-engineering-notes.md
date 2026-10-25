@@ -367,3 +367,12 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   2865e0. ChestList is widened for every caller except the deposit (40c379) and client
   worlds; the client iterator swaps the chosen base's list {ptr, count} for every base's
   chests for the length of the call.
+
+## v0.17.1: review
+- Unused lookups removed: WriteTable (48f1c0, its hook was never installed but the mod
+  refused to start without it), TearDownEvent (490540), CursorQuery (287b10), BeginUndo.
+- The E8 byte scan used to redirect every call of a function matches exactly the real
+  calls on this build (checked against the capstone index: PayCost 12, Stocks 2,
+  ChestList 5, ClientStock 1).
+- Connected replace visits up to 6 * FillLimit + 1 cells; the visited table (2^16) could
+  fill up for large limits and every lookup then walked the whole table. Now 2^18.
