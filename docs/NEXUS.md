@@ -46,6 +46,12 @@ removing or undoing gives nothing back, so your inventory is never touched. The 
 picker ("backpack and magic chests" order) lists every material, also ones you have none
 of; favourites and the other orders stay normal. Props, chests and crafting are unchanged.
 
+[b]Magic chests of all bases[/b] (optional)
+GlobalMagicChests=1 in BuildingTools.ini: building takes materials from the magic chests
+of all your flame altar areas, not only the one you stand in, also outside a base. The
+material picker and the missing-materials ghost count them too. Crafting and loot deposit
+are unchanged. Chests of a base the game has not loaded (far away) may not count.
+
 [b]Details[/b]
 [list]
 [*]Costs, refunds and undo go through the game's own building code.

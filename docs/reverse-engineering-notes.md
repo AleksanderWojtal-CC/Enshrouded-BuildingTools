@@ -325,3 +325,28 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
 - Connected replace probes cells with the mod's removal dry run (RemoveShape, refunds
   suppressed; per-material removed volume from the 48ae10 hook). In game: 500 cells with
   791 probes plus pricing took about 50 ms on the server thread.
+
+## v0.17.0: global magic chests
+- ECS systems by name: system descriptors in .rdata are {name, len, fn, ..., dependency
+  arrays}. `cache_building_stock` (3fc450, server, deps ItemRegistry, PlayerBasesSystemServer,
+  Inventory) and `cache_crafting_stock` (2af3b0, client, PlayerBasesSystemClient).
+- PlayerBases system: base count +0x24, records of 0x130 from +0x30 (max 16): +0x00 chest
+  ids (u32*), +0x08 count, +0x28/+0x30 a second id list, +0xf0 area box (min xyz, max at
+  +0x100), +0x110 mask of sub-boxes (array of 0x20-byte boxes at [sys+0x1330]).
+  Server: per-base stock maps at sys+0x1610+i*0x58 (staging +0x1b90). Client: one map at
+  +0x1610 (staging +0x1668, chunk counters +0x16c8/+0x16cc, done flag +0x16c0).
+- 469060 BaseAt(out, sys, float pos[3]): out[0] = 0 found (index out[8]) or 0x1f.
+- 468660 ChestList(out, list{ids,count,ids2,count2}, sysServer, sysClient, pos, player):
+  status 0 / 0x1f no base / 0x16 permission (3b1cc0) / 0x12. Callers: 3f1ae0 (charge),
+  3f1d70 (check), 2c1a80 (player_crafting), 2b3690 (player_ui), 40bf70 (area_deposit_trigger).
+- 3f1ae0 charge(C, list, ...): C+0xb1 chest order (0 backpack only, 1 backpack then
+  chests, 2 chests first); per chest 40a3d0 -> 40a400 (entity lookup, missing entity =
+  skipped). PayCost mode 0 -> 3f1ae0; modes 1/2 (client prediction) -> 4664a0, which
+  adjusts the client map at +0x1610 if the position is in a base.
+- 4680b0 client iterator(out, sys, pos, player): throttled (+0x16d4 - +0x16d0), returns
+  slices of <= 40 ids of the current base's two lists; at the end copies staging into
+  +0x1610 and resets (46b150). Readers of the client map: 4695f0 (lea +0x1610) from
+  updateInventoryStocks, player_ui, 3f2800; 469610 (missing check 2865e0, map at ctx+0xa0).
+- v0.17.0 redirects all calls to 468660 (5) and 4680b0 (1). ChestList is widened only
+  inside the building PayCost calls (thread flag); the client iterator swaps the chosen
+  base's list {ptr, count} to a list of every base's chests for the length of the call.

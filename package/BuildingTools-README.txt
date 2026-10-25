@@ -112,6 +112,17 @@ Creative building
   Blocks built in creative are refunded like any other block if you remove
   them later with creative off.
 
+Magic chests of all bases
+  Set GlobalMagicChests=1 in the [Chests] section of BuildingTools.ini (close
+  the game first). Building then takes materials from the magic chests of all
+  your bases (flame altar areas): first your backpack, then the chests of the
+  base you stand in, then the other bases. This also works when you build
+  outside a base. The material picker and the red "missing materials" ghost
+  count the chests of all bases. Crafting and the loot deposit keep using only
+  the chests of the base you are in.
+  The game only sees chests in parts of the world it has loaded; chests of a
+  base far away may not count until you have been near it. Off by default.
+
 Uninstall
   Close the game and delete dinput8.dll (the ini and log can go too).
 
