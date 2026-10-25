@@ -835,17 +835,48 @@ static ChestTls* chest_tls(bool create) {
     }
     return t;
 }
+// diagnostics: calls per call site, logged every 2 s while there are any
+struct SiteStat { uint8_t* ret; volatile LONG calls, widened; };
+static SiteStat g_siteStats[8];
+static volatile LONG g_statTick = 0, g_statLines = 0;
+static void site_stat(uint8_t* ret, bool widened) {
+    for (auto& st : g_siteStats) {
+        uint8_t* cur = st.ret;
+        if (!cur) cur = (uint8_t*)InterlockedCompareExchangePointer((void* volatile*)&st.ret, ret, nullptr);
+        if (!cur || cur == ret) { InterlockedIncrement(&st.calls); if (widened) InterlockedIncrement(&st.widened); break; }
+    }
+    LONG now = (LONG)GetTickCount(), last = g_statTick;
+    if (now - last < 2000 || InterlockedCompareExchange(&g_statTick, now, last) != last) return;
+    for (auto& st : g_siteStats) {
+        if (!st.ret) continue;
+        LONG c = InterlockedExchange(&st.calls, 0), w = InterlockedExchange(&st.widened, 0);
+        if (c && InterlockedIncrement(&g_statLines) <= 80)
+            LOG(.str("global chests stats: call rva ").x((uint64_t)(st.ret - 5 - g_base)).str(": ").i(c)
+                .str(" calls in 2 s, ").i(w).str(" widened"));
+    }
+}
+static bool is_client_sys(uint8_t* sys);
+static bool widen_list(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, uint8_t* ret);
 static uint8_t* chest_list_hook(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, const float* pos, uint32_t player) {
     uint8_t* ret = (uint8_t*)__builtin_return_address(0);
     uint8_t* r = g_chestListOrig(out, list, sysA, sysB, pos, player);
     if (!out || !list || !global_chests_on()) return r;
+    bool w0 = widen_list(out, list, sysA, sysB, ret);
+    site_stat(ret, w0);
+    return r;
+}
+static bool widen_list(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, uint8_t* ret) {
     // building, crafting and everything else that pays from magic chests; never the
     // loot deposit (it would put loot into chests of other bases). Without the deposit
     // call site known, only the building systems' payments.
     ChestTls* t = chest_tls(g_depositRet != nullptr);
-    if (!t || ret == g_depositRet || (!g_depositRet && !t->active)) return r;
+    if (!t || ret == g_depositRet || (!g_depositRet && !t->active)) return false;
+    uint8_t* sys0 = sysA ? sysA : sysB;
+    // client worlds (UI, prediction) read the client stock map, which already counts
+    // every base; widening their per-chest lists only costs time
+    if (!t->active && is_client_sys(sys0)) return false;
     uint8_t st = out[0];
-    if (st != 0 && st != 0x1f) return r;           // 0 = found, 0x1f = not in a base
+    if (st != 0 && st != 0x1f) return false;           // 0 = found, 0x1f = not in a base
     uint8_t* sys = sysA ? sysA : sysB;
     int nb = base_count(sys), cur = -1;
     if (st == 0 && list[1])
@@ -857,13 +888,13 @@ static uint8_t* chest_list_hook(uint8_t* out, uint64_t* list, uint8_t* sysA, uin
         LOG(.str("global chests: call at rva ").x((uint64_t)(ret - 5 - g_base)).str(t->active ? " (building)" : "")
 .str(": ").i(n).str(" chests in ").i(nb).str(" bases, ")
             .u(local).str(st == 0 ? " in the base here" : " (outside every base)"));
-        t->logTakes = 24;
+        t->logTakes = 4;
     }
-    if (n <= 0) return r;
+    if (n <= 0) return false;
     list[0] = (uint64_t)t->buf; list[1] = (uint64_t)n;
     if (st != 0) { list[2] = 0; list[3] = 0; }
     out[0] = 0; *(uint32_t*)(out + 4) = 0;
-    return r;
+    return true;
 }
 // diagnostics: each take from one inventory (40a3d0) right after a widened list
 typedef uint8_t* (*TakeFn)(uint8_t* out, uint8_t* trans, uint32_t inv, uint32_t item, uint32_t count);
@@ -893,6 +924,10 @@ static ClientStockFn g_clientStockOrig = nullptr;
 static BaseAtFn g_baseAt = nullptr;
 struct ClientChests { uint8_t* sys; int n; int base; uint32_t buf[kMaxChests]; };
 static ClientChests* g_clientChests[4];
+static bool is_client_sys(uint8_t* sys) {
+    for (ClientChests* c : g_clientChests) if (c && c->sys == sys) return true;
+    return false;
+}
 static volatile LONG g_clientChestLog = 0;
 static int base_at(uint8_t* sys, const float* pos) {
     uint8_t r[16]; memset(r, 0, sizeof(r));
@@ -1061,6 +1096,11 @@ typedef uint8_t (*MissingFn)(void* cursor, uint8_t* sel, float scale);
 static MissingFn g_missingOrig = nullptr;
 static uint8_t missing_hook(void* cursor, uint8_t* sel, float scale) {
     uint8_t r = g_missingOrig(cursor, sel, scale);
+    static volatile LONG s_last = -1, s_flips = 0;
+    if (global_chests_on() && (LONG)r != s_last) {
+        s_last = r;
+        if (InterlockedIncrement(&s_flips) <= 30) LOG(.str("global chests: preview ").str(r ? "missing materials" : "has materials"));
+    }
     if (r && creative_on() && sel && readable(sel + 0x60, 8)) {
         uint8_t* bp = *(uint8_t**)(sel + 0x60);
         if (bp && readable(bp + 0x458, 0x20) &&
@@ -1423,6 +1463,10 @@ static void refund_build(CostList* list, void* ctx) {
 }
 
 static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
+    if (global_chests_on()) {
+        static volatile LONG s_n = 0;
+        if (InterlockedIncrement(&s_n) <= 30) LOG(.str("global chests: place commit in world ").x((uint64_t)*(void**)ctx).str(" shape ").x(shape));
+    }
     bool mine = g_pend.n > 0 && g_pend.ctx == ctx && g_pend.tid == GetCurrentThreadId() &&
                 GetTickCount() - g_pend.tick < 3000;
     if (!mine) return g_placeCommitOrig(ctx, c, shape);
