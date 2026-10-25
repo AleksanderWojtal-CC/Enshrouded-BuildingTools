@@ -280,6 +280,8 @@ static const char* SIG_PAY_UNDO    = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 
 // (469060): index of the base whose area holds a position.
 static const char* SIG_CHEST_LIST   = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 20 57 48 83 EC 40 49 8B F9 49 8B E8";
 static const char* SIG_CLIENT_STOCK = "48 89 4C 24 08 53 55 56 57 48 83 EC 58 8B 82 D4 16 00 00 49 8B D8 2B 82 D0 16 00 00";
+static const char* SIG_TAKE_ITEM = "40 53 48 83 EC 30 8B 44 24 60 48 8B D9 89 44 24 28 48 8B 05 ?? ?? ?? ??";
+static const char* SIG_DEPOSIT_CHESTS = "E8 ?? ?? ?? ?? 45 32 E4 48 8D 4D 10 44 88 A5 30 01 00 00 E8 ?? ?? ?? ??";
 static const char* SIG_BASE_AT      = "48 89 5C 24 08 57 48 83 EC 10 8B 7A 24 45 33 DB 48 8B DA 4C 8B D1 48 85 FF";
 static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56";
 // The picker's "selected material is not in the list" fallback, called by
@@ -820,7 +822,8 @@ static int collect_chests(uint8_t* sys, int first, uint32_t* buf, int cap) {
 // server: chest list of the base at a position (468660)
 typedef uint8_t* (*ChestListFn)(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, const float* pos, uint32_t player);
 static ChestListFn g_chestListOrig = nullptr;
-struct ChestTls { int active; int pad; uint32_t buf[kMaxChests]; };
+struct ChestTls { int active; int logTakes; uint32_t buf[kMaxChests]; };
+static uint8_t* g_depositRet = nullptr;     // return address of the loot deposit's ChestList call
 static DWORD g_chestTls = TLS_OUT_OF_INDEXES;
 static volatile LONG g_chestLog = 0;
 static ChestTls* chest_tls(bool create) {
@@ -833,26 +836,46 @@ static ChestTls* chest_tls(bool create) {
     return t;
 }
 static uint8_t* chest_list_hook(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, const float* pos, uint32_t player) {
+    uint8_t* ret = (uint8_t*)__builtin_return_address(0);
     uint8_t* r = g_chestListOrig(out, list, sysA, sysB, pos, player);
-    ChestTls* t = chest_tls(false);
-    if (!t || !t->active || !out || !list || !global_chests_on()) return r;
+    if (!out || !list || !global_chests_on()) return r;
+    // building, crafting and everything else that pays from magic chests; never the
+    // loot deposit (it would put loot into chests of other bases). Without the deposit
+    // call site known, only the building systems' payments.
+    ChestTls* t = chest_tls(g_depositRet != nullptr);
+    if (!t || ret == g_depositRet || (!g_depositRet && !t->active)) return r;
     uint8_t st = out[0];
     if (st != 0 && st != 0x1f) return r;           // 0 = found, 0x1f = not in a base
     uint8_t* sys = sysA ? sysA : sysB;
     int nb = base_count(sys), cur = -1;
-    if (st == 0)
+    if (st == 0 && list[1])
         for (int b = 0; b < nb; b++)
             if (*(uint64_t*)base_rec(sys, b) == list[0]) { cur = b; break; }
+    uint64_t local = st == 0 ? list[1] : 0;
     int n = collect_chests(sys, cur, t->buf, kMaxChests);
-    if (InterlockedIncrement(&g_chestLog) <= 10) {
-        if (st == 0) LOG(.str("global chests: building pays from ").i(n).str(" chests in ").i(nb)
-                         .str(" bases (standing in base ").i(cur).str(", ").u(list[1]).str(" chests there)"));
-        else LOG(.str("global chests: building pays from ").i(n).str(" chests in ").i(nb).str(" bases (outside every base)"));
+    if (InterlockedIncrement(&g_chestLog) <= 30) {
+        LOG(.str("global chests: call at rva ").x((uint64_t)(ret - 5 - g_base)).str(t->active ? " (building)" : "")
+.str(": ").i(n).str(" chests in ").i(nb).str(" bases, ")
+            .u(local).str(st == 0 ? " in the base here" : " (outside every base)"));
+        t->logTakes = 24;
     }
     if (n <= 0) return r;
     list[0] = (uint64_t)t->buf; list[1] = (uint64_t)n;
     if (st != 0) { list[2] = 0; list[3] = 0; }
     out[0] = 0; *(uint32_t*)(out + 4) = 0;
+    return r;
+}
+// diagnostics: each take from one inventory (40a3d0) right after a widened list
+typedef uint8_t* (*TakeFn)(uint8_t* out, uint8_t* trans, uint32_t inv, uint32_t item, uint32_t count);
+static TakeFn g_takeOrig = nullptr;
+static uint8_t* take_hook(uint8_t* out, uint8_t* trans, uint32_t inv, uint32_t item, uint32_t count) {
+    uint8_t* r = g_takeOrig(out, trans, inv, item, count);
+    ChestTls* t = chest_tls(false);
+    if (t && t->logTakes > 0 && r) {
+        t->logTakes--;
+        LOG(.str("  take from ").x(inv).str(" item ").x(item).str(" x").u(count).str(": status ").x(r[0])
+            .str(" left ").u(*(uint32_t*)(r + 8)).str(" (call rva ").x((uint64_t)((uint8_t*)__builtin_return_address(0) - 5 - g_base)).c(')'));
+    }
     return r;
 }
 // set while a building system pays (pay_hook)
@@ -952,7 +975,12 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
 static uint8_t pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
     uint8_t* ret = (uint8_t*)__builtin_return_address(0);
     ChestScope scope(global_chests_on() && creative_site(ret));
-    return pay_body(mode, list, consume, ret);
+    uint8_t r = pay_body(mode, list, consume, ret);
+    static volatile LONG s_payLog = 0;
+    if (scope.t && list && InterlockedIncrement(&s_payLog) <= 30)
+        LOG(.str("global chests: building ").str(consume ? "charge" : "refund").str(" of ").u(list->count)
+            .str(" entries, mode ").i(mode ? mode[0] : -1).str(" -> ").str(r ? "ok" : "FAILED"));
+    return r;
 }
 static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t* ret) {
     if (creative_on() && creative_site(ret)) {
@@ -2411,14 +2439,20 @@ static DWORD WINAPI init_thread(void*) {
             g_baseAt = (BaseAtFn)ba;
             if (g_chestTls != TLS_OUT_OF_INDEXES) {
                 g_chestListOrig = (ChestListFn)cl;
+                // the loot deposit's call must keep the local chests
+                uint8_t* dep = find_unique("DepositChests", SIG_DEPOSIT_CHESTS);
+                if (dep && rel(dep) == cl) g_depositRet = dep + 5;
                 nList = hook_calls(cl, (void*)&chest_list_hook, nullptr, 0);
                 if (nList <= 0) g_chestListOrig = nullptr;
+                uint8_t* tk = find_unique("TakeItem", SIG_TAKE_ITEM);
+                if (tk) { g_takeOrig = (TakeFn)tk; if (hook_calls(tk, (void*)&take_hook, nullptr, 0) <= 0) g_takeOrig = nullptr; }
             }
             g_clientStockOrig = (ClientStockFn)cs;
             nStock = hook_calls(cs, (void*)&client_stock_hook, nullptr, 0);
             if (nStock <= 0) g_clientStockOrig = nullptr;
         }
-        LOG(.str("global magic chests: ").str(g_cfg.globalChests ? "on" : "off").str(", payment ")
+        LOG(.str("global magic chests: ").str(g_cfg.globalChests ? "on" : "off").str(", crafting ")
+            .str(g_depositRet ? "yes" : "no (deposit call not found)").str(", payment ")
             .str(g_chestListOrig ? "yes" : "no").str(" (").i(nList).str(" calls), picker ")
             .str(g_clientStockOrig ? "yes" : "no").str(" (").i(nStock).str(" calls)"));
     }
