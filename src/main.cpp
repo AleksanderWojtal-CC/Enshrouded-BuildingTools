@@ -1,12 +1,13 @@
 // Enshrouded Building Tools: dinput8.dll proxy mod (single player).
 //
-// Modes
-//   Prefab    - vanilla placement (one shape per click).
-//   Structure - click 3 corners; the box they span (line, plane or cube) is
-//               filled with the current shape. Click the same spot twice to
-//               finish a line or plane early.
-// Replace toggle (both modes): what is under the target is removed first and
-// the shape is placed with the current material in its place.
+//   Prefab mode    - vanilla placement, one shape per click.
+//   Area mode      - two (or three) corner clicks; the box they span is built,
+//                    replaced or removed with the selected shape (solid, hollow, walls).
+//   Replace        - repaints existing blocks with the current material: full shape,
+//                    overlap only, or connected (fill bucket). Refunds the old material.
+//   Free placement - the ghost hovers in front of the camera on the 0.5 m grid.
+//   Options        - creative building, magic chests of all bases, off switch (F5).
+// How it works: docs/HOW-IT-WORKS.md. Addresses and research: docs/reverse-engineering-notes.md.
 //
 // Built freestanding with clang (mingw target), no C runtime.
 
@@ -19,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.17.0"
+#define MOD_VERSION "0.17.1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -47,7 +48,7 @@ struct Buf {
         while (k) c(t[--k]);
         return *this;
     }
-    Buf& i(int64_t v) { if (v < 0) { c('-'); return u((uint64_t)(-v)); } return u((uint64_t)v); }
+    Buf& i(int64_t v) { if (v < 0) { c('-'); return u(0 - (uint64_t)v); } return u((uint64_t)v); }
     Buf& x(uint64_t v) { str("0x"); return u(v, 16); }
     Buf& f(double v, int dec = 3) {
         if (v != v) return str("nan");
@@ -124,7 +125,7 @@ static int ini_int(const wchar_t* sec, const wchar_t* key, int def) {
 struct IniText {
     char s[6144]; int n = 0;
     IniText& t(const char* x) { while (*x && n < (int)sizeof(s) - 1) s[n++] = *x++; return *this; }
-    IniText& i(int v) { char b[16]; int k = 0; bool neg = v < 0; unsigned u = neg ? -v : v;
+    IniText& i(int v) { char b[16]; int k = 0; bool neg = v < 0; unsigned u = neg ? 0u - (unsigned)v : (unsigned)v;
         do { b[k++] = (char)('0' + u % 10); u /= 10; } while (u && k < 15);
         if (neg) t("-"); while (k) { char c[2] = { b[--k], 0 }; t(c); } return *this; }
 };
@@ -236,9 +237,6 @@ static const char* SIG_PAY = "40 55 56 48 83 EC 78 48 8B F2 48 8B E9 0F B6 11 85
 // (they price an action); after payment the game commits it with these.
 static const char* SIG_PLACE_COMMIT  = "48 8B C4 55 53 56 57 41 54 41 56 41 57 48 8D A8 88 FD FF FF 48 81 EC 40 03 00 00";
 static const char* SIG_REMOVE_COMMIT = "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 55 41 56 41 57 48 8D AC 24 E0 E5 FF FF";
-// Sends a BuildingTearDownEvent (effects only) through the event writer at ctx+0xC8.
-// Contexts without that writer would crash it; the hook skips the event then.
-static const char* SIG_TEARDOWN_EVENT = "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 48 8B B1 C8 00 00 00";
 // Turns per-material removed volumes into refund entries (called by RemoveShape).
 static const char* SIG_REFUND_BUILD = "4C 8B DC 55 53 56 57 41 55 41 57 49 8D 6B A1 48 81 EC E8 00 00 00 49 8B 58 08";
 // Density check inside the voxel blit callback; patched to run src/cave.S.
@@ -247,18 +245,13 @@ static const char* SIG_BLIT_CHECK =
     "45 0F B6 1C 48 41 80 FB 80 0F 83 ?? ?? ?? ?? 4D 3B 5A 28 0F 83 ?? ?? ?? ?? 49 8B 42 20 41 80 3C 03 00 0F 84 ?? ?? ?? ?? "
     "41 80 BA A0 00 00 00 00 0F 84 ?? ?? ?? ??";
 // patch the existing-material checks (cmp r11b,80h ... je skip): 35 bytes at +0x29
-static const int kBlitPatchOff = 0x29, kBlitPatchLen = 35, kBlitSkipOff = 0x104, kBlitWriteOff = 0xdb;
-// Builds the 256-entry "may write over this material" table for a placement.
-// Begin undo step (storage ring of 5 steps, 32 records each).
-static const char* SIG_BEGIN_UNDO = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 20 48 8B 82 00 0A 00 00";
+static const int kBlitPatchOff = 0x29, kBlitPatchLen = 35, kBlitSkipOff = 0x104;
 // Drop the oldest undo step.
 static const char* SIG_POP_UNDO = "48 89 5C 24 10 48 89 6C 24 18 57 41 56 41 57 48 83 EC 30 48 8B B9 08 0A 00 00";
 // HUD building update (plays the build sounds); hooked to play the mod's sounds.
 static const char* SIG_HUD_UPDATE = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 88 FE FF FF 48 81 EC 78 02 00 00";
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
 static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 88 B3 D9 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 88 2B 01 00 0F 29 44 24 20 E8";
-// builds the cursor query (snapping etc.) from the equipped item
-static const char* SIG_CURSOR_QUERY = "48 89 5C 24 18 48 89 74 24 20 55 57 41 56 48 8B EC 48 83 EC 30 4D 8B F1";
 // place cursor transform from the aim ray
 static const char* SIG_CURSOR_XF = "48 8B C4 55 53 56 57 41 56 48 8D 6C 24 90 48 81 EC 70 01 00 00 0F 29 70 C8";
 // System dependency copy, and the dismantle system's call of it (writer at +0x180)
@@ -266,28 +259,29 @@ static const char* SIG_SYS_DEPS = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 
 static const char* SIG_DISM_DEPS = "41 B8 90 01 00 00 48 8D 95 F0 01 00 00 4C 8B E9 E8";
 // Client cursor hover highlight (runs every frame)
 static const char* SIG_HOVER_FX = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 70 F2 FF FF";
-static const char* SIG_WRITE_TABLE = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 C7 44 24 40 00 00 00 00 49 8B D8";
-// Item id of a building material (used to price a shape).
 // Creative building: the PayCost calls of the building systems (blueprints = place,
 // dismantle = remove a shape / a prefab, undo) and the preview's missing-materials check.
 static const char* SIG_PAY_PLACE   = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 4D F8 48 8B 45 B8 48 89 85 98 01 00 00";
 static const char* SIG_PAY_REMOVE  = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 44 8B 06 48 8D 54 24 70 0F 57 C0";
 static const char* SIG_PAY_REMOVE_PREFAB = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 44 8B 07 48 8D 54 24 70 48 8D 4D 30";
 static const char* SIG_PAY_UNDO    = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 8D 40 01 00 00 E8 ?? ?? ?? ??";
-// The material picker's item lists (g38_items::updateInventoryStocks)
-// Global magic chests. ChestList (468660): chest ids of the base at a position (server
-// payment); ClientStock (4680b0): the client stock cache's chest iterator; BaseAt
+// Magic chests of all bases. ChestList (468660): chest ids of the base at a position;
+// ClientStock (4680b0): the client stock cache's chest iterator; DepositChests: the
+// loot deposit's ChestList call; StockCount (469610): a stock map count; BaseAt
 // (469060): index of the base whose area holds a position.
 static const char* SIG_CHEST_LIST   = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 20 57 48 83 EC 40 49 8B F9 49 8B E8";
 static const char* SIG_CLIENT_STOCK = "48 89 4C 24 08 53 55 56 57 48 83 EC 58 8B 82 D4 16 00 00 49 8B D8 2B 82 D0 16 00 00";
 static const char* SIG_DEPOSIT_CHESTS = "E8 ?? ?? ?? ?? 45 32 E4 48 8D 4D 10 44 88 A5 30 01 00 00 E8 ?? ?? ?? ??";
 static const char* SIG_STOCK_COUNT  = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 41 8B D8 48 8B FA 4C 8B D1";
 static const char* SIG_BASE_AT      = "48 89 5C 24 08 57 48 83 EC 10 8B 7A 24 45 33 DB 48 8B DA 4C 8B D1 48 85 FF";
+// The material picker's item lists (g38_items::updateInventoryStocks)
 static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56";
 // The picker's "selected material is not in the list" fallback, called by
 // client_cycle_inventory_stock (it sends the chosen material like a scroll)
 static const char* SIG_PICK_CALL = "E8 ?? ?? ?? ?? 80 7D 00 00 75 59 48 8B CE E8 ?? ?? ?? ?? 48 8B 4D C0 44 8B F0";
+// The build preview's missing-materials check, called from the cursor systems
 static const char* SIG_MISSING_CALL = "E8 ?? ?? ?? ?? 8B 13 8B CA 0F BA F1 0C 0F BA EA 0C 84 C0 0F 44 D1 89 13";
+// Item id of a building material (used to price a shape).
 static const char* SIG_MATERIAL_ITEM = "48 83 EC 28 44 0F B6 DA 41 8D 43 FF 3C 7E 77 74 4C 8B 49 38 4D 85 C9 74 3B";
 
 // Cost list each shape action appends to (0x18-byte entries).
@@ -310,24 +304,14 @@ static PlaceFn  g_placeOrig = nullptr;   // trampoline
 static PayFn    g_payOrig = nullptr;     // trampoline
 static CommitFn g_placeCommitOrig = nullptr;   // trampoline
 
-static CommitFn g_removeCommit = nullptr;
-
 // ---- replace blit (src/cave.S)
-extern "C" uint8_t bt_cave_start[], bt_cave_end[], bt_cave_mode[], bt_cave_cont[], bt_cave_skip[], bt_cave_write[],
+extern "C" uint8_t bt_cave_start[], bt_cave_end[], bt_cave_mode[], bt_cave_cont[], bt_cave_skip[],
                    bt_cave_vols[], bt_cave_allow[], bt_cave_hits[];
 static uint8_t* g_caveAllow = nullptr;
 static volatile uint32_t* g_caveHits = nullptr;
 // Materials Replace may repaint: those a normal removal could remove at that spot
 // (from a removal dry run), so protected world blocks are never touched.
 static uint8_t g_allow[256];
-static volatile DWORD g_tableForceTid = 0;
-typedef void (*WriteTableFn)(uint8_t* table, void* ctx, void* state);
-static WriteTableFn g_writeTableOrig = nullptr;
-static void write_table_hook(uint8_t* table, void* ctx, void* state) {
-    g_writeTableOrig(table, ctx, state);
-    if (table && g_tableForceTid == GetCurrentThreadId())
-        for (int m = 1; m < 0x80; m++) if (g_allow[m]) table[m] = 1;
-}
 static volatile uint8_t* g_caveMode = nullptr;   // in the runtime copy
 static uint32_t* g_caveVols = nullptr;
 enum { STYLE_OVERLAP = 1, STYLE_FULL = 2, STYLE_CONNECTED = 3 };   // cave modes 1 and 2; connected = overlap
@@ -335,19 +319,10 @@ static volatile LONG g_modOff = 0;           // whole mod off (ToggleMod): vanil
 static bool creative_on() { return g_cfg.creative && !g_modOff; }
 static bool global_chests_on() { return g_cfg.globalChests && !g_modOff; }
 static volatile LONG g_replaceStyle = STYLE_FULL;
-typedef void (*TearDownFn)(void* ctx, void* a, void* b, uint32_t c);
-static TearDownFn g_tearDownOrig = nullptr;
-static void teardown_hook(void* ctx, void* a, void* b, uint32_t c) {
-    if (!ctx || !*(void**)((uint8_t*)ctx + 0xc8)) return;   // no event writer: skip the effect event
-    g_tearDownOrig(ctx, a, b, c);
-}
 static MaterialItemFn g_materialItem = nullptr;
 static RemoveFn g_remove = nullptr;      // trampoline once hooked
 static volatile DWORD g_ownRemoveTid = 0;  // set while the mod itself calls RemoveShape
 
-// Fields of the dismantle system's action context the placement context lacks.
-// RemoveCommit needs them (+0x120 is the ColliderSystem, used to clear props in
-// the removed volume). Captured from the game's own dismantle dry run, per world.
 static void flash(const char* msg);
 // Removed volume of the mod's own removal dry runs (summed over all materials).
 struct VolList { float* data; uint64_t count; };
@@ -406,9 +381,9 @@ enum { SND_CORNER = 0, SND_DONE, SND_FAIL, SND_TOGGLE, SND_COUNT };
 static uint8_t** g_uiCtxSlot = nullptr;           // global UI context pointer
 typedef void (*PlayUiSoundFn)(void* ctx, const void* soundRef);
 static PlayUiSoundFn g_playUiSound = nullptr;
-static volatile LONG g_sndQueue[SND_COUNT];
-static volatile DWORD g_hudTick = 0;      // pending plays per sound
-static volatile DWORD g_sndTick[SND_COUNT];
+static volatile LONG g_sndQueue[SND_COUNT];      // pending plays per sound
+static volatile DWORD g_sndTick[SND_COUNT];      // when each was queued
+static volatile DWORD g_hudTick = 0;             // last HUD update (the game sounds play there)
 // offsets inside FbUiBundle (sounds @0x12060: menu @+0x1e0, hud @+0x9e0)
 static const uint32_t kSndOffset[SND_COUNT] = {
     0x12320,    // menu.highlightChange
@@ -553,7 +528,10 @@ static uint8_t* find_hookable(const char* name, const char* sig, int stolen) {
 }
 
 // ------------------------------------------------------------------ hooking
-static uint8_t* alloc_near(uint8_t* target, size_t size) {
+// Executable memory within +-2 GB of `target` (for rel32 jumps). Small requests are
+// carved out of one shared block (relays, trampolines, the replace blit), which saves
+// one 64 KB allocation and a long VirtualAlloc search per hook.
+static uint8_t* alloc_near_raw(uint8_t* target, size_t size) {
     SYSTEM_INFO si; GetSystemInfo(&si);
     uintptr_t gran = si.dwAllocationGranularity;
     uintptr_t t = (uintptr_t)target;
@@ -567,6 +545,22 @@ static uint8_t* alloc_near(uint8_t* target, size_t size) {
         }
     }
     return nullptr;
+}
+static uint8_t* alloc_near(uint8_t* target, size_t size) {
+    static uint8_t* pool = nullptr; static size_t used = 0;
+    const size_t kPool = 0x10000;
+    size = (size + 15) & ~(size_t)15;
+    auto in_range = [&](uint8_t* p) { int64_t d = p - target; return d > -0x70000000ll && d < 0x70000000ll; };
+    if (size <= kPool / 4) {          // called from the init thread only
+        if (!pool || used + size > kPool || !in_range(pool) || !in_range(pool + kPool)) {
+            uint8_t* p = alloc_near_raw(target, kPool);
+            if (!p) return nullptr;
+            pool = p; used = 0;
+        }
+        uint8_t* r = pool + used; used += size;
+        return r;
+    }
+    return alloc_near_raw(target, size);
 }
 
 static void put_absjmp(uint8_t* at, void* to) {
@@ -611,7 +605,8 @@ static void* hook(uint8_t* target, int stolen, void* detour) {
 // Used for functions other mods hook or scan by their prologue (Creative Mode looks
 // for PayCost and 9bc1a0 by their first bytes): the function itself stays untouched,
 // so the order in which the mods start does not matter. `sites` lists the call
-// instructions; with sites == nullptr every call in .text is redirected.
+// instructions; with sites == nullptr every E8 whose target is `target` in .text is
+// redirected (on the 1.0 client this byte scan finds exactly the real calls).
 // Returns the number of calls redirected.
 static int hook_calls(uint8_t* target, void* detour, uint8_t* const* sites, int nSites) {
     if (!target || !g_textBase) return 0;
@@ -731,9 +726,6 @@ static float price_removal(CostList* list, void* ctx, void* state, const CursorX
     return removed;
 }
 
-// Wraps the game's payment step. When it charges a list we removed blocks for,
-// the removed materials are refunded through the same function.
-static volatile LONG g_payDiag = 0;
 // ---- undo of Replace
 // The game's undo of a placement step refunds the step's cost list and restores the
 // old voxels, but knows nothing about the old material the mod gave back. The mod
@@ -980,7 +972,9 @@ static bool creative_site(uint8_t* ret) {
     return false;
 }
 static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t* ret);
-// Every PayCost call goes through here (redirected call sites).
+// Every PayCost call goes through here (redirected call sites). When it charges a list
+// the mod removed blocks for (Replace), the removed materials are refunded through the
+// same function.
 static uint8_t pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
     uint8_t* ret = (uint8_t*)__builtin_return_address(0);
     ChestScope scope(global_chests_on() && creative_site(ret));
@@ -1018,15 +1012,6 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
             LOG(.str("creative: charge at another call, rva ").x((uint64_t)(ret - 5 - g_base))
                 .str(", ").u(list->count).str(" entries (paid normally)"));
     }
-    static volatile LONG s_refundDiag = 0;
-    if (!consume && list && InterlockedIncrement(&s_refundDiag) <= 20) {
-        LOG(.str("refund call at rva ").x((uint64_t)(ret - 5 - g_base)).str(": ").u(list->count).str(" entries"));
-    }
-    if (!consume && mode && mode[0] == 0 && list != g_refundList && InterlockedIncrement(&g_payDiag) <= 3) {
-        uint8_t* inv = *(uint8_t**)(mode + 8);
-        if (inv && readable(inv, 0x100))
-            LOG(.str("game refund transaction: flags ").x(inv[0xb0]).str(" writer ").x(*(uint64_t*)(inv + 0xb8)));
-    }
     uint8_t r = g_payOrig(mode, list, consume);
     if (list && list == g_refundList) {
         LONG n = g_refundN;
@@ -1037,8 +1022,6 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
             // transaction is committed; the placement system leaves it off.
             uint8_t* inv = *(uint8_t**)(mode + 8);
             if (inv && readable(inv, 0x100)) {
-                LOG(.str("  refund transaction: flags ").x(inv[0xb0]).str(" writer ").x(*(uint64_t*)(inv + 0xb8))
-                    .str(" pending ").u(*(uint64_t*)(inv + 0xf8)));
                 if (g_cfg.refundPopup) {
                     if (!*(void**)(inv + 0xb8)) *(void**)(inv + 0xb8) = pickup_writer_for(inv);
                     if (*(void**)(inv + 0xb8)) inv[0xb0] |= 1;
@@ -1047,7 +1030,6 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
             }
             uint8_t rr = g_payOrig(mode, &tmp, 0);
             if (rr) { g_paidN = n < kMaxPaid ? n : kMaxPaid; memcpy(g_paid, g_refund, (size_t)g_paidN * sizeof(CostEntry)); g_paidTick = GetTickCount(); }
-            if (inv && readable(inv, 0x100)) LOG(.str("  after refund: pending ").u(*(uint64_t*)(inv + 0xf8)));
             LOG(.str("refund: ").i(n).str(" entries -> ").str(rr ? "ok" : "not all refunded (inventory full?)")
                 .str(g_refundDropped ? " (some dropped: over limit)" : ""));
         } else if (n > 0) {
@@ -1368,12 +1350,11 @@ static bool price_shape(CostList* list, void* ctx, void* state, void* pdata, Cur
         if (g_onlyMaterial)                 // connected replace: repaint only the clicked material
             for (int m = 1; m < 0x100; m++) if (m != g_onlyMaterial) { g_allow[m] = 0; g_caveAllow[m] = 0; }
         *g_caveMode = (uint8_t)g_pend.style;
-        g_tableForceTid = GetCurrentThreadId();
     }
     if (g_pend.n < kMaxPending) g_pendCost[g_pend.n] = (uint32_t)list->count;
     g_pend.list = list;
     uint8_t r = g_placeOrig(list, ctx, state, pdata, xf);          // dry run
-    if (replace) { *g_caveMode = 0; g_tableForceTid = 0; }
+    if (replace) *g_caveMode = 0;
     pend_add(xf->pos);
     if (replace && g_pend.n <= kVolSnaps) memcpy(g_volSnap[g_pend.n - 1], g_caveVols, 256 * 4);
     return r != 0;
@@ -1381,39 +1362,36 @@ static bool price_shape(CostList* list, void* ctx, void* state, void* pdata, Cur
 
 static void refund_reset() { memset(g_caveVols, 0, 256 * 4); }
 
-// refund entries for given voxel counts (the game's refund builder into a local list)
-static int build_refund_entries(void* ctx, const uint32_t* cnt, CostEntry* out, int max) {
+// The game's refund builder: appends refund entries for per-material voxel counts
+// (1.0 per voxel) to `list`. Returns the total volume (0 = nothing built).
+static float refund_entries(CostList* list, void* ctx, const uint32_t* cnt) {
     alignas(16) float vols[256]; float total = 0.f;
-    for (int m = 0; m < 256; m++) { vols[m] = (float)cnt[m]; total += vols[m]; }
     vols[0] = 0.f;
-    if (total <= 0.f || !g_refundBuildOrig) return 0;
-    static CostEntry buf[256];
-    CostList l = { buf, 0, 256, nullptr };
+    for (int m = 1; m < 256; m++) { vols[m] = (float)cnt[m]; total += vols[m]; }
+    if (total <= 0.f || !g_refundBuildOrig) return 0.f;
     VolList vl = { vols, 0x100 };
     void** lootSlot = (void**)((uint8_t*)ctx + 0x40);
     void* saved = *lootSlot; if (!saved) *lootSlot = g_lootMemory;
-    g_refundBuildOrig(&l, ctx, &vl);
+    g_refundBuildOrig(list, ctx, &vl);
     *lootSlot = saved;
+    return total;
+}
+// refund entries for given voxel counts, into `out`
+static int build_refund_entries(void* ctx, const uint32_t* cnt, CostEntry* out, int max) {
+    static CostEntry buf[256];
+    CostList l = { buf, 0, 256, nullptr };
+    refund_entries(&l, ctx, cnt);
     int n = (int)(l.count < (uint64_t)max ? l.count : (uint64_t)max);
     memcpy(out, buf, (size_t)n * sizeof(CostEntry));
     return n;
 }
 
-// Turns the tallied old-material volumes into refund entries (the game's own
-// refund builder) and moves them to g_refund, paid back once the action is paid.
+// Turns the tallied old-material volumes into refund entries and moves them to
+// g_refund, paid back once the action is paid.
 static void refund_build(CostList* list, void* ctx) {
-    alignas(16) float vols[256];
-    float total = 0.f;
-    for (int m = 0; m < 256; m++) { vols[m] = (float)g_caveVols[m]; total += vols[m]; }   // 1.0 per voxel
-    vols[0] = 0.f;
-    if (total <= 0.f || !g_refundBuildOrig) return;
-    VolList vl = { vols, 0x100 };
-    void** lootSlot = (void**)((uint8_t*)ctx + 0x40);
-    void* savedLoot = *lootSlot;
-    if (!savedLoot) *lootSlot = g_lootMemory;
     uint64_t before = list->count;
-    g_refundBuildOrig(list, ctx, &vl);
-    *lootSlot = savedLoot;
+    float total = refund_entries(list, ctx, g_caveVols);
+    if (total <= 0.f) return;
     if (list->count > before) {
         CostEntry* e = (CostEntry*)list->data;
         for (uint64_t k = before; k < list->count; k++) {
@@ -1435,7 +1413,7 @@ static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     uint8_t any = 0;
     int placed = 0;
     uint32_t h0 = g_caveHits[0], h1 = g_caveHits[1];
-    if (pd.replace) { *g_caveMode = (uint8_t)pd.style; g_tableForceTid = GetCurrentThreadId(); }
+    if (pd.replace) *g_caveMode = (uint8_t)pd.style;
     UndoSplit us; undo_begin(us, ctx, pd.list, g_pendCost, pd.n);
     for (int i = 0; i < pd.n; i++) {
         undo_before(us, i);
@@ -1446,7 +1424,7 @@ static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
         undo_after(us);
     }
     undo_end(us);
-    *g_caveMode = 0; g_tableForceTid = 0;
+    *g_caveMode = 0;
     if (pd.replace && us.step0 && !us.lost && us.recorded > 0 && GetTickCount() - g_paidTick < 3000 && g_paidN > 0) {
         CostEntry e[kMaxPaid]; int ne = 0;
         if (us.recorded >= pd.n) { ne = g_paidN; memcpy(e, g_paid, (size_t)ne * sizeof(CostEntry)); }
@@ -1535,15 +1513,18 @@ static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdat
     if (target == mine) { flash("Connected replace: that is already your material"); beep(MB_ICONHAND); return 0; }
     // breadth-first over cells (i,j,k relative to the start)
     const int limit = g_cfg.fillLimit;
+    // Every found cell probes up to 6 neighbours, so up to 6 * FillLimit + 1 cells are
+    // visited: the table holds 2^18 (FillLimit is at most 20000), always under half full.
     static int32_t q[kMaxPending][3];
-    static uint64_t seen[1 << 16];                      // open addressing, 0 = empty
+    static const uint32_t kSeen = 1u << 18;
+    static uint64_t seen[kSeen];                        // open addressing, 0 = empty
     memset(seen, 0, sizeof(seen));
     auto key = [](int i, int j, int k) -> uint64_t {
         return ((uint64_t)(uint32_t)(i + 0x100000) << 42) | ((uint64_t)(uint32_t)(j + 0x100000) << 21) | (uint64_t)(uint32_t)(k + 0x100000) | (1ull << 63);
     };
     auto visit = [&](int i, int j, int k) -> bool {     // false if seen before (or table full)
-        uint64_t kk = key(i, j, k); uint32_t h = (uint32_t)((kk * 0x9E3779B97F4A7C15ull) >> 48);
-        for (int n = 0; n < (1 << 16); n++, h = (h + 1) & 0xffff) {
+        uint64_t kk = key(i, j, k); uint32_t h = (uint32_t)((kk * 0x9E3779B97F4A7C15ull) >> 46);
+        for (uint32_t n = 0; n < kSeen; n++, h = (h + 1) & (kSeen - 1)) {
             if (seen[h] == kk) return false;
             if (!seen[h]) { seen[h] = kk; return true; }
         }
@@ -1877,8 +1858,18 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
 static HWND g_overlay;
 static char g_overlayText[320];
 static volatile LONG g_fontPx = 24;      // panel font height, scaled to the window
+// The panel font, recreated only when its size changes (overlay thread only).
+static HFONT panel_font(int px) {
+    static HFONT font = nullptr; static int fontPx = 0;
+    if (!font || fontPx != px) {
+        if (font) DeleteObject(font);
+        font = CreateFontW(px, 0, 0, 0, FW_MEDIUM, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+        fontPx = px;
+    }
+    return font;
+}
 
-static HWND game_window() {
+static HWND find_game_window() {
     struct S { DWORD pid; HWND best; LONG area; } s = { GetCurrentProcessId(), nullptr, 0 };
     EnumWindows([](HWND h, LPARAM lp) -> BOOL {
         auto* s = (S*)lp; DWORD pid = 0; GetWindowThreadProcessId(h, &pid);
@@ -1888,6 +1879,14 @@ static HWND game_window() {
         return TRUE;
     }, (LPARAM)&s);
     return s.best;
+}
+// The game's main window, looked up again only when it is gone or every 2 s
+// (enumerating every window on the desktop 20 times a second is wasteful).
+static HWND game_window() {
+    static HWND w = nullptr; static DWORD at = 0;
+    DWORD now = GetTickCount();
+    if (!w || !IsWindow(w) || now - at > 2000) { w = find_game_window(); at = now; }
+    return w;
 }
 
 static bool game_focused() {
@@ -1910,12 +1909,11 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
         HBRUSH fr = CreateSolidBrush(g_replace ? RGB(214, 150, 72) : RGB(196, 178, 126));
         FillRect(dc, &bar, fr); DeleteObject(fr);
         int px = g_fontPx;
-        HFONT font = CreateFontW(px, 0, 0, 0, FW_MEDIUM, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-        HGDIOBJ of = SelectObject(dc, font);
+        HGDIOBJ of = SelectObject(dc, panel_font(px));
         SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(232, 226, 210));
         RECT tr = { r.left + px / 2, r.top + px / 4, r.right - px / 2, r.bottom - px / 4 };
         DrawTextA(dc, g_overlayText, -1, &tr, DT_CENTER | DT_TOP | DT_NOPREFIX);
-        SelectObject(dc, of); DeleteObject(font);
+        SelectObject(dc, of);
         EndPaint(h, &ps);
         return 0;
     }
@@ -1996,14 +1994,11 @@ static int preview_voxels(uint32_t out[][3], int cap) {
         if (v0[a] < 0) return 0;
     }
     int64_t d[3] = { v1[0] - v0[0] + 1, v1[1] - v0[1] + 1, v1[2] - v0[2] + 1 };
-    int64_t inner = (d[0] > 2 ? d[0] - 2 : 0) * (d[1] > 2 ? d[1] - 2 : 0) * (d[2] > 2 ? d[2] - 2 : 0);
-    int64_t surface = d[0] * d[1] * d[2] - inner;
     int n = 0;
     auto put = [&](int64_t x, int64_t y, int64_t z) {
         if (n >= cap) return;
         out[n][0] = (uint32_t)x; out[n][1] = (uint32_t)y; out[n][2] = (uint32_t)z; n++;
     };
-    (void)surface;
     {
         int64_t edges = 4 * (d[0] + d[1] + d[2]);
         int64_t stride = (edges + cap - 9) / (cap - 8);
@@ -2092,15 +2087,20 @@ static void compose_overlay(char* out, int cap) {
         if (g_hover) { int t = (int)(g_hoverDist * 10.f + 0.5f); b.str("  |  free ").i(t / 10).c('.').i(t % 10).str(" m"); }
         if (creative_on()) b.str("  |  creative");
     }
-    // line 2: keys
+    // line 2: keys (their names never change while the game runs)
     if (g_cfg.panelKeys) {
-        char k[6][16];
-        vk_name(g_cfg.keyStructure, k[0]); vk_name(g_cfg.keyReplace, k[1]); vk_name(g_cfg.keyCancel, k[2]);
-        vk_name(g_cfg.keyStyle, k[3]); vk_name(g_cfg.keyHover, k[4]); vk_name(g_cfg.keyFill, k[5]);
+        static char k[8][16]; static bool named = false;
+        if (!named) {
+            vk_name(g_cfg.keyStructure, k[0]); vk_name(g_cfg.keyReplace, k[1]); vk_name(g_cfg.keyCancel, k[2]);
+            vk_name(g_cfg.keyStyle, k[3]); vk_name(g_cfg.keyHover, k[4]); vk_name(g_cfg.keyFill, k[5]);
+            if (g_cfg.keyOff > 0) vk_name(g_cfg.keyOff, k[6]);
+            if (g_cfg.wheelKey > 0) vk_name(g_cfg.wheelKey, k[7]);
+            named = true;
+        }
         b.str("\n").str(k[0]).str(" area  ").str(k[1]).str(" replace  ").str(k[2]).str(" clear  ")
          .str(k[3]).str(" style  ").str(k[4]).str(" free  ").str(k[5]).str(" fill");
-        if (g_hover) b.str("  Q+wheel dist");
-        if (g_cfg.keyOff > 0) { char ko[16]; vk_name(g_cfg.keyOff, ko); b.str("  ").str(ko).str(" off"); }
+        if (g_hover && g_cfg.wheelKey > 0) b.str("  ").str(k[7]).str("+wheel dist");
+        if (g_cfg.keyOff > 0) b.str("  ").str(k[6]).str(" off");
     }
     lstrcpynA(out, b.z(), cap);
 }
@@ -2140,11 +2140,10 @@ static DWORD WINAPI overlay_thread(void*) {
             if (sc < 0.5f) sc = 0.5f;
             int px = (int)(17.f * sc + 0.5f);
             if (px != g_fontPx) { g_fontPx = px; last[0] = 0; }
-            HFONT font = CreateFontW(px, 0, 0, 0, FW_MEDIUM, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-            HGDIOBJ of = SelectObject(dc, font);
+            HGDIOBJ of = SelectObject(dc, panel_font(px));
             RECT tr = { 0, 0, 4000, 0 };
             DrawTextA(dc, g_overlayText, -1, &tr, DT_CALCRECT | DT_NOPREFIX);
-            SelectObject(dc, of); DeleteObject(font); ReleaseDC(g_overlay, dc);
+            SelectObject(dc, of); ReleaseDC(g_overlay, dc);
             int w = (tr.right - tr.left) + px * 2, h = (tr.bottom - tr.top) + px / 2 + 3;
             int x = r.left + ((r.right - r.left) - w) / 2, y = r.bottom - (int)(g_cfg.panelBottom * sc) - h;
             if (x < r.left) x = r.left; if (y < r.top) y = r.top;
@@ -2277,8 +2276,6 @@ static bool install_cave(uint8_t* sig) {
     uint64_t cont = (uint64_t)(site + kBlitPatchLen), skip = (uint64_t)(sig + kBlitSkipOff);
     memcpy(mem + (bt_cave_cont - bt_cave_start), &cont, 8);
     memcpy(mem + (bt_cave_skip - bt_cave_start), &skip, 8);
-    uint64_t write = (uint64_t)(sig + kBlitWriteOff);
-    memcpy(mem + (bt_cave_write - bt_cave_start), &write, 8);
     g_caveAllow = mem + (bt_cave_allow - bt_cave_start);
     g_caveMode = mem + (bt_cave_mode - bt_cave_start);
     g_caveVols = (uint32_t*)(mem + (bt_cave_vols - bt_cave_start));
@@ -2304,11 +2301,11 @@ static bool install_cave(uint8_t* sig) {
 // Logs where a fatal exception happened (as module offsets), then lets the game
 // handle it as usual. First-chance exceptions the game handles itself are rare;
 // only the first few are logged.
-static uint8_t* g_self; static size_t g_selfSize;
+static uint8_t* g_self; static size_t g_selfSize, g_gameSize;
 static volatile LONG g_crashLogs = 0;
 
 static void addr_desc(Buf& b, uint64_t a) {
-    uint64_t gb = (uint64_t)g_base, ge = gb + 0x2a1e000;
+    uint64_t gb = (uint64_t)g_base, ge = gb + g_gameSize;
     uint64_t sb = (uint64_t)g_self, se = sb + g_selfSize;
     if (a >= gb && a < ge) b.str("game+").x(a - gb);
     else if (a >= sb && a < se) b.str("mod+").x(a - sb);
@@ -2332,8 +2329,7 @@ static LONG CALLBACK crash_handler(EXCEPTION_POINTERS* ep) {
     for (int k = 0; k < 512 && n < 14; k++) {
         if (!readable(sp + k, 8)) break;
         uint64_t v = sp[k];
-        uint64_t gb = (uint64_t)g_base;
-        bool inGame = v >= gb + 0x1000 && v < gb + 0x13b2000;
+        bool inGame = v >= (uint64_t)g_textBase && v < (uint64_t)g_textBase + g_textSize;
         bool inMod = v >= (uint64_t)g_self && v < (uint64_t)g_self + g_selfSize;
         if (inGame || inMod) { b.c(' '); addr_desc(b, v); n++; }
     }
@@ -2359,15 +2355,11 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* pcommit = find_hookable("PlaceCommit", SIG_PLACE_COMMIT, 5);
     uint8_t* rcommit = find_hookable("RemoveCommit", SIG_REMOVE_COMMIT, 5);
     uint8_t* matItem = find_unique("MaterialItem", SIG_MATERIAL_ITEM);
-    uint8_t* tearDown = find_unique("TearDownEvent", SIG_TEARDOWN_EVENT);
     uint8_t* refundBuild = find_hookable("RefundBuild", SIG_REFUND_BUILD, 5);
     uint8_t* blit = find_unique("BlitCheck", SIG_BLIT_CHECK);
-    uint8_t* wtable = find_unique("WriteTable", SIG_WRITE_TABLE);
     uint8_t* popUndo = find_hookable("PopUndo", SIG_POP_UNDO, 5);
     uint8_t* hudUpd = find_hookable("HudUpdate", SIG_HUD_UPDATE, 5);
     uint8_t* uiSnd = find_unique("UiSound", SIG_UI_SOUND);
-    uint8_t* cquery = find_unique("CursorQuery", SIG_CURSOR_QUERY);
-    g_removeCommit = (CommitFn)rcommit;
     g_materialItem = (MaterialItemFn)matItem;
     g_remove = nullptr;
     g_bounds = (BoundsFn)bounds;
@@ -2375,7 +2367,7 @@ static DWORD WINAPI init_thread(void*) {
     g_cursorLayoutOk = cc && pc && pc > cc && pc - cc < 0x400;
     // the server/client branch must sit directly before the placement call
     g_worldLayoutOk = g_cursorLayoutOk && sc && sc + 81 == pc;
-    if (!place || !bounds || !remove || !pay || !pcommit || !rcommit || !matItem || !refundBuild || !blit || !wtable || !g_worldLayoutOk) {
+    if (!place || !bounds || !remove || !pay || !pcommit || !rcommit || !matItem || !refundBuild || !blit || !g_worldLayoutOk) {
         LOG(.str("required code not found; mod disabled (game version not supported, or another mod changed this code). place=").i(place != nullptr)
             .str(" bounds=").i(bounds != nullptr).str(" remove=").i(remove != nullptr).str(" pay=").i(pay != nullptr)
             .str(" layout=").i(g_worldLayoutOk));
@@ -2472,14 +2464,12 @@ static DWORD WINAPI init_thread(void*) {
         if (calls <= 0 || calls > 64) { LOG(.str("pay hook failed; mod disabled")); return 0; }
         g_payOrig = (PayFn)pay;
     }
-    (void)tearDown;
     g_remove = (RemoveFn)hook(remove, 10, (void*)&remove_hook);
     if (!g_remove) { LOG(.str("remove hook failed; mod disabled")); return 0; }
     g_removeCommitOrig = (CommitFn)hook(rcommit, 5, (void*)&remove_commit_hook);
     if (!g_removeCommitOrig) { LOG(.str("remove commit hook failed; mod disabled")); return 0; }
     g_refundBuildOrig = (RefundBuildFn)hook(refundBuild, 5, (void*)&refund_build_hook);
     if (!g_refundBuildOrig) { LOG(.str("refund hook failed; mod disabled")); return 0; }
-    (void)wtable;     // the replace blit applies the allow list itself
     if (!install_cave(blit)) { LOG(.str("blit patch failed; mod disabled")); return 0; }
     if (popUndo) g_popUndoOrig = (PopUndoFn)hook(popUndo, 5, (void*)&pop_undo_hook);
     if (!g_popUndoOrig) LOG(.str("undo pop hook not installed: area actions keep undo for their first shape only"));
@@ -2490,7 +2480,6 @@ static DWORD WINAPI init_thread(void*) {
         if (!g_hudOrig) g_playUiSound = nullptr;
     }
     LOG(.str("game sounds: ").str(g_playUiSound ? "yes" : "no (Windows sounds)"));
-    (void)cquery;
     // only the dismantle system's own call is redirected; 9bc1a0 itself is left
     // untouched (Creative Mode looks for its first bytes)
     uint8_t* sdeps = find_hookable("SystemDeps", SIG_SYS_DEPS, 5);
@@ -2562,8 +2551,11 @@ extern "C" BOOL WINAPI DllMainCRTStartup(HINSTANCE self, DWORD reason, LPVOID) {
     g_logOn = g_cfg.log != 0;
     open_log();
     g_self = (uint8_t*)self;
-    { auto* dos = (IMAGE_DOS_HEADER*)self; auto* nt = (IMAGE_NT_HEADERS64*)((uint8_t*)self + dos->e_lfanew);
-      g_selfSize = nt->OptionalHeader.SizeOfImage; }
+    auto image_size = [](void* m) -> size_t {
+        auto* dos = (IMAGE_DOS_HEADER*)m; auto* nt = (IMAGE_NT_HEADERS64*)((uint8_t*)m + dos->e_lfanew);
+        return nt->OptionalHeader.SizeOfImage;
+    };
+    g_selfSize = image_size(self); g_gameSize = image_size(g_base);
     AddVectoredExceptionHandler(0, crash_handler);
     CreateThread(nullptr, 0, init_thread, nullptr, 0, nullptr);
     CreateThread(nullptr, 0, input_thread, nullptr, 0, nullptr);

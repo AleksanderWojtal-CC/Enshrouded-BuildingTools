@@ -3,6 +3,18 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.17.1
+
+- Faster and lighter: the info panel no longer re-creates its font, looks up the game
+  window and asks Windows for key names twenty times a second; hooks share one small
+  block of memory instead of 64 KB each; a few unused game lookups at start-up are gone.
+- Fix: connected replace (fill bucket) with a very large `FillLimit` could freeze the
+  game for a long time; its search table is now big enough for the maximum limit.
+- Fix: the mod no longer refuses to start when one unused piece of game code is not
+  found (after a game update).
+- The info panel shows the key you set for the free placement wheel (not always Q).
+- Cleaner log: debug lines from earlier versions removed.
+
 ## 0.17.0
 
 - New: **magic chests of all bases** (`GlobalMagicChests=1` in the new `[Chests]`

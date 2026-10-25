@@ -29,7 +29,6 @@
     .globl bt_cave_mode
     .globl bt_cave_cont
     .globl bt_cave_skip
-    .globl bt_cave_write
     .globl bt_cave_vols
     .globl bt_cave_allow
     .globl bt_cave_hits
@@ -47,11 +46,11 @@ bt_cave_start:
     jmp qword ptr [rip + bt_cave_cont]
 
 1:  # ---- mod replace (the new material is a building material)
-    lock inc dword ptr [rip + bt_cave_hits]          # hits[0]: covered voxels seen
+    inc dword ptr [rip + bt_cave_hits]               # hits[0]: covered voxels seen (log only)
     cmp r11b, 0x80
     jb 3f
     # existing building voxel
-    lock inc dword ptr [rip + bt_cave_hits + 4]      # hits[1]: building voxels seen
+    inc dword ptr [rip + bt_cave_hits + 4]           # hits[1]: building voxels seen (log only)
     cmp r11b, byte ptr [r10 + 0xa1]
     je 9f                                            # already the new material
     lea rax, [rip + bt_cave_allow]
@@ -75,7 +74,6 @@ bt_cave_start:
     .p2align 3
 bt_cave_cont:  .quad 0
 bt_cave_skip:  .quad 0
-bt_cave_write: .quad 0
 bt_cave_mode:  .byte 0
     .p2align 2
 bt_cave_hits:  .long 0, 0
