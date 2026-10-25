@@ -1023,11 +1023,21 @@ static uint32_t stock_count_hook(void* map, uint8_t* sys, uint32_t item, const f
             !readable(*(void**)(m + 0x40), (size_t)cap * 8)) continue;
         sum += g_stockCountOrig(m, sys, item, pos);
     }
-    static volatile LONG s_n = 0;
-    if (InterlockedIncrement(&s_n) <= 10)
+    static uint32_t s_item[64]; static uint32_t s_val[64]; static volatile LONG s_k = 0;
+    bool seen = false;
+    for (int k = 0; k < 64 && k < s_k; k++) if (s_item[k] == item) { seen = s_val[k] == sum; s_val[k] = sum; break; }
+    if (!seen && s_k < 64) {
+        bool found = false;
+        for (int k = 0; k < s_k; k++) if (s_item[k] == item) found = true;
+        if (!found) { LONG k = InterlockedIncrement(&s_k) - 1; if (k < 64) { s_item[k] = item; s_val[k] = sum; } }
+    }
+    if (!seen)
         LOG(.str("global chests: server stock of item ").x(item).str(" = ").u(sum).str(" in ").i(nb)
-            .str(" bases (local check said ").u(g_stockCountOrig(map, sys, item, pos)).c(')'));
-    return sum;
+            .str(" bases (local check said ").u(g_stockCountOrig(map, sys, item, pos)).str("); check passed, payment decides"));
+    // The server's per-base maps do not reliably hold what the chests contain, so the
+    // server check always passes: the payment that follows takes from the chests of
+    // every base and refuses the placement itself when there is not enough anywhere.
+    return 0xffff;
 }
 
 static uint8_t* g_creativeSites[4];          // return addresses of the building PayCost calls
@@ -1861,7 +1871,21 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
     const bool replace = g_replace != 0;
     const LONG mode = g_mode;
     const bool modActive = replace || mode == MODE_AREA;
-    if (!modActive) return g_placeOrig(list, ctx, state, pdata, xf);
+    if (!modActive) {
+        if (!global_chests_on()) return g_placeOrig(list, ctx, state, pdata, xf);
+        uint64_t before = list ? list->count : 0;
+        uint8_t r = g_placeOrig(list, ctx, state, pdata, xf);
+        static volatile LONG s_n = 0;
+        if (InterlockedIncrement(&s_n) <= 40) {
+            int w = world_of(list, xf);
+            uint32_t item = 0;
+            if (list && list->count > before) item = *(uint32_t*)(((CostEntry*)list->data)[list->count - 1].b + 0x14);
+            LOG(.str("global chests: dry run (").str(w == WORLD_SERVER ? "server" : w == WORLD_CLIENT ? "client" : "?")
+                .str(") material ").x(pdata ? ((uint8_t*)pdata)[0x454] : 0).str(" -> ").i(r).str(", cost entries +")
+                .u(list ? list->count - before : 0).str(" item ").x(item));
+        }
+        return r;
+    }
 
     const int world = world_of(list, xf);
     if (world == WORLD_UNKNOWN) {
