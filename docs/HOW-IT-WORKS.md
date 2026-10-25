@@ -116,29 +116,53 @@ only the clicked material, so other materials in the same cells are left alone.
 
 ## Magic chests of all bases
 
-The game keeps every base (flame altar area) in its PlayerBases system: the number of
-bases at +0x24 and up to 16 records of 0x130 bytes from +0x30. Each record starts with
-the list of the base's magic chest entity ids and holds the base's area box.
+With `GlobalMagicChests=1`, building and crafting use the magic chests of every base
+(flame altar area), not only the one the player stands in.
 
-- **Payment (server).** The inventory transaction that charges a cost list (3f1ae0)
-  takes from the backpack and then from the chests that `ChestList` (468660) returns
-  for the player's position: the chests of the base the player stands in. While one of
-  the building systems pays (the redirected `PayCost` calls of place, dismantle and
-  undo), a thread flag is set and the mod's `ChestList` returns the chests of all
-  bases instead, those of the current base first. Outside every base, where the game
-  would return "not in a base", it returns all bases' chests too. Other users of
-  `ChestList` (crafting, the loot deposit) see the normal list.
-- **Picker and ghost (client).** The client's `cache_crafting_stock` system adds up
-  the chests of the base at the player's position into one stock map, 40 chests per
-  frame, through the iterator `ClientStock` (4680b0). The material picker
-  (`updateInventoryStocks`) and the missing-materials check read that map. For the
-  length of each iterator call the mod points the base's chest list at a list of all
-  bases' chests (the base's own chests first, so other readers never see an invalid
-  entry) and restores it afterwards. Outside every base it uses the first base and a
-  point inside its area, so the map is built for the player anywhere.
+The game keeps every base in a `PlayerBases` system (one in the server world, one in
+the client world): the number of bases at +0x24 and up to 16 records of 0x130 bytes from
++0x30. A record starts with the list of the base's magic chest entity ids and holds the
+base's area box. Three places in the game use "the chests of the base the player is in",
+and the mod widens each of them. All three are reached through redirected `call`
+instructions; the game functions themselves are not patched.
+
+1. **Payments and crafting (server).** An inventory transaction (building costs,
+   crafting, station queues) takes from the backpack and then from the chests that
+   `ChestList` (468660) returns for the player's position. The mod returns the chests of
+   every base instead, the current base first, so local chests are used before distant
+   ones. Outside every base, where the game would answer "not in a base", it returns all
+   bases' chests too. Two callers keep the normal list:
+   - the **loot deposit** (`area_deposit_trigger`), which would otherwise put loot into
+     chests of other bases;
+   - **client worlds** (the UI's per-recipe checks ask several thousand times per
+     second). Their counts come from the client stock map below, so widening them would
+     only cost time; in testing it dropped the game to 2 FPS with a crafting bench open.
+   If the deposit's call site is not found in a game version, only the building systems'
+   payments are widened (a thread flag set in `pay_hook`) and crafting stays local.
+2. **Client stock map (picker, ghost, crafting menu).** The client's
+   `cache_crafting_stock` system adds up the current base's chests into one stock map,
+   40 chests per frame, through the iterator `ClientStock` (4680b0). The material picker,
+   the red "missing materials" ghost and the crafting menu read that map. For the length
+   of each iterator call the mod points the base's chest list at a list of every base's
+   chests and restores it afterwards. The list starts with the base's own chests, and the
+   pointer is swapped in before the count and out after it, so another thread reading the
+   record never sees an id past the end. The list is rebuilt only when a new pass starts
+   or the player changes base. Outside every base it uses the first base and a point
+   inside that base's area, so the map is built for the player anywhere.
+3. **Server cursor check.** Before a click turns into a building action, the server
+   (`server_cursor_no_prediction`) runs the same missing-materials check as the client
+   (2865e0). It counts the material in a per-base stock map (`StockCount`, 469610), and
+   those server maps do not hold what the chests contain (they read 0 in testing even
+   for materials in the local chests). For a material that is only in another base, the
+   server therefore dropped the click: the animation played, nothing was built or paid.
+   With the option on, the server's count answers "plenty" and the payment (1) decides:
+   it takes from every chest, or refuses the placement when there is not enough
+   anywhere. The client's check is unchanged and still turns the ghost red when you are
+   short. Server and client worlds are told apart by the client world's system, which the
+   mod learns in (2); until then the check is left alone.
 
 Chests whose entity is not loaded are skipped by the game itself (the entity lookup
-fails), so distant bases only count once the game has them in memory.
+fails), so a base far away may only count once the game has it in memory.
 
 ## Off switch
 

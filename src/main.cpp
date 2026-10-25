@@ -109,7 +109,7 @@ struct Config {
     int creative     = 0;      // building is free: no charge, no refund, no missing materials
     int keyOff       = VK_F5;  // the whole mod off / on (vanilla game while off)
     int fillLimit    = 500;    // most shapes one connected replace (fill bucket) may repaint
-    int globalChests = 0;      // building takes from (and shows) the magic chests of every base
+    int globalChests = 0;      // building and crafting use the magic chests of every base
 };
 static Config g_cfg;
 
@@ -150,9 +150,9 @@ static void write_full_ini(const Config& c) {
      .t(";     so your inventory is never touched (props, crafting and chests stay normal)\r\n")
      .t("CreativeBuilding=").i(c.creative).t("\r\n")
      .t("\r\n[Chests]\r\n")
-     .t("; 1 = building uses the magic chests of all your bases (flame altar areas), not only\r\n")
-     .t(";     the one you stand in; the material picker shows them too. Crafting and loot\r\n")
-     .t(";     deposit keep using the local chests. Chests far away must be loaded by the game.\r\n")
+     .t("; 1 = building and crafting use the magic chests of all your bases (flame altar\r\n")
+     .t(";     areas), not only the one you stand in, also outside a base. The material picker\r\n")
+     .t(";     and crafting menus count them. Loot deposit stays local. Off by default.\r\n")
      .t("GlobalMagicChests=").i(c.globalChests).t("\r\n")
      .t("\r\n[Area]\r\n")
      .t("; 2 = two opposite corners, 3 = two base corners then the height\r\nCorners=").i(c.corners).t("\r\n")
@@ -280,7 +280,6 @@ static const char* SIG_PAY_UNDO    = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 
 // (469060): index of the base whose area holds a position.
 static const char* SIG_CHEST_LIST   = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 20 57 48 83 EC 40 49 8B F9 49 8B E8";
 static const char* SIG_CLIENT_STOCK = "48 89 4C 24 08 53 55 56 57 48 83 EC 58 8B 82 D4 16 00 00 49 8B D8 2B 82 D0 16 00 00";
-static const char* SIG_TAKE_ITEM = "40 53 48 83 EC 30 8B 44 24 60 48 8B D9 89 44 24 28 48 8B 05 ?? ?? ?? ??";
 static const char* SIG_DEPOSIT_CHESTS = "E8 ?? ?? ?? ?? 45 32 E4 48 8D 4D 10 44 88 A5 30 01 00 00 E8 ?? ?? ?? ??";
 static const char* SIG_STOCK_COUNT  = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 41 8B D8 48 8B FA 4C 8B D1";
 static const char* SIG_BASE_AT      = "48 89 5C 24 08 57 48 83 EC 10 8B 7A 24 45 33 DB 48 8B DA 4C 8B D1 48 85 FF";
@@ -785,24 +784,29 @@ static void* pickup_writer_for(uint8_t* inv) {
     for (int k = 0; k < 8; k++) if (g_pickWriters[k].world == world) return g_pickWriters[k].writer;
     return nullptr;
 }
-// ---- global magic chests
-// The game keeps every base (flame altar area) in its PlayerBases system: a count at
-// +0x24 and up to 16 records of 0x130 bytes from +0x30. A record starts with the base's
-// magic chest entity ids {u32* ids, u64 count} and holds its area box at +0xf0.
-// - Payment (server): the inventory transaction (3f1ae0) asks 468660 for the chest list
-//   of the base at the player's position and takes from those chests after the backpack.
-//   While a building system pays, the mod hands it the chests of every base instead
-//   (the base the player stands in first). Crafting and loot deposit are not touched.
-// - Picker and ghost (client): cache_crafting_stock adds up the chests of the base at the
-//   player's position, 40 per frame, through the iterator 4680b0 into the client's stock
-//   map. For the length of that call the mod points the chosen base's chest list at a
-//   list of all bases' chests, so the picker counts and the red ghost cover every base.
-// Chests of a base that is not loaded are skipped by the game (no entity found).
+// ---- magic chests of all bases (GlobalMagicChests)
+// The game's PlayerBases system (one in the server world, one in the client world) keeps
+// the number of bases at +0x24 and up to 16 base records of 0x130 bytes from +0x30.
+// A record starts with the base's magic chest entity ids {u32* ids, u64 count}; its
+// area box is at +0xf0 (min xyz, max xyz at +0x100) and a mask of sub-boxes at +0x110.
+// Three places use "the chests of the base the player stands in":
+// 1. Server payment and crafting: inventory transactions get the chest list from
+//    ChestList (468660). The mod returns the chests of every base (the current base
+//    first), also outside every base. Not for the loot deposit, and not for client
+//    worlds, whose UI checks read the client stock map below instead.
+// 2. Client stock map (picker, ghost, crafting menu): cache_crafting_stock walks the
+//    current base's chests through ClientStock (4680b0), 40 per frame. For the length of
+//    each call the mod points that base's chest list at a list of every base's chests.
+// 3. Server cursor check (server_cursor_no_prediction -> 2865e0 -> StockCount 469610):
+//    the server's per-base stock maps do not hold what the chests contain, so for a
+//    material only found in another base the server dropped the click before anything
+//    was paid. The server check passes; the payment (1) is what refuses a placement
+//    when there is not enough anywhere.
+// Chests whose entity is not loaded are skipped by the game itself.
 static const int kMaxBases = 16;
 static const int kMaxChests = 16384;
 static uint8_t* base_rec(uint8_t* sys, int b) { return sys + 0x30 + (size_t)b * 0x130; }
 static int base_count(uint8_t* sys) {
-    if (!sys || !readable(sys + 0x24, 4)) return 0;
     uint32_t n = *(uint32_t*)(sys + 0x24);
     return n > (uint32_t)kMaxBases ? 0 : (int)n;
 }
@@ -812,7 +816,7 @@ static int collect_chests(uint8_t* sys, int first, uint32_t* buf, int cap) {
     if (!nb || !readable(base_rec(sys, 0), (size_t)nb * 0x130)) return 0;
     for (int k = -1; k < nb; k++) {
         int b = k < 0 ? first : k;
-        if (b < 0 || b >= nb || (k >= 0 && b == first)) continue;
+        if (b < 0 || (k >= 0 && b == first)) continue;
         uint8_t* rec = base_rec(sys, b);
         uint32_t* ids = *(uint32_t**)rec; uint64_t c = *(uint64_t*)(rec + 8);
         if (!ids || !c || c > (uint64_t)kMaxChests || !readable(ids, (size_t)c * 4)) continue;
@@ -820,129 +824,51 @@ static int collect_chests(uint8_t* sys, int first, uint32_t* buf, int cap) {
     }
     return n;
 }
-// server: chest list of the base at a position (468660)
-typedef uint8_t* (*ChestListFn)(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, const float* pos, uint32_t player);
-static ChestListFn g_chestListOrig = nullptr;
-struct ChestTls { int active; int logTakes; uint32_t buf[kMaxChests]; };
-static uint8_t* g_depositRet = nullptr;     // return address of the loot deposit's ChestList call
-static DWORD g_chestTls = TLS_OUT_OF_INDEXES;
-static volatile LONG g_chestLog = 0;
-static ChestTls* chest_tls(bool create) {
-    if (g_chestTls == TLS_OUT_OF_INDEXES) return nullptr;
-    ChestTls* t = (ChestTls*)TlsGetValue(g_chestTls);
-    if (!t && create) {
-        t = (ChestTls*)VirtualAlloc(nullptr, sizeof(ChestTls), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-        if (t) TlsSetValue(g_chestTls, t);
-    }
-    return t;
-}
-// diagnostics: calls per call site, logged every 2 s while there are any
-struct SiteStat { uint8_t* ret; volatile LONG calls, widened; };
-static SiteStat g_siteStats[8];
-static volatile LONG g_statTick = 0, g_statLines = 0;
-static void site_stat(uint8_t* ret, bool widened) {
-    for (auto& st : g_siteStats) {
-        uint8_t* cur = st.ret;
-        if (!cur) cur = (uint8_t*)InterlockedCompareExchangePointer((void* volatile*)&st.ret, ret, nullptr);
-        if (!cur || cur == ret) { InterlockedIncrement(&st.calls); if (widened) InterlockedIncrement(&st.widened); break; }
-    }
-    LONG now = (LONG)GetTickCount(), last = g_statTick;
-    if (now - last < 2000 || InterlockedCompareExchange(&g_statTick, now, last) != last) return;
-    for (auto& st : g_siteStats) {
-        if (!st.ret) continue;
-        LONG c = InterlockedExchange(&st.calls, 0), w = InterlockedExchange(&st.widened, 0);
-        if (c && InterlockedIncrement(&g_statLines) <= 80)
-            LOG(.str("global chests stats: call rva ").x((uint64_t)(st.ret - 5 - g_base)).str(": ").i(c)
-                .str(" calls in 2 s, ").i(w).str(" widened"));
-    }
-}
-static bool is_client_sys(uint8_t* sys);
-static bool widen_list(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, uint8_t* ret);
-static uint8_t* chest_list_hook(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, const float* pos, uint32_t player) {
-    uint8_t* ret = (uint8_t*)__builtin_return_address(0);
-    uint8_t* r = g_chestListOrig(out, list, sysA, sysB, pos, player);
-    if (!out || !list || !global_chests_on()) return r;
-    bool w0 = widen_list(out, list, sysA, sysB, ret);
-    site_stat(ret, w0);
-    return r;
-}
-static bool widen_list(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, uint8_t* ret) {
-    // building, crafting and everything else that pays from magic chests; never the
-    // loot deposit (it would put loot into chests of other bases). Without the deposit
-    // call site known, only the building systems' payments.
-    ChestTls* t = chest_tls(g_depositRet != nullptr);
-    if (!t || ret == g_depositRet || (!g_depositRet && !t->active)) return false;
-    uint8_t* sys0 = sysA ? sysA : sysB;
-    // client worlds (UI, prediction) read the client stock map, which already counts
-    // every base; widening their per-chest lists only costs time
-    if (!t->active && is_client_sys(sys0)) return false;
-    uint8_t st = out[0];
-    if (st != 0 && st != 0x1f) return false;           // 0 = found, 0x1f = not in a base
-    uint8_t* sys = sysA ? sysA : sysB;
-    int nb = base_count(sys), cur = -1;
-    if (st == 0 && list[1])
-        for (int b = 0; b < nb; b++)
-            if (*(uint64_t*)base_rec(sys, b) == list[0]) { cur = b; break; }
-    uint64_t local = st == 0 ? list[1] : 0;
-    int n = collect_chests(sys, cur, t->buf, kMaxChests);
-    if (InterlockedIncrement(&g_chestLog) <= 30) {
-        LOG(.str("global chests: call at rva ").x((uint64_t)(ret - 5 - g_base)).str(t->active ? " (building)" : "")
-.str(": ").i(n).str(" chests in ").i(nb).str(" bases, ")
-            .u(local).str(st == 0 ? " in the base here" : " (outside every base)"));
-        t->logTakes = 4;
-    }
-    if (n <= 0) return false;
-    list[0] = (uint64_t)t->buf; list[1] = (uint64_t)n;
-    if (st != 0) { list[2] = 0; list[3] = 0; }
-    out[0] = 0; *(uint32_t*)(out + 4) = 0;
-    return true;
-}
-// diagnostics: each take from one inventory (40a3d0) right after a widened list
-typedef uint8_t* (*TakeFn)(uint8_t* out, uint8_t* trans, uint32_t inv, uint32_t item, uint32_t count);
-static TakeFn g_takeOrig = nullptr;
-static uint8_t* take_hook(uint8_t* out, uint8_t* trans, uint32_t inv, uint32_t item, uint32_t count) {
-    uint8_t* r = g_takeOrig(out, trans, inv, item, count);
-    ChestTls* t = chest_tls(false);
-    if (t && t->logTakes > 0 && r) {
-        t->logTakes--;
-        LOG(.str("  take from ").x(inv).str(" item ").x(item).str(" x").u(count).str(": status ").x(r[0])
-            .str(" left ").u(*(uint32_t*)(r + 8)).str(" (call rva ").x((uint64_t)((uint8_t*)__builtin_return_address(0) - 5 - g_base)).c(')'));
-    }
-    return r;
-}
-// set while a building system pays (pay_hook)
-struct ChestScope {
-    ChestTls* t; int was;
-    explicit ChestScope(bool on) : t(nullptr), was(0) {
-        if (on && g_chestListOrig && (t = chest_tls(true))) { was = t->active; t->active = 1; }
-    }
-    ~ChestScope() { if (t) t->active = was; }
-};
-// client: chest iterator of cache_crafting_stock (4680b0)
+
+// -- 2. client stock map (also registers the client worlds' systems for 1 and 3)
 typedef uint8_t* (*ClientStockFn)(uint8_t* out, uint8_t* sys, const float* pos, uint32_t player);
 typedef uint8_t* (*BaseAtFn)(uint8_t* out, uint8_t* sys, const float* pos);
 static ClientStockFn g_clientStockOrig = nullptr;
-static BaseAtFn g_baseAt = nullptr;
-struct ClientChests { uint8_t* sys; int n; int base; uint32_t buf[kMaxChests]; };
-static ClientChests* g_clientChests[4];
+static BaseAtFn g_baseAt = nullptr;          // 469060: index of the base whose area holds a point
+struct ClientChests {
+    uint8_t* sys;
+    int here;        // base the player stood in when the list was built (-1 = none)
+    int base;        // base whose chest list is swapped (-1 = none found)
+    float at[3];     // a point in `base`, used while the player is outside every base
+    int n; uint32_t buf[kMaxChests];
+};
+static ClientChests* volatile g_clientChests[4];   // one per client world
 static bool is_client_sys(uint8_t* sys) {
     for (ClientChests* c : g_clientChests) if (c && c->sys == sys) return true;
     return false;
 }
-static volatile LONG g_clientChestLog = 0;
+static ClientChests* client_chests(uint8_t* sys) {
+    for (auto& s : g_clientChests) {
+        ClientChests* c = s;
+        if (c && c->sys == sys) return c;
+        if (c) continue;
+        c = (ClientChests*)VirtualAlloc(nullptr, sizeof(ClientChests), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        if (!c) return nullptr;
+        c->sys = sys; c->here = -2; c->base = -1;
+        if (InterlockedCompareExchangePointer((void* volatile*)&s, c, nullptr) == nullptr) return c;
+        VirtualFree(c, 0, MEM_RELEASE);
+        if (s->sys == sys) return s;
+    }
+    return nullptr;
+}
 static int base_at(uint8_t* sys, const float* pos) {
     uint8_t r[16]; memset(r, 0, sizeof(r));
     g_baseAt(r, sys, pos);
     return r[0] == 0 ? r[8] : -1;
 }
-// A point the game places inside base b: the centre of its box, or of its first sub-box.
+// A point the game places inside base b: the centre of its box, or of one of its sub-boxes.
 static bool point_in_base(uint8_t* sys, int b, float* p) {
     uint8_t* rec = base_rec(sys, b);
     const float* box = (const float*)(rec + 0xf0);
     uint32_t mask = *(uint32_t*)(rec + 0x110);
     for (int a = 0; a < 3; a++) p[a] = (box[a] + box[a + 4]) * 0.5f;
     if (base_at(sys, p) == b) return true;
-    uint8_t* sub = readable(sys + 0x1330, 8) ? *(uint8_t**)(sys + 0x1330) : nullptr;
+    uint8_t* sub = *(uint8_t**)(sys + 0x1330);
     if (!sub || !readable(sub, 0x200)) return false;
     for (int j = 0; j < 16; j++) {
         if (!(mask >> j & 1)) continue;
@@ -953,91 +879,98 @@ static bool point_in_base(uint8_t* sys, int b, float* p) {
     return false;
 }
 static uint8_t* client_stock_hook(uint8_t* out, uint8_t* sys, const float* pos, uint32_t player) {
-    if (!global_chests_on() || !sys || !pos || !g_baseAt) return g_clientStockOrig(out, sys, pos, player);
-    int nb = base_count(sys);
-    if (!nb || !readable(base_rec(sys, 0), (size_t)nb * 0x130) || !readable(sys + 0x16c8, 8))
-        return g_clientStockOrig(out, sys, pos, player);
-    ClientChests* cc = nullptr;     // one list per client world
-    for (auto*& s : g_clientChests) {
-        ClientChests* c = s;
-        if (c && c->sys == sys) { cc = c; break; }
-        if (!c) {
-            c = (ClientChests*)VirtualAlloc(nullptr, sizeof(ClientChests), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-            if (!c) break;
-            c->sys = sys; c->base = -1;
-            if (InterlockedCompareExchangePointer((void* volatile*)&s, c, nullptr) == nullptr) { cc = c; break; }
-            VirtualFree(c, 0, MEM_RELEASE);
-            if (s->sys == sys) { cc = s; break; }
-        }
-    }
-    if (!cc) return g_clientStockOrig(out, sys, pos, player);
-    // the base the stock is gathered for: the one the player stands in, else the first
-    // base the game can place a point in (its chest list is the one swapped)
-    int b = base_at(sys, pos);
-    float fake[3]; const float* at = pos;
-    if (b < 0) {
-        for (int k = 0; k < nb && b < 0; k++)
-            if (point_in_base(sys, k, fake)) { b = k; at = fake; }
-        if (b < 0) return g_clientStockOrig(out, sys, pos, player);
-    }
-    // a new pass starts with both chunk counters at 0: rebuild the list then, so it
-    // stays the same while the game walks through it 40 chests per frame
+    if (!global_chests_on() || !sys || !pos) return g_clientStockOrig(out, sys, pos, player);
+    ClientChests* cc = client_chests(sys);
+    int nb = cc ? base_count(sys) : 0;
+    if (!nb) return g_clientStockOrig(out, sys, pos, player);
+    // A pass over the chests starts with both chunk counters at 0. The list is rebuilt
+    // only then (or when the player changes base), so it stays the same while the game
+    // walks through it over several frames.
     bool fresh = *(uint32_t*)(sys + 0x16c8) == 0 && *(uint32_t*)(sys + 0x16cc) == 0;
-    if (fresh || cc->base != b) { cc->n = collect_chests(sys, b, cc->buf, kMaxChests); cc->base = b; }
-    uint8_t* rec = base_rec(sys, b);
-    volatile uint64_t* slot = (volatile uint64_t*)rec;
+    int here = base_at(sys, pos);
+    if (fresh || here != cc->here || cc->base < 0) {
+        int b = here, was = cc->n, wasBase = cc->base;
+        // outside every base: gather for the first base the game can place a point in
+        if (b < 0) for (int k = 0; k < nb && b < 0; k++) if (point_in_base(sys, k, cc->at)) b = k;
+        cc->here = here; cc->base = b;
+        cc->n = b >= 0 ? collect_chests(sys, b, cc->buf, kMaxChests) : 0;
+        if (b >= 0 && (b != wasBase || cc->n != was))
+            LOG(.str("global chests: picker counts ").i(cc->n).str(" chests in ").i(nb).str(" bases")
+                .str(here >= 0 ? "" : " (outside every base)"));
+    }
+    int b = cc->base;
+    if (b < 0) return g_clientStockOrig(out, sys, pos, player);
+    const float* at = here >= 0 ? pos : cc->at;
+    volatile uint64_t* slot = (volatile uint64_t*)base_rec(sys, b);
     uint64_t ids0 = slot[0], n0 = slot[1];
-    if (cc->n <= (int)n0 && at == pos) return g_clientStockOrig(out, sys, pos, player);
-    if (fresh && InterlockedIncrement(&g_clientChestLog) <= 5)
-        LOG(.str("global chests: picker counts ").i(cc->n).str(" chests of ").i(nb).str(" bases (base ").i(b)
-            .str(at == pos ? ", standing in it)" : ", player outside every base)"));
-    // the list starts with base b's own chests, so a reader that sees the new pointer
-    // with the old count still reads valid ids: pointer first in, count first out
+    if ((uint64_t)cc->n <= n0 && at == pos) return g_clientStockOrig(out, sys, pos, player);
+    // The list starts with base b's own chests, so another reader that sees the new
+    // pointer with the old count still reads valid ids: pointer first in, count first out.
     slot[0] = (uint64_t)cc->buf; slot[1] = (uint64_t)cc->n;
     uint8_t* r = g_clientStockOrig(out, sys, at, player);
     slot[1] = n0; slot[0] = ids0;
     return r;
 }
 
-// Missing-materials check (2865e0, run by client_cursor and by the server's
-// server_cursor_no_prediction): counts an item through 469610 in the stock map of the
-// base at the cursor. On the server every base has its own map (sys + 0x1610 + i*0x58),
-// so a material that lies only in another base counted 0 there and the server refused
-// the placement before paying. The server count is the sum over all bases' maps; the
-// client's single map already covers every base.
+// -- 1. chest lists for payments and crafting
+typedef uint8_t* (*ChestListFn)(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, const float* pos, uint32_t player);
+static ChestListFn g_chestListOrig = nullptr;
+static uint8_t* g_depositRet = nullptr;     // return address of the loot deposit's ChestList call
+struct ChestTls { int building; int pad; uint32_t buf[kMaxChests]; };   // per thread
+static DWORD g_chestTls = TLS_OUT_OF_INDEXES;
+static ChestTls* chest_tls(bool create) {
+    if (g_chestTls == TLS_OUT_OF_INDEXES) return nullptr;
+    ChestTls* t = (ChestTls*)TlsGetValue(g_chestTls);
+    if (!t && create) {
+        t = (ChestTls*)VirtualAlloc(nullptr, sizeof(ChestTls), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        if (t) TlsSetValue(g_chestTls, t);
+    }
+    return t;
+}
+// Marks the building systems' payments (pay_hook). Only needed when the loot deposit's
+// call site is unknown: then only these payments get every base's chests.
+struct ChestScope {
+    ChestTls* t; int was;
+    explicit ChestScope(bool on) : t(nullptr), was(0) {
+        if (on && g_chestListOrig && !g_depositRet && (t = chest_tls(true))) { was = t->building; t->building = 1; }
+    }
+    ~ChestScope() { if (t) t->building = was; }
+};
+static uint8_t* chest_list_hook(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, const float* pos, uint32_t player) {
+    uint8_t* ret = (uint8_t*)__builtin_return_address(0);
+    uint8_t* r = g_chestListOrig(out, list, sysA, sysB, pos, player);
+    // cheap tests first: the UI asks thousands of times per second
+    if (!global_chests_on() || !out || !list || ret == g_depositRet) return r;
+    uint8_t st = out[0];
+    if (st != 0 && st != 0x1f) return r;              // 0 = found, 0x1f = not in a base
+    uint8_t* sys = sysA ? sysA : sysB;
+    if (!sys || is_client_sys(sys)) return r;
+    ChestTls* t = chest_tls(g_depositRet != nullptr);
+    if (!t || (!g_depositRet && !t->building)) return r;
+    int nb = base_count(sys), cur = -1;
+    if (st == 0 && list[1])
+        for (int b = 0; b < nb; b++)
+            if (*(uint64_t*)base_rec(sys, b) == list[0]) { cur = b; break; }
+    int n = collect_chests(sys, cur, t->buf, kMaxChests);
+    static volatile LONG s_log = 0;
+    if (InterlockedIncrement(&s_log) <= 3)
+        LOG(.str("global chests: a payment takes from ").i(n).str(" chests in ").i(nb).str(" bases")
+            .str(st == 0 ? "" : " (outside every base)"));
+    if (n <= 0) return r;
+    list[0] = (uint64_t)t->buf; list[1] = (uint64_t)n;
+    if (st != 0) { list[2] = 0; list[3] = 0; out[0] = 0; *(uint32_t*)(out + 4) = 0; }
+    return r;
+}
+
+// -- 3. server cursor check
 typedef uint32_t (*StockCountFn)(void* map, uint8_t* sys, uint32_t item, const float* pos);
 static StockCountFn g_stockCountOrig = nullptr;
 static uint32_t stock_count_hook(void* map, uint8_t* sys, uint32_t item, const float* pos) {
-    // only once the client world's system is known, so it is never mistaken for the server's
-    if (!global_chests_on() || !sys || !g_clientChests[0] || is_client_sys(sys)) return g_stockCountOrig(map, sys, item, pos);
-    int nb = base_count(sys);
-    if (!nb || !readable(sys + 0x1610, (size_t)nb * 0x58)) return g_stockCountOrig(map, sys, item, pos);
-    uint32_t sum = 0;
-    for (int b = 0; b < nb; b++) {
-        // a map {+8 bit set, +0x10 capacity (power of 2), +0x28 keys, +0x40 values, +0x54 count}
-        uint8_t* m = sys + 0x1610 + (size_t)b * 0x58;
-        uint64_t cap = *(uint64_t*)(m + 0x10); uint32_t cnt = *(uint32_t*)(m + 0x54);
-        if (!cnt) continue;
-        if (!cap || (cap & (cap - 1)) || cap > (1u << 20) || cnt > cap ||
-            !readable(*(void**)(m + 8), (size_t)(cap + 63) / 8) || !readable(*(void**)(m + 0x28), (size_t)cap * 4) ||
-            !readable(*(void**)(m + 0x40), (size_t)cap * 8)) continue;
-        sum += g_stockCountOrig(m, sys, item, pos);
-    }
-    static uint32_t s_item[64]; static uint32_t s_val[64]; static volatile LONG s_k = 0;
-    bool seen = false;
-    for (int k = 0; k < 64 && k < s_k; k++) if (s_item[k] == item) { seen = s_val[k] == sum; s_val[k] = sum; break; }
-    if (!seen && s_k < 64) {
-        bool found = false;
-        for (int k = 0; k < s_k; k++) if (s_item[k] == item) found = true;
-        if (!found) { LONG k = InterlockedIncrement(&s_k) - 1; if (k < 64) { s_item[k] = item; s_val[k] = sum; } }
-    }
-    if (!seen)
-        LOG(.str("global chests: server stock of item ").x(item).str(" = ").u(sum).str(" in ").i(nb)
-            .str(" bases (local check said ").u(g_stockCountOrig(map, sys, item, pos)).str("); check passed, payment decides"));
-    // The server's per-base maps do not reliably hold what the chests contain, so the
-    // server check always passes: the payment that follows takes from the chests of
-    // every base and refuses the placement itself when there is not enough anywhere.
-    return 0xffff;
+    // a system that is not a known client world's is the server's; until the client
+    // world has shown up nothing is changed
+    if (!global_chests_on() || !sys || !g_clientChests[0] || is_client_sys(sys))
+        return g_stockCountOrig(map, sys, item, pos);
+    return 0xffff;                                    // "plenty": the payment decides
 }
 
 static uint8_t* g_creativeSites[4];          // return addresses of the building PayCost calls
@@ -1047,17 +980,11 @@ static bool creative_site(uint8_t* ret) {
     return false;
 }
 static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t* ret);
-// Every PayCost call goes through here (redirected call sites). The building systems'
-// calls may take from the magic chests of every base (GlobalMagicChests).
+// Every PayCost call goes through here (redirected call sites).
 static uint8_t pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
     uint8_t* ret = (uint8_t*)__builtin_return_address(0);
     ChestScope scope(global_chests_on() && creative_site(ret));
-    uint8_t r = pay_body(mode, list, consume, ret);
-    static volatile LONG s_payLog = 0;
-    if (scope.t && list && InterlockedIncrement(&s_payLog) <= 30)
-        LOG(.str("global chests: building ").str(consume ? "charge" : "refund").str(" of ").u(list->count)
-            .str(" entries, mode ").i(mode ? mode[0] : -1).str(" -> ").str(r ? "ok" : "FAILED"));
-    return r;
+    return pay_body(mode, list, consume, ret);
 }
 static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t* ret) {
     if (creative_on() && creative_site(ret)) {
@@ -1138,11 +1065,6 @@ typedef uint8_t (*MissingFn)(void* cursor, uint8_t* sel, float scale);
 static MissingFn g_missingOrig = nullptr;
 static uint8_t missing_hook(void* cursor, uint8_t* sel, float scale) {
     uint8_t r = g_missingOrig(cursor, sel, scale);
-    static volatile LONG s_last = -1, s_flips = 0;
-    if (global_chests_on() && (LONG)r != s_last) {
-        s_last = r;
-        if (InterlockedIncrement(&s_flips) <= 30) LOG(.str("global chests: preview ").str(r ? "missing materials" : "has materials"));
-    }
     if (r && creative_on() && sel && readable(sel + 0x60, 8)) {
         uint8_t* bp = *(uint8_t**)(sel + 0x60);
         if (bp && readable(bp + 0x458, 0x20) &&
@@ -1504,31 +1426,10 @@ static void refund_build(CostList* list, void* ctx) {
     LOG(.str("  repainted volume ").f(total).str(" -> refund entries ").i(g_refundN));
 }
 
-static uint8_t* g_placeCommitTarget = nullptr;
 static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     bool mine = g_pend.n > 0 && g_pend.ctx == ctx && g_pend.tid == GetCurrentThreadId() &&
                 GetTickCount() - g_pend.tick < 3000;
-    if (!mine) {
-        uint8_t r = g_placeCommitOrig(ctx, c, shape);
-        static volatile LONG s_n = 0;
-        if (global_chests_on() && InterlockedIncrement(&s_n) <= 40) {
-            // the commit's own first checks: shape, its item, the material item and its blueprint data
-            typedef void* (*ShapeFn)(void* tbl, uint32_t id);
-            typedef uint8_t* (*ItemFn)(uint32_t id, void* reg);
-            uint8_t* pc = (uint8_t*)g_placeCommitTarget;
-            ShapeFn shapeFn = pc && pc[0x60] == 0xE8 ? (ShapeFn)(pc + 0x65 + *(int32_t*)(pc + 0x61)) : nullptr;
-            ItemFn itemFn = pc && pc[0x77] == 0xE8 ? (ItemFn)(pc + 0x7c + *(int32_t*)(pc + 0x78)) : nullptr;
-            uint8_t* cx = (uint8_t*)ctx;
-            void* sh = shapeFn ? shapeFn(*(void**)(cx + 0x100), shape) : nullptr;
-            uint8_t* si = itemFn ? itemFn(shape, *(void**)(cx + 0x28)) : nullptr;
-            uint8_t* mi = itemFn ? itemFn(c->player, *(void**)(cx + 0x28)) : nullptr;
-            uint64_t bp = mi ? (*(uint64_t*)(mi + 0x444) | *(uint64_t*)(mi + 0x44c)) : 0;
-            LOG(.str("global chests: place commit in world ").x((uint64_t)*(void**)ctx).str(" shape ").x(shape)
-                .str(" item ").x(c->player).str(" -> ").str(r ? "ok" : "FAILED").str(" (shape ").i(sh != nullptr)
-                .str(" shape item ").i(si != nullptr).str(" material ").i(mi != nullptr).str(" blueprint ").i(bp != 0).c(')'));
-        }
-        return r;
-    }
+    if (!mine) return g_placeCommitOrig(ctx, c, shape);
     Pending pd = g_pend;
     g_pend.n = 0;
     uint8_t any = 0;
@@ -1871,21 +1772,7 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
     const bool replace = g_replace != 0;
     const LONG mode = g_mode;
     const bool modActive = replace || mode == MODE_AREA;
-    if (!modActive) {
-        if (!global_chests_on()) return g_placeOrig(list, ctx, state, pdata, xf);
-        uint64_t before = list ? list->count : 0;
-        uint8_t r = g_placeOrig(list, ctx, state, pdata, xf);
-        static volatile LONG s_n = 0;
-        if (InterlockedIncrement(&s_n) <= 40) {
-            int w = world_of(list, xf);
-            uint32_t item = 0;
-            if (list && list->count > before) item = *(uint32_t*)(((CostEntry*)list->data)[list->count - 1].b + 0x14);
-            LOG(.str("global chests: dry run (").str(w == WORLD_SERVER ? "server" : w == WORLD_CLIENT ? "client" : "?")
-                .str(") material ").x(pdata ? ((uint8_t*)pdata)[0x454] : 0).str(" -> ").i(r).str(", cost entries +")
-                .u(list ? list->count - before : 0).str(" item ").x(item));
-        }
-        return r;
-    }
+    if (!modActive) return g_placeOrig(list, ctx, state, pdata, xf);
 
     const int world = world_of(list, xf);
     if (world == WORLD_UNKNOWN) {
@@ -2509,15 +2396,6 @@ static DWORD WINAPI init_thread(void*) {
             uint8_t* fn = mc + 5 + *(int32_t*)(mc + 1);
             g_missingOrig = (MissingFn)fn;
             if (hook_calls(fn, (void*)&missing_hook, &mc, 1) != 1) g_missingOrig = nullptr;
-            // its two stock counts (global magic chests: the server counts every base)
-            uint8_t* sc0 = fn + 0x137; uint8_t* sc1 = fn + 0x2d7;
-            uint8_t* cnt = find_unique("StockCount", SIG_STOCK_COUNT);
-            if (cnt && sc0[0] == 0xE8 && sc1[0] == 0xE8 && sc0 + 5 + *(int32_t*)(sc0 + 1) == cnt && sc1 + 5 + *(int32_t*)(sc1 + 1) == cnt) {
-                uint8_t* sites[2] = { sc0, sc1 };
-                g_stockCountOrig = (StockCountFn)cnt;
-                if (hook_calls(cnt, (void*)&stock_count_hook, sites, 2) != 2) g_stockCountOrig = nullptr;
-            }
-            LOG(.str("server stock check for global chests: ").str(g_stockCountOrig ? "yes" : "no"));
         }
         uint8_t* st = find_unique("Stocks", SIG_STOCKS);
         auto rel = [](uint8_t* at) -> uint8_t* { return at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
@@ -2547,40 +2425,44 @@ static DWORD WINAPI init_thread(void*) {
             .str("/4 payment calls, preview check ").str(g_missingOrig ? "yes" : "no")
             .str(", full material list ").str(g_stockAdd ? "yes" : "no").str(", empty-type pick ").str(g_pickOrig ? "yes" : "no"));
     }
-    // global magic chests: both functions stay untouched, their calls are redirected
+    // Magic chests of all bases. The game functions stay untouched; their calls are
+    // redirected. Everything is checked first and installed only together.
     {
         uint8_t* cl = find_unique("ChestList", SIG_CHEST_LIST);
         uint8_t* cs = find_unique("ClientStock", SIG_CLIENT_STOCK);
         uint8_t* ba = find_unique("BaseAt", SIG_BASE_AT);
-        auto rel = [](uint8_t* at) -> uint8_t* { return at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
-        // both use BaseAt and read a base record as {chest ids, count} at sys + 0x30 + i * 0x130
-        bool layout = cl && cs && ba && rel(cl + 0x74) == ba && rel(cs + 0xef) == ba &&
+        uint8_t* cnt = find_unique("StockCount", SIG_STOCK_COUNT);
+        uint8_t* dep = find_unique("DepositChests", SIG_DEPOSIT_CHESTS);
+        auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
+        // the missing-materials check's two stock counts
+        uint8_t* mf = (uint8_t*)g_missingOrig;
+        uint8_t* cntSites[2] = { mf ? mf + 0x137 : nullptr, mf ? mf + 0x2d7 : nullptr };
+        // ChestList and ClientStock use BaseAt and read a base record as {chest ids, count}
+        // at sys + 0x30 + i * 0x130; BaseAt reads the base boxes and sub-boxes
+        bool layout = cl && cs && ba && cnt && rel(cl + 0x74) == ba && rel(cs + 0xef) == ba &&
+                      rel(cntSites[0]) == cnt && rel(cntSites[1]) == cnt &&
                       memcmp(cl + 0x96, "\x48\x69\xC8\x30\x01\x00\x00\x48\x8B\x44\x29\x30\x48\x89\x06\x48\x8B\x44\x29\x38", 20) == 0 &&
                       memcmp(cs + 0x12a, "\x48\x69\xC8\x30\x01\x00\x00\x4C\x8B\x44\x31\x38\x4C\x8B\x54\x31\x30", 17) == 0 &&
                       memcmp(ba + 0x28, "\x4C\x8D\x82\x24\x01\x00\x00", 7) == 0 &&
                       memcmp(ba + 0xb9, "\x48\x8B\x83\x30\x13\x00\x00", 7) == 0;
-        int nList = 0, nStock = 0;
-        if (layout) {
-            g_chestTls = TlsAlloc();
+        if (layout) g_chestTls = TlsAlloc();
+        if (layout && g_chestTls != TLS_OUT_OF_INDEXES) {
             g_baseAt = (BaseAtFn)ba;
-            if (g_chestTls != TLS_OUT_OF_INDEXES) {
-                g_chestListOrig = (ChestListFn)cl;
-                // the loot deposit's call must keep the local chests
-                uint8_t* dep = find_unique("DepositChests", SIG_DEPOSIT_CHESTS);
-                if (dep && rel(dep) == cl) g_depositRet = dep + 5;
-                nList = hook_calls(cl, (void*)&chest_list_hook, nullptr, 0);
-                if (nList <= 0) g_chestListOrig = nullptr;
-                uint8_t* tk = find_unique("TakeItem", SIG_TAKE_ITEM);
-                if (tk) { g_takeOrig = (TakeFn)tk; if (hook_calls(tk, (void*)&take_hook, nullptr, 0) <= 0) g_takeOrig = nullptr; }
-            }
+            // the loot deposit's call keeps the local chests; without it known, only the
+            // building systems' payments get every base (crafting stays local)
+            if (rel(dep) == cl) g_depositRet = dep + 5;
+            g_chestListOrig = (ChestListFn)cl;
             g_clientStockOrig = (ClientStockFn)cs;
-            nStock = hook_calls(cs, (void*)&client_stock_hook, nullptr, 0);
-            if (nStock <= 0) g_clientStockOrig = nullptr;
+            g_stockCountOrig = (StockCountFn)cnt;
+            int nList = hook_calls(cl, (void*)&chest_list_hook, nullptr, 0);
+            int nStock = hook_calls(cs, (void*)&client_stock_hook, nullptr, 0);
+            int nCount = hook_calls(cnt, (void*)&stock_count_hook, cntSites, 2);
+            LOG(.str("magic chests of all bases: ").str(g_cfg.globalChests ? "on" : "off").str(" (calls redirected: chest list ")
+                .i(nList).str(", stock ").i(nStock).str(", check ").i(nCount).str("; crafting ")
+                .str(g_depositRet ? "included)" : "local, deposit call not found)"));
+        } else {
+            LOG(.str("magic chests of all bases: not available (game code differs)"));
         }
-        LOG(.str("global magic chests: ").str(g_cfg.globalChests ? "on" : "off").str(", crafting ")
-            .str(g_depositRet ? "yes" : "no (deposit call not found)").str(", payment ")
-            .str(g_chestListOrig ? "yes" : "no").str(" (").i(nList).str(" calls), picker ")
-            .str(g_clientStockOrig ? "yes" : "no").str(" (").i(nStock).str(" calls)"));
     }
     // PayCost is redirected at its call sites, not hooked at its entry: Creative Mode
     // scans for its first bytes and hooks it too.
@@ -2640,7 +2522,6 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
-    g_placeCommitTarget = pcommit;
     g_placeCommitOrig = (CommitFn)hook(pcommit, 5, (void*)&place_commit_hook);
     if (!g_placeCommitOrig) { LOG(.str("commit hook failed; mod disabled")); return 0; }
     g_placeOrig = (PlaceFn)hook(place, 10, (void*)&place_hook);
