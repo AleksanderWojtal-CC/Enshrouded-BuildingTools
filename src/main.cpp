@@ -282,6 +282,7 @@ static const char* SIG_CHEST_LIST   = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24
 static const char* SIG_CLIENT_STOCK = "48 89 4C 24 08 53 55 56 57 48 83 EC 58 8B 82 D4 16 00 00 49 8B D8 2B 82 D0 16 00 00";
 static const char* SIG_TAKE_ITEM = "40 53 48 83 EC 30 8B 44 24 60 48 8B D9 89 44 24 28 48 8B 05 ?? ?? ?? ??";
 static const char* SIG_DEPOSIT_CHESTS = "E8 ?? ?? ?? ?? 45 32 E4 48 8D 4D 10 44 88 A5 30 01 00 00 E8 ?? ?? ?? ??";
+static const char* SIG_STOCK_COUNT  = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 41 8B D8 48 8B FA 4C 8B D1";
 static const char* SIG_BASE_AT      = "48 89 5C 24 08 57 48 83 EC 10 8B 7A 24 45 33 DB 48 8B DA 4C 8B D1 48 85 FF";
 static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56";
 // The picker's "selected material is not in the list" fallback, called by
@@ -996,6 +997,37 @@ static uint8_t* client_stock_hook(uint8_t* out, uint8_t* sys, const float* pos, 
     uint8_t* r = g_clientStockOrig(out, sys, at, player);
     slot[1] = n0; slot[0] = ids0;
     return r;
+}
+
+// Missing-materials check (2865e0, run by client_cursor and by the server's
+// server_cursor_no_prediction): counts an item through 469610 in the stock map of the
+// base at the cursor. On the server every base has its own map (sys + 0x1610 + i*0x58),
+// so a material that lies only in another base counted 0 there and the server refused
+// the placement before paying. The server count is the sum over all bases' maps; the
+// client's single map already covers every base.
+typedef uint32_t (*StockCountFn)(void* map, uint8_t* sys, uint32_t item, const float* pos);
+static StockCountFn g_stockCountOrig = nullptr;
+static uint32_t stock_count_hook(void* map, uint8_t* sys, uint32_t item, const float* pos) {
+    // only once the client world's system is known, so it is never mistaken for the server's
+    if (!global_chests_on() || !sys || !g_clientChests[0] || is_client_sys(sys)) return g_stockCountOrig(map, sys, item, pos);
+    int nb = base_count(sys);
+    if (!nb || !readable(sys + 0x1610, (size_t)nb * 0x58)) return g_stockCountOrig(map, sys, item, pos);
+    uint32_t sum = 0;
+    for (int b = 0; b < nb; b++) {
+        // a map {+8 bit set, +0x10 capacity (power of 2), +0x28 keys, +0x40 values, +0x54 count}
+        uint8_t* m = sys + 0x1610 + (size_t)b * 0x58;
+        uint64_t cap = *(uint64_t*)(m + 0x10); uint32_t cnt = *(uint32_t*)(m + 0x54);
+        if (!cnt) continue;
+        if (!cap || (cap & (cap - 1)) || cap > (1u << 20) || cnt > cap ||
+            !readable(*(void**)(m + 8), (size_t)(cap + 63) / 8) || !readable(*(void**)(m + 0x28), (size_t)cap * 4) ||
+            !readable(*(void**)(m + 0x40), (size_t)cap * 8)) continue;
+        sum += g_stockCountOrig(m, sys, item, pos);
+    }
+    static volatile LONG s_n = 0;
+    if (InterlockedIncrement(&s_n) <= 10)
+        LOG(.str("global chests: server stock of item ").x(item).str(" = ").u(sum).str(" in ").i(nb)
+            .str(" bases (local check said ").u(g_stockCountOrig(map, sys, item, pos)).c(')'));
+    return sum;
 }
 
 static uint8_t* g_creativeSites[4];          // return addresses of the building PayCost calls
@@ -2453,6 +2485,15 @@ static DWORD WINAPI init_thread(void*) {
             uint8_t* fn = mc + 5 + *(int32_t*)(mc + 1);
             g_missingOrig = (MissingFn)fn;
             if (hook_calls(fn, (void*)&missing_hook, &mc, 1) != 1) g_missingOrig = nullptr;
+            // its two stock counts (global magic chests: the server counts every base)
+            uint8_t* sc0 = fn + 0x137; uint8_t* sc1 = fn + 0x2d7;
+            uint8_t* cnt = find_unique("StockCount", SIG_STOCK_COUNT);
+            if (cnt && sc0[0] == 0xE8 && sc1[0] == 0xE8 && sc0 + 5 + *(int32_t*)(sc0 + 1) == cnt && sc1 + 5 + *(int32_t*)(sc1 + 1) == cnt) {
+                uint8_t* sites[2] = { sc0, sc1 };
+                g_stockCountOrig = (StockCountFn)cnt;
+                if (hook_calls(cnt, (void*)&stock_count_hook, sites, 2) != 2) g_stockCountOrig = nullptr;
+            }
+            LOG(.str("server stock check for global chests: ").str(g_stockCountOrig ? "yes" : "no"));
         }
         uint8_t* st = find_unique("Stocks", SIG_STOCKS);
         auto rel = [](uint8_t* at) -> uint8_t* { return at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
