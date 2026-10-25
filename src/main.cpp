@@ -1462,14 +1462,31 @@ static void refund_build(CostList* list, void* ctx) {
     LOG(.str("  repainted volume ").f(total).str(" -> refund entries ").i(g_refundN));
 }
 
+static uint8_t* g_placeCommitTarget = nullptr;
 static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
-    if (global_chests_on()) {
-        static volatile LONG s_n = 0;
-        if (InterlockedIncrement(&s_n) <= 30) LOG(.str("global chests: place commit in world ").x((uint64_t)*(void**)ctx).str(" shape ").x(shape));
-    }
     bool mine = g_pend.n > 0 && g_pend.ctx == ctx && g_pend.tid == GetCurrentThreadId() &&
                 GetTickCount() - g_pend.tick < 3000;
-    if (!mine) return g_placeCommitOrig(ctx, c, shape);
+    if (!mine) {
+        uint8_t r = g_placeCommitOrig(ctx, c, shape);
+        static volatile LONG s_n = 0;
+        if (global_chests_on() && InterlockedIncrement(&s_n) <= 40) {
+            // the commit's own first checks: shape, its item, the material item and its blueprint data
+            typedef void* (*ShapeFn)(void* tbl, uint32_t id);
+            typedef uint8_t* (*ItemFn)(uint32_t id, void* reg);
+            uint8_t* pc = (uint8_t*)g_placeCommitTarget;
+            ShapeFn shapeFn = pc && pc[0x60] == 0xE8 ? (ShapeFn)(pc + 0x65 + *(int32_t*)(pc + 0x61)) : nullptr;
+            ItemFn itemFn = pc && pc[0x77] == 0xE8 ? (ItemFn)(pc + 0x7c + *(int32_t*)(pc + 0x78)) : nullptr;
+            uint8_t* cx = (uint8_t*)ctx;
+            void* sh = shapeFn ? shapeFn(*(void**)(cx + 0x100), shape) : nullptr;
+            uint8_t* si = itemFn ? itemFn(shape, *(void**)(cx + 0x28)) : nullptr;
+            uint8_t* mi = itemFn ? itemFn(c->player, *(void**)(cx + 0x28)) : nullptr;
+            uint64_t bp = mi ? (*(uint64_t*)(mi + 0x444) | *(uint64_t*)(mi + 0x44c)) : 0;
+            LOG(.str("global chests: place commit in world ").x((uint64_t)*(void**)ctx).str(" shape ").x(shape)
+                .str(" item ").x(c->player).str(" -> ").str(r ? "ok" : "FAILED").str(" (shape ").i(sh != nullptr)
+                .str(" shape item ").i(si != nullptr).str(" material ").i(mi != nullptr).str(" blueprint ").i(bp != 0).c(')'));
+        }
+        return r;
+    }
     Pending pd = g_pend;
     g_pend.n = 0;
     uint8_t any = 0;
@@ -2558,6 +2575,7 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
+    g_placeCommitTarget = pcommit;
     g_placeCommitOrig = (CommitFn)hook(pcommit, 5, (void*)&place_commit_hook);
     if (!g_placeCommitOrig) { LOG(.str("commit hook failed; mod disabled")); return 0; }
     g_placeOrig = (PlaceFn)hook(place, 10, (void*)&place_hook);
