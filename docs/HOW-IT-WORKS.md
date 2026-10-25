@@ -114,6 +114,32 @@ in the first cell). The walk stops at `FillLimit` cells. The found cells are the
 and committed like an Area replace in overlap style, with the blit's allow table holding
 only the clicked material, so other materials in the same cells are left alone.
 
+## Magic chests of all bases
+
+The game keeps every base (flame altar area) in its PlayerBases system: the number of
+bases at +0x24 and up to 16 records of 0x130 bytes from +0x30. Each record starts with
+the list of the base's magic chest entity ids and holds the base's area box.
+
+- **Payment (server).** The inventory transaction that charges a cost list (3f1ae0)
+  takes from the backpack and then from the chests that `ChestList` (468660) returns
+  for the player's position: the chests of the base the player stands in. While one of
+  the building systems pays (the redirected `PayCost` calls of place, dismantle and
+  undo), a thread flag is set and the mod's `ChestList` returns the chests of all
+  bases instead, those of the current base first. Outside every base, where the game
+  would return "not in a base", it returns all bases' chests too. Other users of
+  `ChestList` (crafting, the loot deposit) see the normal list.
+- **Picker and ghost (client).** The client's `cache_crafting_stock` system adds up
+  the chests of the base at the player's position into one stock map, 40 chests per
+  frame, through the iterator `ClientStock` (4680b0). The material picker
+  (`updateInventoryStocks`) and the missing-materials check read that map. For the
+  length of each iterator call the mod points the base's chest list at a list of all
+  bases' chests (the base's own chests first, so other readers never see an invalid
+  entry) and restores it afterwards. Outside every base it uses the first base and a
+  point inside its area, so the map is built for the player anywhere.
+
+Chests whose entity is not loaded are skipped by the game itself (the entity lookup
+fails), so distant bases only count once the game has them in memory.
+
 ## Off switch
 
 `ToggleMod` (F5) sets the mod back to vanilla: Prefab mode, Replace, free placement and
