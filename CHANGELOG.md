@@ -6,12 +6,14 @@ changelog on Nexus Mods, so keep it short and written for players.
 ## 0.17.0
 
 - New: **magic chests of all bases** (`GlobalMagicChests=1` in the new `[Chests]`
-  section of `BuildingTools.ini`, off by default). Building takes materials from the
-  magic chests of every flame altar area, not only the one you stand in, also when
-  you build outside a base. The material picker and the red "missing materials"
-  ghost count them too. Order: backpack, the chests of the base you are in, then
-  the other bases. Crafting and loot deposit are unchanged.
+  section of `BuildingTools.ini`, off by default). Building and crafting take
+  materials from the magic chests of every flame altar area, not only the one you
+  stand in, also outside a base. The material picker, the red "missing materials"
+  ghost and the crafting menus count them too. Order: backpack, the chests of the
+  base you are in, then the other bases. The loot deposit stays local.
 - Chests of a base the game has not loaded (far away) may not count.
+- `BuildingTools.ini` gets the new `[Chests]` section on the first start; your
+  settings are kept.
 
 ## 0.16.0
 

@@ -326,7 +326,7 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   suppressed; per-material removed volume from the 48ae10 hook). In game: 500 cells with
   791 probes plus pricing took about 50 ms on the server thread.
 
-## v0.17.0: global magic chests
+## v0.17.0: magic chests of all bases
 - ECS systems by name: system descriptors in .rdata are {name, len, fn, ..., dependency
   arrays}. `cache_building_stock` (3fc450, server, deps ItemRegistry, PlayerBasesSystemServer,
   Inventory) and `cache_crafting_stock` (2af3b0, client, PlayerBasesSystemClient).
@@ -335,18 +335,35 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   +0x100), +0x110 mask of sub-boxes (array of 0x20-byte boxes at [sys+0x1330]).
   Server: per-base stock maps at sys+0x1610+i*0x58 (staging +0x1b90). Client: one map at
   +0x1610 (staging +0x1668, chunk counters +0x16c8/+0x16cc, done flag +0x16c0).
+  Map: {+8 bit set, +0x10 capacity, +0x28 u32 keys, +0x40 values {u16 count, ...}, +0x54 used}.
 - 469060 BaseAt(out, sys, float pos[3]): out[0] = 0 found (index out[8]) or 0x1f.
 - 468660 ChestList(out, list{ids,count,ids2,count2}, sysServer, sysClient, pos, player):
   status 0 / 0x1f no base / 0x16 permission (3b1cc0) / 0x12. Callers: 3f1ae0 (charge),
-  3f1d70 (check), 2c1a80 (player_crafting), 2b3690 (player_ui), 40bf70 (area_deposit_trigger).
+  3f1d70 (check), 2c1a80 (player_crafting), 2b3690 (player_ui, ~4000 calls/s with a
+  bench open), 40bf70 (area_deposit_trigger).
 - 3f1ae0 charge(C, list, ...): C+0xb1 chest order (0 backpack only, 1 backpack then
-  chests, 2 chests first); per chest 40a3d0 -> 40a400 (entity lookup, missing entity =
-  skipped). PayCost mode 0 -> 3f1ae0; modes 1/2 (client prediction) -> 4664a0, which
-  adjusts the client map at +0x1610 if the position is in a base.
+  chests, 2 chests first); per inventory 40a3d0(out, C, entity, item, count) -> 40a400
+  (missing entity -> status 0x16, skipped). PayCost mode 0 -> 3f1ae0; modes 1/2 (client
+  prediction, chosen by 9c5ee0 "is server world" in the blueprint system) -> 4664a0, which
+  adjusts the client map at +0x1610 if the position is in a base. 3f20a0: C+0xb0 bit 0x40
+  selects the map check (3f2800 via 4695f0) instead of the chest list.
 - 4680b0 client iterator(out, sys, pos, player): throttled (+0x16d4 - +0x16d0), returns
   slices of <= 40 ids of the current base's two lists; at the end copies staging into
   +0x1610 and resets (46b150). Readers of the client map: 4695f0 (lea +0x1610) from
   updateInventoryStocks, player_ui, 3f2800; 469610 (missing check 2865e0, map at ctx+0xa0).
-- v0.17.0 redirects all calls to 468660 (5) and 4680b0 (1). ChestList is widened only
-  inside the building PayCost calls (thread flag); the client iterator swaps the chosen
-  base's list {ptr, count} to a list of every base's chests for the length of the call.
+- Blueprint system (2d3270): handles PlaceVoxelObjectEvent (0xde627227), which the cursor
+  systems only send when the missing-materials check passes. Then dry run, PayCost, and
+  PlaceCommit (always after a successful payment), then 48be20(ctx, C, id, ok): applies
+  the transaction (408ed0) only if the commit returned true, and sends event 0xbbaebaf7.
+- 2865e0 runs in `client_cursor` and in the server's `server_cursor_no_prediction`
+  (both through 297510). Its StockCount 469610(map, sys, item, pos) calls (+0x137, +0x2d7)
+  read the server's per-base maps, which stayed 0 in testing, also for local materials:
+  the server refused materials that were only in another base before paying.
+- Tests (3 bases, 15 chests): picker counts and crafting from other bases worked first;
+  building needed the server check (v0.17.0 answers 0xffff for the server's system).
+  Widening player_ui's ChestList calls dropped the game to 2 FPS with a bench open;
+  client worlds are excluded.
+- v0.17.0 redirects all calls to 468660 (5), 4680b0 (1) and the two StockCount calls in
+  2865e0. ChestList is widened for every caller except the deposit (40c379) and client
+  worlds; the client iterator swaps the chosen base's list {ptr, count} for every base's
+  chests for the length of the call.

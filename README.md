@@ -19,9 +19,10 @@ A client-side mod for **Enshrouded 1.0 (single player)** that extends the Constr
   order lists every material, also ones you have none of; favourites and the other
   orders stay normal. Props, crafting and chests work as normal.
 - **Magic chests of all bases** (optional, `GlobalMagicChests=1` in `BuildingTools.ini`):
-  building takes materials from the magic chests of every flame altar area, not only the
-  one you stand in, also when you build outside a base. The material picker and the red
-  "missing materials" ghost count them too. Crafting and loot deposit stay local.
+  building and crafting take materials from the magic chests of every flame altar area,
+  not only the one you stand in, also outside a base. The material picker, the red
+  "missing materials" ghost and the crafting menus count them too. Chests of the base you
+  are in are used first; the loot deposit still only fills local chests.
 - The mod uses the game's own UI sounds and adds a small info bar at the bottom of the screen.
   Keys and options live in `BuildingTools.ini`.
 
