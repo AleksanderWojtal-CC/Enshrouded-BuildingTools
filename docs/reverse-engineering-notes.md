@@ -402,8 +402,12 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   recorded yet (the client skips its placement prediction while its ghost is blocked,
   which is common when flying), or the client's live aim is more than 6 m from the
   server's place cursor. The log line after it says which; waiting for the player's log.
-- Partial actions: 3f1d70(C, item, count) is the read-only check of the craft path
-  (40a050/40a260 counts; ChestList for the chests), returning 0 or 4. The mod binary
-  searches the largest shape prefix (cost list prefix at g_pendCost[k]) that passes for
-  every item, truncates the list and the pending shapes, and rebuilds the Replace refund
-  from a per-shape log of cave volume changes.
+- Partial actions: 3f1d70(C, entity, count) is NOT an availability check: it asks whether
+  inventory `entity` has room for `count` (the craft output), so it failed for every
+  building material (first test: "0 of 500 affordable" with 128 in the inventory).
+  The take path (40a400 -> 40f4a0 view -> 40a6e0 per slot) writes into the transaction's
+  slot copies (4089b0) and its change list (412710 on C+0xf0), so trial charges cannot be
+  rolled back. The mod uses the picker's counts instead (stock lists of types 2..5 after
+  finalise 4070c0, entries {id, slot, u64 count @+0x10}), binary searches the largest
+  affordable shape prefix (cost list prefix at g_pendCost[k]), truncates the list and the
+  pending shapes, and rebuilds the Replace refund from a per-shape log of cave volume changes.
