@@ -5,9 +5,14 @@ changelog on Nexus Mods, so keep it short and written for players.
 
 ## 0.17.3
 
-- Fix: a big area or connected replace that the inventory cannot pay for did nothing
-  without a word (often right after the "FillLimit" message). The banner now says
-  "Not enough material for N shapes (needs X items)".
+- New: **partial area and connected actions.** When an area build, area replace or
+  connected replace costs more than your backpack and chests hold, it now does as many
+  shapes as you can pay for (bottom layer first; nearest blocks first for connected
+  replace) instead of nothing. The banner says "Placed N of M shapes (not enough
+  material)". Replace refunds and undo cover exactly the shapes that were done.
+- Fix: such an action used to fail without a word (often right after the "FillLimit"
+  message). If not even one shape can be paid, the banner now says "Not enough
+  material for N shapes (needs X items)".
 - Fix: very big area and connected actions (thousands of shapes) could take longer to
   price than the mod waited for the game to write them, and then only one shape or
   nothing was changed. The wait now starts when pricing is done.
