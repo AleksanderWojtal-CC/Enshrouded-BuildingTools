@@ -273,8 +273,6 @@ static const char* SIG_CHEST_LIST   = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24
 static const char* SIG_CLIENT_STOCK = "48 89 4C 24 08 53 55 56 57 48 83 EC 58 8B 82 D4 16 00 00 49 8B D8 2B 82 D0 16 00 00";
 static const char* SIG_DEPOSIT_CHESTS = "E8 ?? ?? ?? ?? 45 32 E4 48 8D 4D 10 44 88 A5 30 01 00 00 E8 ?? ?? ?? ??";
 static const char* SIG_STOCK_COUNT  = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 41 8B D8 48 8B FA 4C 8B D1";
-// Read-only "do the transaction's inventories hold N of item" (partial area actions)
-static const char* SIG_HAVE_ITEMS   = "89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 78 45 33 FF";
 static const char* SIG_BASE_AT      = "48 89 5C 24 08 57 48 83 EC 10 8B 7A 24 45 33 DB 48 8B DA 4C 8B D1 48 85 FF";
 // The material picker's item lists (g38_items::updateInventoryStocks)
 static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56";
@@ -1218,6 +1216,38 @@ static uint8_t* pick_hook(uint8_t* res, uint8_t* list, uint64_t a, uint64_t b, u
     }
     return r;
 }
+// Material counts of the picker's lists (types 2..5: terrain, blocks, roof, overgrowth),
+// written by the client thread each frame into the back half and published by index.
+struct StockCount { uint32_t id; uint32_t count; };
+static const int kStockCache = 1024;
+static StockCount g_stockCache[2][kStockCache];
+static volatile LONG g_stockN[2], g_stockCur = 0;
+static volatile DWORD g_stockTick = 0;
+static void note_stock(uint8_t* stocks) {
+    LONG back = g_stockCur ^ 1; int n = 0;
+    for (int t = 2; t <= 5; t++) {
+        StockList* l = (StockList*)(stocks + t * 0x648);
+        if (!l->data || l->count > 4096) continue;
+        for (uint64_t k = 0; k < l->count && n < kStockCache; k++) {
+            uint8_t* en = l->data + k * 0x18;
+            uint32_t id = *(uint32_t*)en; uint64_t c = *(uint64_t*)(en + 0x10);
+            if (!id) continue;
+            int j = 0; while (j < n && g_stockCache[back][j].id != id) j++;     // one entry per item
+            uint64_t sum = (j < n ? g_stockCache[back][j].count : 0) + c;
+            if (j == n) { if (n == kStockCache) break; g_stockCache[back][n++].id = id; }
+            g_stockCache[back][j].count = sum > 0xffffffffull ? 0xffffffffu : (uint32_t)sum;
+        }
+    }
+    g_stockN[back] = n;
+    MemoryBarrier();
+    g_stockCur = back; g_stockTick = GetTickCount();
+}
+static int64_t stock_of(uint32_t item) {
+    if (GetTickCount() - g_stockTick > 3000) return -1;
+    LONG cur = g_stockCur; int n = g_stockN[cur];
+    for (int j = 0; j < n; j++) if (g_stockCache[cur][j].id == item) return g_stockCache[cur][j].count;
+    return 0;                       // listed types are complete: not there = none
+}
 static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, void* e) {
     // only while the hammer is out (the lists are rebuilt every frame; longer lists
     // cost the game time even when the picker is closed)
@@ -1227,6 +1257,7 @@ static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, 
     uint8_t* sb = (uint8_t*)stocks; int st = sb[0x2bf8];
     uint64_t before = st < 7 ? ((StockList*)(sb + st * 0x648))->count : 0;
     g_stockFinalOrig(stocks, a, b, cc, d, e);
+    if (!creative_on()) note_stock((uint8_t*)stocks);
     // The game selects the entry of the material chosen last (+0x628 index, +0x630
     // valid). With none of a type in the inventory nothing is chosen, so the picker
     // cannot scroll and the hammer has no material: select the first entry instead.
@@ -1460,12 +1491,12 @@ static void refund_build(CostList* list, void* ctx) {
 }
 
 // ---- partial actions
-// 3f1d70(transaction, item, count): 0 when the transaction's inventories (backpack and
-// chests, as the charge would use them) hold `count` of `item`. Read only.
-typedef uint32_t (*HaveFn)(uint8_t* trans, uint32_t item, uint32_t count);
-static HaveFn g_have = nullptr;
 static volatile int g_partialOf = 0;          // the action was cut down from this many shapes
-static bool affordable(uint8_t* trans, const CostList* list, uint32_t end) {
+// How much of an item the player can build with: the material picker's count (backpack and
+// magic chests, as the charge uses them), noted every frame by stock_final_hook.
+// -1 = not known (no picker list with that item in the last 3 seconds).
+static int64_t stock_of(uint32_t item);
+static bool affordable(uint8_t*, const CostList* list, uint32_t end) {
     struct Need { uint32_t item; uint64_t count; } need[32]; int nn = 0;
     const CostEntry* e = (const CostEntry*)list->data;
     for (uint32_t q = 0; q < end; q++) {
@@ -1474,8 +1505,15 @@ static bool affordable(uint8_t* trans, const CostList* list, uint32_t end) {
         if (k == nn) { if (nn == 32) return false; need[nn++] = { item, 0 }; }
         need[k].count += count;
     }
-    for (int k = 0; k < nn; k++)
-        if (need[k].count > 0xffffffffull || g_have(trans, need[k].item, (uint32_t)need[k].count) != 0) return false;
+    for (int k = 0; k < nn; k++) {
+        int64_t have = stock_of(need[k].item);
+        if (have < 0 || (uint64_t)have < need[k].count) return false;
+    }
+    return true;
+}
+static bool stock_known(const CostList* list) {
+    const CostEntry* e = (const CostEntry*)list->data;
+    for (uint64_t q = 0; q < list->count; q++) if (stock_of(*(const uint32_t*)(e[q].b + 0x10)) < 0) return false;
     return true;
 }
 // Cuts the queued action down to the most shapes the inventory can pay for. Returns true
@@ -1483,7 +1521,8 @@ static bool affordable(uint8_t* trans, const CostList* list, uint32_t end) {
 // split) the list is left as is and the charge fails as usual.
 static bool shrink_to_affordable(uint8_t* trans, CostList* list) {
     int n = g_pend.n;
-    if (!g_have || !trans || !list->data || n < 2 || g_pend.list != list || list->count != g_pendCost[n]) return false;
+    if (!list->data || n < 2 || g_pend.list != list || list->count != g_pendCost[n]) return false;
+    if (!stock_known(list)) { LOG(.str("partial action: material count not known (open the material picker once)")); return false; }
     if (affordable(trans, list, (uint32_t)list->count)) return false;
     int lo = 0, hi = n - 1;                       // largest k with shapes 0..k-1 affordable
     while (lo < hi) {
@@ -2625,8 +2664,7 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
-    g_have = (HaveFn)find_unique("HaveItems", SIG_HAVE_ITEMS);
-    LOG(.str("partial area actions: ").str(g_have ? "available" : "not available"));
+    LOG(.str("partial area actions: ").str(g_stockFinalOrig ? "available" : "not available (picker counts not found)"));
     g_placeCommitOrig = (CommitFn)hook(pcommit, 5, (void*)&place_commit_hook);
     if (!g_placeCommitOrig) { LOG(.str("commit hook failed; mod disabled")); return 0; }
     g_placeOrig = (PlaceFn)hook(place, 10, (void*)&place_hook);

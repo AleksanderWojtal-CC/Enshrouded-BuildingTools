@@ -78,9 +78,10 @@ up. Up to 256 voxels are used, thinned evenly. The effect is drawn on block surf
 so edges in open air stay invisible. The game's own blue ghost block is a tinted model
 render, which the mod does not reuse.
 
-**Partial actions.** Before an area or connected action is paid, the mod checks with
-the game's read-only availability check (3f1d70, the same inventories the charge would
-use, magic chests included) whether the whole cost list is affordable. If not, it finds
+**Partial actions.** Before an area or connected action is paid, the mod checks whether
+the whole cost list is affordable, using the material counts of the picker's lists
+(`updateInventoryStocks`, noted every frame: backpack plus magic chests, all bases with
+GlobalMagicChests, exactly what the charge takes from). If not, it finds
 the largest number of shapes, in planned order, whose costs are, cuts the cost list and
 the queued shapes to them, and for Replace rebuilds the refund from a per-shape log of
 repainted old-material voxels, so refunds and undo match the shapes actually written.
