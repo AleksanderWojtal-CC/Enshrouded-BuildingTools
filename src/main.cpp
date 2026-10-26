@@ -273,6 +273,8 @@ static const char* SIG_CHEST_LIST   = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24
 static const char* SIG_CLIENT_STOCK = "48 89 4C 24 08 53 55 56 57 48 83 EC 58 8B 82 D4 16 00 00 49 8B D8 2B 82 D0 16 00 00";
 static const char* SIG_DEPOSIT_CHESTS = "E8 ?? ?? ?? ?? 45 32 E4 48 8D 4D 10 44 88 A5 30 01 00 00 E8 ?? ?? ?? ??";
 static const char* SIG_STOCK_COUNT  = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 41 8B D8 48 8B FA 4C 8B D1";
+// Read-only "do the transaction's inventories hold N of item" (partial area actions)
+static const char* SIG_HAVE_ITEMS   = "89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 78 45 33 FF";
 static const char* SIG_BASE_AT      = "48 89 5C 24 08 57 48 83 EC 10 8B 7A 24 45 33 DB 48 8B DA 4C 8B D1 48 85 FF";
 // The material picker's item lists (g38_items::updateInventoryStocks)
 static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56";
@@ -986,6 +988,7 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
 // the cost list and size of the area / connected action priced last (pay feedback)
 static CostList* volatile g_actList = nullptr;
 static volatile int g_actShapes = 0;
+static bool shrink_to_affordable(uint8_t* trans, CostList* list);
 // Every PayCost call goes through here (redirected call sites). When it charges a list
 // the mod removed blocks for (Replace), the removed materials are refunded through the
 // same function.
@@ -1026,6 +1029,11 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
             LOG(.str("creative: charge at another call, rva ").x((uint64_t)(ret - 5 - g_base))
                 .str(", ").u(list->count).str(" entries (paid normally)"));
     }
+    // An area or connected action that costs more than the inventory holds is cut down
+    // to the shapes it can pay for (in the order they were planned: bottom layer first,
+    // or nearest cells first), instead of failing as a whole.
+    if (consume && list && mode && mode[0] == 0 && g_actShapes > 1 && list == g_actList)
+        shrink_to_affordable(*(uint8_t**)(mode + 8), list);
     uint8_t r = g_payOrig(mode, list, consume);
     // A mod action the inventory cannot pay for is dropped by the game without a word
     // (nothing is built or replaced), so say why.
@@ -1361,6 +1369,28 @@ static void pend_add(const int64_t* pos) {
     if (g_pend.n < kMaxPending) { memcpy(g_pendPos[g_pend.n], pos, 24); g_pend.n++; }
 }
 
+// Replace: the old-material voxel counts after each shape, as changes only (most shapes
+// repaint one or two materials). A cut-down action refunds exactly its own shapes.
+struct VolMark { uint32_t shape; uint32_t mat; uint32_t total; };
+static const int kVolLog = 1 << 18;
+static VolMark g_volLog[kVolLog];
+static int g_volLogN = 0; static bool g_volLogFull = false;
+static uint32_t g_volPrev[256];
+static void vol_log(int shape) {
+    for (int m = 1; m < 256; m++) {
+        uint32_t v = g_caveVols[m];
+        if (v == g_volPrev[m]) continue;
+        g_volPrev[m] = v;
+        if (g_volLogN < kVolLog) g_volLog[g_volLogN++] = VolMark{ (uint32_t)shape, (uint32_t)m, v };
+        else g_volLogFull = true;
+    }
+}
+// old-material voxel counts of shapes 0..k-1
+static void vol_counts(int k, uint32_t* cnt) {
+    memset(cnt, 0, 256 * 4);
+    for (int q = 0; q < g_volLogN && (int)g_volLog[q].shape < k; q++) cnt[g_volLog[q].mat] = g_volLog[q].total;
+}
+
 // Prices one shape of the action at `xf` and queues it for the commit.
 // With Replace, the dry run runs with the replace blit, so the game measures (and
 // prices) exactly what will be written, and the old material of every repainted
@@ -1381,10 +1411,11 @@ static bool price_shape(CostList* list, void* ctx, void* state, void* pdata, Cur
     if (replace) *g_caveMode = 0;
     pend_add(xf->pos);
     if (replace && g_pend.n <= kVolSnaps) memcpy(g_volSnap[g_pend.n - 1], g_caveVols, 256 * 4);
+    if (replace) vol_log(g_pend.n - 1);
     return r != 0;
 }
 
-static void refund_reset() { memset(g_caveVols, 0, 256 * 4); }
+static void refund_reset() { memset(g_caveVols, 0, 256 * 4); memset(g_volPrev, 0, sizeof(g_volPrev)); g_volLogN = 0; g_volLogFull = false; }
 
 // The game's refund builder: appends refund entries for per-material voxel counts
 // (1.0 per voxel) to `list`. Returns the total volume (0 = nothing built).
@@ -1428,6 +1459,52 @@ static void refund_build(CostList* list, void* ctx) {
     LOG(.str("  repainted volume ").f(total).str(" -> refund entries ").i(g_refundN));
 }
 
+// ---- partial actions
+// 3f1d70(transaction, item, count): 0 when the transaction's inventories (backpack and
+// chests, as the charge would use them) hold `count` of `item`. Read only.
+typedef uint32_t (*HaveFn)(uint8_t* trans, uint32_t item, uint32_t count);
+static HaveFn g_have = nullptr;
+static volatile int g_partialOf = 0;          // the action was cut down from this many shapes
+static bool affordable(uint8_t* trans, const CostList* list, uint32_t end) {
+    struct Need { uint32_t item; uint64_t count; } need[32]; int nn = 0;
+    const CostEntry* e = (const CostEntry*)list->data;
+    for (uint32_t q = 0; q < end; q++) {
+        uint32_t item = *(const uint32_t*)(e[q].b + 0x10), count = *(const uint32_t*)(e[q].b + 0x14);
+        int k = 0; while (k < nn && need[k].item != item) k++;
+        if (k == nn) { if (nn == 32) return false; need[nn++] = { item, 0 }; }
+        need[k].count += count;
+    }
+    for (int k = 0; k < nn; k++)
+        if (need[k].count > 0xffffffffull || g_have(trans, need[k].item, (uint32_t)need[k].count) != 0) return false;
+    return true;
+}
+// Cuts the queued action down to the most shapes the inventory can pay for. Returns true
+// when the list was changed. With nothing affordable (or a Replace whose refunds cannot be
+// split) the list is left as is and the charge fails as usual.
+static bool shrink_to_affordable(uint8_t* trans, CostList* list) {
+    int n = g_pend.n;
+    if (!g_have || !trans || !list->data || n < 2 || g_pend.list != list || list->count != g_pendCost[n]) return false;
+    if (affordable(trans, list, (uint32_t)list->count)) return false;
+    int lo = 0, hi = n - 1;                       // largest k with shapes 0..k-1 affordable
+    while (lo < hi) {
+        int mid = (lo + hi + 1) / 2;
+        if (affordable(trans, list, g_pendCost[mid])) lo = mid; else hi = mid - 1;
+    }
+    int k = lo;
+    LOG(.str("partial action: ").i(k).str(" of ").i(n).str(" shapes affordable"));
+    if (k == 0 || (g_pend.replace && g_volLogFull)) return false;
+    list->count = g_pendCost[k];
+    g_pend.n = k;
+    if (g_pend.replace && g_refundList == list) {
+        static uint32_t cnt[256];
+        vol_counts(k, cnt);
+        g_refundN = build_refund_entries(g_pend.ctx, cnt, g_refund, kMaxRefund);
+        g_refundDropped = 0;
+    }
+    g_partialOf = n;
+    return true;
+}
+
 static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     bool mine = g_pend.n > 0 && g_pend.ctx == ctx && g_pend.tid == GetCurrentThreadId() &&
                 GetTickCount() - g_pend.tick < 3000;
@@ -1459,7 +1536,9 @@ static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     }
     if (pd.replace) LOG(.str("  commit blit: voxels ").u(g_caveHits[0] - h0).str(" solid ").u(g_caveHits[1] - h1));
     LOG(.str("commit: ").i(pd.n).str(" shapes, written ").i(placed).str(pd.replace ? (pd.style == STYLE_OVERLAP ? " (replace overlap / connected)" : " (replace full)") : ""));
-    if (pd.n > 1) { Buf b; b.str("Placed ").i(placed).str(" shapes");
+    int of = g_partialOf; g_partialOf = 0;
+    if (pd.n > 1 || of) { Buf b; b.str("Placed ").i(placed).str(" shapes");
+        if (of > pd.n) b.str(" of ").i(of).str(" (not enough material)");
         if (us.recorded < pd.n) b.str("  |  undo covers ").i(us.recorded);
         flash(b.z()); }
     return any;
@@ -2546,6 +2625,8 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
+    g_have = (HaveFn)find_unique("HaveItems", SIG_HAVE_ITEMS);
+    LOG(.str("partial area actions: ").str(g_have ? "available" : "not available"));
     g_placeCommitOrig = (CommitFn)hook(pcommit, 5, (void*)&place_commit_hook);
     if (!g_placeCommitOrig) { LOG(.str("commit hook failed; mod disabled")); return 0; }
     g_placeOrig = (PlaceFn)hook(place, 10, (void*)&place_hook);
