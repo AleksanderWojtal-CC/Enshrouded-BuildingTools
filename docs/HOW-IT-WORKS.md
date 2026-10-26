@@ -140,6 +140,11 @@ instructions; the game functions themselves are not patched.
      only cost time; in testing it dropped the game to 2 FPS with a crafting bench open.
    If the deposit's call site is not found in a game version, only the building systems'
    payments are widened (a thread flag set in `pay_hook`) and crafting stays local.
+   One client-world change is needed: the crafting menu chooses "backpack only" when
+   its chest list is empty (a base without chests of its own, or no base), and
+   "backpack and chests" otherwise. In that case the mod hands it one chest of another
+   base, so the menu takes its counts from the client stock map (all bases) and lets
+   the craft go to the server, which then uses every base's chests.
 2. **Client stock map (picker, ghost, crafting menu).** The client's
    `cache_crafting_stock` system adds up the current base's chests into one stock map,
    40 chests per frame, through the iterator `ClientStock` (4680b0). The material picker,

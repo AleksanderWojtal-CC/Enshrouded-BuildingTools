@@ -376,3 +376,15 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   ChestList 5, ClientStock 1).
 - Connected replace visits up to 6 * FillLimit + 1 cells; the visited table (2^16) could
   fill up for large limits and every lookup then walked the whole table. Now 2^18.
+
+## v0.17.2: crafting in a base without chests
+- Building in a base with no chests worked (server ChestList status 0, 0 local chests,
+  widened to every base), crafting at a bench there did not: the menu (player_ui,
+  2b3690) sets the transaction's chest order at 2b8c5d: 0 (backpack only) unless the
+  ChestList result (2b89e6, client world) has chests ([rbp+0x4e8] or [rbp+0x4f8] != 0),
+  then 2. The menu check 3f2030 -> 3f20a0 uses flag 0x40 (stock map path 3f2800), which
+  with order 0 only counts the backpack (40a3d0) and never reaches the client map.
+- 471290 (handle_crafting_events / factory_station) runs 3f2030 every frame for station
+  queues with order 0 and flags 0x8; unrelated to the bench craft.
+- v0.17.2: a client-world ChestList result with no chests gets one chest of another base
+  (from the client stock's all-bases list), so the menu picks order 2.

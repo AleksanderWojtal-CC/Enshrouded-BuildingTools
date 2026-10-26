@@ -3,6 +3,12 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.17.2
+
+- Fix (magic chests of all bases): crafting at a bench in a base without any chests of
+  its own (or outside every base) only used the backpack, although the costs showed
+  the materials of the other bases. It now uses the chests of every base there too.
+
 ## 0.17.1
 
 - Faster and lighter: the info panel no longer re-creates its font, looks up the game

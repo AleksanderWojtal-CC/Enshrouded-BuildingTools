@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.17.1"
+#define MOD_VERSION "0.17.2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -936,7 +936,18 @@ static uint8_t* chest_list_hook(uint8_t* out, uint64_t* list, uint8_t* sysA, uin
     uint8_t st = out[0];
     if (st != 0 && st != 0x1f) return r;              // 0 = found, 0x1f = not in a base
     uint8_t* sys = sysA ? sysA : sysB;
-    if (!sys || is_client_sys(sys)) return r;
+    if (!sys) return r;
+    if (is_client_sys(sys)) {
+        // The crafting menu picks "backpack only" when the base the player is in has no
+        // chests (or the player is in no base), and "backpack and chests" otherwise; its
+        // counts then come from the client stock map, which covers every base. Without
+        // local chests it gets one chest of another base, so the menu uses the chests.
+        // The list stays short: the menu asks thousands of times per second.
+        if (list[1] == 0 && list[3] == 0)
+            if (ClientChests* cc = client_chests(sys))
+                if (cc->n > 0) { list[0] = (uint64_t)cc->buf; list[1] = 1; }
+        return r;
+    }
     ChestTls* t = chest_tls(g_depositRet != nullptr);
     if (!t || (!g_depositRet && !t->building)) return r;
     int nb = base_count(sys), cur = -1;
