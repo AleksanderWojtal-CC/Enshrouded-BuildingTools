@@ -3,6 +3,20 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.17.3
+
+- Fix: a big area or connected replace that the inventory cannot pay for did nothing
+  without a word (often right after the "FillLimit" message). The banner now says
+  "Not enough material for N shapes (needs X items)".
+- Fix: very big area and connected actions (thousands of shapes) could take longer to
+  price than the mod waited for the game to write them, and then only one shape or
+  nothing was changed. The wait now starts when pricing is done.
+- Fix: connected replace with a big shape said "that is already your material" when
+  the aimed spot also held blocks of the new material (for example next to blocks
+  already repainted). It now picks the clicked material from the other blocks there.
+- The FillLimit message now reads "only the first N shapes (FillLimit)": the shapes
+  found up to the limit are still replaced.
+
 ## 0.17.2
 
 - Fix (magic chests of all bases): crafting at a bench in a base without any chests of

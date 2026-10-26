@@ -388,3 +388,17 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   queues with order 0 and flags 0x8; unrelated to the bench craft.
 - v0.17.2: a client-world ChestList result with no chests gets one chest of another base
   (from the client stock's all-bases list), so the menu picks order 2.
+
+## v0.17.3: player report (FillLimit 5000, aim errors with Airborne Architect)
+- A failed PayCost of the server's building charge skips the commit silently
+  (blueprint system 2d39b2 -> 2d3afd). With FillLimit 5000 the charge for thousands of
+  shapes is easily more than the inventory holds; the "FillLimit" banner was the last
+  thing shown. The mod now reports refused charges of its own multi-shape actions.
+- The pending action's 3 s window started before pricing; pricing several thousand
+  replace shapes (removal probe + dry run each) can take longer. Now set after pricing.
+- Connected replace chose the material with the most volume in the first shape-sized
+  cell, including the material being placed. Now the largest other building material.
+- "could not read the aimed block" = aim_lookup failed: no client cursor component
+  recorded yet (the client skips its placement prediction while its ghost is blocked,
+  which is common when flying), or the client's live aim is more than 6 m from the
+  server's place cursor. The log line after it says which; waiting for the player's log.

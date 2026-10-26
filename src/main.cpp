@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.17.2"
+#define MOD_VERSION "0.17.3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -983,6 +983,9 @@ static bool creative_site(uint8_t* ret) {
     return false;
 }
 static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t* ret);
+// the cost list and size of the area / connected action priced last (pay feedback)
+static CostList* volatile g_actList = nullptr;
+static volatile int g_actShapes = 0;
 // Every PayCost call goes through here (redirected call sites). When it charges a list
 // the mod removed blocks for (Replace), the removed materials are refunded through the
 // same function.
@@ -1024,6 +1027,16 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
                 .str(", ").u(list->count).str(" entries (paid normally)"));
     }
     uint8_t r = g_payOrig(mode, list, consume);
+    // A mod action the inventory cannot pay for is dropped by the game without a word
+    // (nothing is built or replaced), so say why.
+    if (!r && consume && list && mode && mode[0] == 0 && g_actShapes > 1 && list == g_actList) {
+        uint64_t items = 0;
+        for (uint64_t k = 0; k < list->count; k++) items += *(uint32_t*)(((CostEntry*)list->data)[k].b + 0x14);
+        Buf b; b.str("Not enough material for ").i(g_actShapes).str(" shapes (needs ").u(items).str(" items)");
+        flash(b.z()); beep(MB_ICONHAND);
+        LOG(.str("charge refused: ").i(g_actShapes).str(" shapes, ").u(list->count).str(" cost entries, ").u(items).str(" items"));
+    }
+    if (consume && list == g_actList && mode && mode[0] == 0) { g_actList = nullptr; g_actShapes = 0; }   // charged once
     if (list && list == g_refundList) {
         LONG n = g_refundN;
         if (r && consume && mode && mode[0] == 0 && n > 0) {
@@ -1494,6 +1507,8 @@ static uint8_t structure_fill(CostList* list, void* ctx, void* state, void* pdat
     LOG(.str("fill: priced ").i(priced).str(" of ").i(pl.total).str(" cost entries=").u(list->count)
         .str(" refund entries=").i(g_refundN));
     if (!priced) { g_pend.n = 0; return 0; }
+    g_pend.tick = GetTickCount();
+    g_actList = list; g_actShapes = g_pend.n;
     return g_pend.n > 0 ? 1 : 0;
 }
 
@@ -1512,16 +1527,22 @@ static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdat
         step[a] = (int64_t)((double)(int64_t)(sz * 16.0 + 0.5) * (core::kFix / 16.0));
     }
     if (step[0] <= 0 || step[1] <= 0 || step[2] <= 0) return 0;
-    // the clicked material: the building material with the most volume in the first cell
+    // The clicked material: the building material with the most volume in the first cell,
+    // leaving out the material being placed. The cell is shape-sized, so with a big shape
+    // it often also holds blocks already repainted; those must not win the vote.
     CursorXf xf = start;
     memset(g_remVols, 0, sizeof(g_remVols));
     price_removal(list, ctx, state, &xf);
-    int target = 0; float best = 0.f;
-    for (int m = 0x80; m < 0x100; m++) if (g_remVols[m] > best) { best = g_remVols[m]; target = m; }
     const int mine = pdata ? ((uint8_t*)pdata)[0x454] : 0;           // the material being placed
-    LOG(.str("connected replace: clicked material ").x(target).str(" volume ").f(best).str(", new material ").x(mine));
-    if (!target) { flash("Connected replace: no building block there"); beep(MB_ICONHAND); return 0; }
-    if (target == mine) { flash("Connected replace: that is already your material"); beep(MB_ICONHAND); return 0; }
+    int target = 0; float best = 0.f;
+    for (int m = 0x80; m < 0x100; m++) if (m != mine && g_remVols[m] > best) { best = g_remVols[m]; target = m; }
+    LOG(.str("connected replace: clicked material ").x(target).str(" volume ").f(best).str(", new material ").x(mine)
+        .str(mine >= 0x80 ? " volume " : "").f(mine >= 0x80 ? g_remVols[mine] : 0.f));
+    if (!target) {
+        bool own = mine >= 0x80 && g_remVols[mine] > 0.f;
+        flash(own ? "Connected replace: that is already your material" : "Connected replace: no building block there");
+        beep(MB_ICONHAND); return 0;
+    }
     // breadth-first over cells (i,j,k relative to the start)
     const int limit = g_cfg.fillLimit;
     // Every found cell probes up to 6 neighbours, so up to 6 * FillLimit + 1 cells are
@@ -1573,8 +1594,10 @@ static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdat
     if (priced) refund_build(list, ctx);
     LOG(.str("connected replace: priced ").i(priced).str(" of ").i(tail).str(" cost entries=").u(list->count)
         .str(" refund entries=").i(g_refundN));
-    if (capped) { Buf b; b.str("Connected replace stopped at ").i(limit).str(" shapes (FillLimit)"); flash(b.z()); }
+    if (capped) { Buf b; b.str("Connected replace: only the first ").i(limit).str(" shapes (FillLimit)"); flash(b.z()); }
     if (!priced) { g_pend.n = 0; flash("Nothing to replace there"); return 0; }
+    g_pend.tick = GetTickCount();       // pricing thousands of shapes takes a while
+    g_actList = list; g_actShapes = g_pend.n;
     return g_pend.n > 0 ? 1 : 0;
 }
 
@@ -1731,6 +1754,7 @@ static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* 
             }
     g_rpendCost[g_rpend.n] = list ? (uint32_t)((CostList*)list)->count : 0;
     g_rpend.list = (CostList*)list;
+    g_rpend.tick = GetTickCount();
     LOG(.str("remove fill: priced ").i(g_rpend.n).str(" shapes, refund entries ").u(list ? ((CostList*)list)->count : 0));
     LeaveCriticalSection(&g_stateLock);
     beep(MB_ICONASTERISK);
