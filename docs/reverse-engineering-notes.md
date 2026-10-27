@@ -326,6 +326,18 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   suppressed; per-material removed volume from the 48ae10 hook). In game: 500 cells with
   791 probes plus pricing took about 50 ms on the server thread.
 
+## v0.19.0: connected delete, terrain replace
+- 48f1c0(out[256], ctx, state) -> 48f070 builds the per-material "may affect" table:
+  out[0] = 1; terrain 1..0x7f only when the shape state's material is terrain (or its
+  item group is 0x11..0x13), split by the terrain material's flag +0x2c; building
+  0x80..0xff by flags +0x6c / +0x14. Called in RemoveShape at 48b273 (table at rbp-0x30,
+  passed to the blit as {ptr, 0x100} -> params +0x20/+0x28) and in RemoveCommit at
+  487f24. The removal blit a84960 checks the table in both its terrain border pass
+  (a84aa9) and main loop (a84bb4), so masking it removes only one material.
+- Blit a81080 at the cave site: r8 = voxel data (material, density bytes), rcx = rdx =
+  voxel index, xmm2 = 255.0 and xmm1 = 1.0 for the whole call; [params+0x38] is the
+  measured volume (float), [params+0x30] the count-only flag (dry run).
+
 ## v0.17.0: magic chests of all bases
 - ECS systems by name: system descriptors in .rdata are {name, len, fn, ..., dependency
   arrays}. `cache_building_stock` (3fc450, server, deps ItemRegistry, PlayerBasesSystemServer,

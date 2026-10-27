@@ -94,7 +94,13 @@ the voxel blit callback (a81350) with `src/cave.S`. In Replace mode an existing 
 voxel of another material is counted and handed back to the point where the game picks
 the write path by the new material: a building material takes the block path (material
 byte, density byte 0), a terrain material the terrain path (material and density byte).
-The terrain path sees the old block as density 0, so it always writes. Materials the game would not let you remove at that spot are left alone: they
+The terrain path sees the old block as density 0, so it always writes.
+An existing terrain voxel (material 1–0x7f, density > 0) that the removal dry run allows
+is repainted too: a new building material takes the block path; a new terrain material
+keeps the voxel's density and is priced by it (full shape then raises the density to the
+shape's, as the game's terrain placement does). The cave tallies terrain in density units
+(255 = a full voxel) and the refund turns them into density / 255, the unit the game's
+removal uses. Materials the game would not let you remove at that spot are left alone: they
 are found by a removal dry run, which feeds the `allow[]` table.
 
 The dry run runs with the patch active, so the game prices exactly what will be written.
@@ -122,6 +128,19 @@ joins when it contains the clicked material (the building material with the most
 in the first cell). The walk stops at `FillLimit` cells. The found cells are then priced
 and committed like an Area replace in overlap style, with the blit's allow table holding
 only the clicked material, so other materials in the same cells are left alone.
+The clicked material can be terrain too, when the removal dry run reports it (a terrain
+material is selected).
+
+## Connected delete
+
+With the same style, a right click starts the same walk from the dismantle system's
+dry run (`RemoveShape`). Removal builds a 256-entry "may remove" table per material
+(48f1c0) both in the dry run and in `RemoveCommit`, and the removal blit leaves every
+voxel whose entry is 0. The mod redirects both calls; while it removes connected cells
+on its thread, every material but the clicked one is cleared from the table. Every
+found cell is then dry-run in the dismantle's own context (so the game builds the
+refund for the clicked material only) and committed with one `RemoveCommit` per cell,
+with the same undo budget as Area remove.
 
 ## Magic chests of all bases
 
