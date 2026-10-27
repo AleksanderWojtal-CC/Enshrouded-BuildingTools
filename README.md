@@ -4,7 +4,7 @@ A client-side mod for **Enshrouded 1.0 (single player)** that extends the Constr
 
 - **Replace**: repaint existing blocks with your current material, as a full shape,
   only where the shape overlaps existing blocks, or **connected** (fill bucket: every
-  touching block of the clicked material, up to a limit). Old material is refunded, with the game's item pop-up.
+  touching block of the clicked material, up to a limit; roofs also diagonally). Old material is refunded, with the game's item pop-up.
   Undo restores everything, including taking the refund back. With a terrain material
   selected it repaints the ground too (for example dirt into stone).
 - **Connected delete**: with the fill bucket style, a right click removes every touching

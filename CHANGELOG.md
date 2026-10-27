@@ -14,6 +14,9 @@ changelog on Nexus Mods, so keep it short and written for players.
   styles) repaints ground too, for example dirt into stone, keeping its shape. The fill
   bucket spreads over terrain as well. The old terrain is refunded by how much of it was
   there.
+- New: **the fill bucket follows roofs diagonally.** For roof materials, connected replace
+  and connected delete also spread to diagonal neighbours (side to side, up and down and
+  across), so a whole sloped roof is caught in one click.
 
 ## 0.18.0
 

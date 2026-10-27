@@ -334,6 +334,9 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   passed to the blit as {ptr, 0x100} -> params +0x20/+0x28) and in RemoveCommit at
   487f24. The removal blit a84960 checks the table in both its terrain border pass
   (a84aa9) and main loop (a84bb4), so masking it removes only one material.
+- e75970(registry = ctx+0xf8, id) returns the BuildingTerraformingConfig (0xb4 bytes) for a
+  material id (terrain m, building m + 0x80 as a byte); +0x6c isRoofBlock, +0x14 hardness.
+  Found at runtime through 48f1c0 + 0x144 -> 48f070, call at +0xe0.
 - Blit a81080 at the cave site: r8 = voxel data (material, density bytes), rcx = rdx =
   voxel index, xmm2 = 255.0 and xmm1 = 1.0 for the whole call; [params+0x38] is the
   measured volume (float), [params+0x30] the count-only flag (dry run).
