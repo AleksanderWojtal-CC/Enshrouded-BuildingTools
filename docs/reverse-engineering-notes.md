@@ -586,5 +586,9 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   hash set) and never reaches RemoveCommit. These are the only two RemoveShape callers.
 - So Area remove priced the area at the corner 2 click but the game removed only the
   clicked piece, and every corner click removed its piece (no commit to suppress).
-  v0.20.1: RemoveShape with a non-null filter in Area mode or connected delete runs
-  vanilla (one piece) with a banner, corners kept.
+- The path is chosen at 2d43de: rbx = flag [dep+0x80] == 1 ? [dep+0x78] : 0, dep =
+  [rbp+0x1f8] (pointer at +8 of the 9bc1a0 dependency copy). v0.20.1 redirects the
+  9b83c0 call at 2d43cf: in Area mode / connected delete it clears the flag after the
+  call, so pieces take the block path (hammer shape, RemoveCommit); the flag is put back
+  at the next RemoveShape or dismantle run. Fallback without it: RemoveShape with a
+  non-null filter in those modes runs vanilla (one piece) with a banner.

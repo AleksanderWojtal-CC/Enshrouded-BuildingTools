@@ -579,6 +579,8 @@ static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 
 static const char* SIG_CURSOR_XF = "48 8B C4 55 53 56 57 41 56 48 8D 6C 24 90 48 81 EC 70 01 00 00 0F 29 70 C8";
 // System dependency copy, and the dismantle system's call of it (writer at +0x180)
 static const char* SIG_SYS_DEPS = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 60 4C 8B 09 48 8B D9";
+// Dismantle system: 9b83c0 call right before the aimed-entity check (piece or blocks)
+static const char* SIG_PIECE_CHECK_CALL = "48 8B 95 F0 02 00 00 49 8B CD E8 ?? ?? ?? ?? 8B D8 85 C0 0F 85 ?? ?? ?? ?? 48 8B 85 F8 01 00 00";
 static const char* SIG_DISM_DEPS = "41 B8 90 01 00 00 48 8D 95 F0 01 00 00 4C 8B E9 E8";
 // Client cursor hover highlight (runs every frame)
 static const char* SIG_HOVER_FX = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 70 F2 FF FF";
@@ -1080,9 +1082,14 @@ static WriterRec g_pickWriters[8];
 static uint8_t* g_dismDepsRet = nullptr;     // return address of the dismantle's 9bc1a0 call
 typedef uint64_t (*DepsFn)(void* sys, uint8_t* out, uint32_t size);
 static DepsFn g_depsOrig = nullptr;
+static void piece_target_restore();
+static uint8_t* volatile g_dismState = nullptr;   // dismantle dependency at rbp+0x1f8 (aimed entity +0x78, flag +0x80)
+static volatile DWORD g_dismStateTid = 0;
 static uint64_t deps_hook(void* sys, uint8_t* out, uint32_t size) {
     uint64_t r = g_depsOrig(sys, out, size);
     if ((uint8_t*)__builtin_return_address(0) == g_dismDepsRet && sys && out && size >= 0x188) {
+        piece_target_restore();
+        g_dismState = *(uint8_t**)(out + 8); g_dismStateTid = GetCurrentThreadId();
         void* world = *(void**)sys, *w = *(void**)(out + 0x180);
         if (w) {
             int k = 0;
@@ -1090,6 +1097,33 @@ static uint64_t deps_hook(void* sys, uint8_t* out, uint32_t size) {
             if (k < 8) { g_pickWriters[k].world = world; g_pickWriters[k].writer = w; }
         }
     }
+    return r;
+}
+// ---- building pieces as blocks (Area remove, connected delete)
+// The dismantle system removes a building piece (foundation, stairs...) as one entity
+// when the aimed entity flag (+0x80 == 1, entity at +0x78) is set; otherwise it takes
+// the block path (RemoveShape, RemoveCommit with the hammer's shape). In Area mode and
+// connected delete the mod clears the flag between the dismantle's 9b83c0 call and its
+// read at 2d43de, so pieces are cut like blocks. The flag is put back at the mod's
+// next RemoveShape call or the next dismantle run, whichever comes first.
+typedef uint64_t (*PieceCheckFn)(void*, void*, uint64_t, void*);
+static PieceCheckFn g_pieceCheckOrig = nullptr;
+static uint8_t* volatile g_pieceFlag = nullptr;     // cleared flag byte to put back
+static void piece_target_restore() {
+    uint8_t* f = (uint8_t*)InterlockedExchangePointer((void* volatile*)&g_pieceFlag, nullptr);
+    if (f && *f == 0) *f = 1;
+}
+static uint64_t piece_check_hook(void* a, void* b, uint64_t c, void* d) {
+    uint64_t r = g_pieceCheckOrig(a, b, c, d);
+    if ((uint32_t)r || g_modOff) return r;
+    const bool connected = g_mode == MODE_PREFAB && g_replace && g_replaceStyle == STYLE_CONNECTED;
+    if (g_mode != MODE_AREA && !connected) return r;
+    uint8_t* st = g_dismState;
+    if (!st || g_dismStateTid != GetCurrentThreadId() || !readable(st, 0x88)) return r;
+    if (st[0x80] != 1 || !*(uint64_t*)(st + 0x78)) return r;
+    st[0x80] = 0;
+    g_pieceFlag = st + 0x80;
+    LOG(.str("dismantle: building piece aimed, removed as blocks (").str(connected ? "connected delete" : "area").c(')'));
     return r;
 }
 static void* pickup_writer_for(uint8_t* inv) {
@@ -2295,13 +2329,15 @@ static uint8_t connected_remove(CostList* list, void* ctx, void* state, Aabb* bx
 }
 
 static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* xfp, void* filter, uint8_t check) {
+    piece_target_restore();
     if (g_ownRemoveTid == GetCurrentThreadId() || !is_server_ctx(ctx) || !box || !xfp)
         return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
     const bool connected = g_mode == MODE_PREFAB && g_replace && g_replaceStyle == STYLE_CONNECTED;
     if (filter && (connected || g_mode == MODE_AREA)) {
-        // A building piece (foundation, stairs...) is an object, dismantled by entity: the
-        // dry run gets the entity as filter and the commit is 488670, never RemoveCommit.
-        // Area and connected removal only work on blocks, so the piece goes on its own.
+        // A building piece (foundation, stairs...) dismantled by entity: the dry run gets
+        // the entity as filter and the commit is 488670, never RemoveCommit. Normally
+        // piece_check_hook sends pieces down the block path; without it the piece goes
+        // on its own.
         LOG(.str("remove click on a building piece: removed on its own"));
         flash(T(S_REMOVE_PIECE));
         return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
@@ -3958,6 +3994,14 @@ static DWORD WINAPI init_thread(void*) {
         if (hook_calls(sdeps, (void*)&deps_hook, &site, 1) != 1) g_depsOrig = nullptr;
     }
     LOG(.str("refund pop-up: ").str(g_depsOrig ? "available" : "not available"));
+    uint8_t* pcall = g_depsOrig ? find_unique("PieceCheckCall", SIG_PIECE_CHECK_CALL) : nullptr;
+    if (pcall) {
+        uint8_t* site = pcall + 10;
+        uint8_t* target = site + 5 + *(int32_t*)(site + 1);
+        g_pieceCheckOrig = (PieceCheckFn)target;
+        if (hook_calls(target, (void*)&piece_check_hook, &site, 1) != 1) g_pieceCheckOrig = nullptr;
+    }
+    LOG(.str("building pieces as blocks: ").str(g_pieceCheckOrig ? "available" : "not available"));
     uint8_t* hfx = find_hookable("HoverFx", SIG_HOVER_FX, 5);
     if (hfx) {
         // the hover function's own calls: game time (+0x4fd), stop (+0x51d), start (+0x607),
