@@ -1083,27 +1083,10 @@ static uint8_t* g_dismDepsRet = nullptr;     // return address of the dismantle'
 typedef uint64_t (*DepsFn)(void* sys, uint8_t* out, uint32_t size);
 static DepsFn g_depsOrig = nullptr;
 static void piece_target_restore();
-// Dismantle dependency at rbp+0x1f8 (aimed entity +0x78, flag +0x80), per thread: the
-// server and client worlds run their dismantle systems at the same time.
-struct DismState { volatile DWORD tid; uint8_t* volatile st; };
-static DismState g_dismStates[16];
-static void dism_state_set(uint8_t* st) {
-    const DWORD tid = GetCurrentThreadId();
-    int k = 0;
-    for (; k < 16; k++) if (g_dismStates[k].tid == tid) break;
-    if (k == 16) for (k = 0; k < 16; k++) if (InterlockedCompareExchange((volatile LONG*)&g_dismStates[k].tid, (LONG)tid, 0) == 0) break;
-    if (k < 16) g_dismStates[k].st = st;
-}
-static uint8_t* dism_state_get() {
-    const DWORD tid = GetCurrentThreadId();
-    for (int k = 0; k < 16; k++) if (g_dismStates[k].tid == tid) return g_dismStates[k].st;
-    return nullptr;
-}
 static uint64_t deps_hook(void* sys, uint8_t* out, uint32_t size) {
     uint64_t r = g_depsOrig(sys, out, size);
     if ((uint8_t*)__builtin_return_address(0) == g_dismDepsRet && sys && out && size >= 0x188) {
         piece_target_restore();
-        dism_state_set(*(uint8_t**)(out + 8));
         void* world = *(void**)sys, *w = *(void**)(out + 0x180);
         if (w) {
             int k = 0;
@@ -1115,11 +1098,12 @@ static uint64_t deps_hook(void* sys, uint8_t* out, uint32_t size) {
 }
 // ---- building pieces as blocks (Area remove, connected delete)
 // The dismantle system removes a building piece (foundation, stairs...) as one entity
-// when the aimed entity flag (+0x80 == 1, entity at +0x78) is set; otherwise it takes
-// the block path (RemoveShape, RemoveCommit with the hammer's shape). In Area mode and
-// connected delete the mod clears the flag between the dismantle's 9b83c0 call and its
-// read at 2d43de, so pieces are cut like blocks. The flag is put back at the mod's
-// next RemoveShape call or the next dismantle run, whichever comes first.
+// when the aimed entity flag of its state at [rbp+0x1f8] is set (+0x80 == 1, entity at
+// +0x78); otherwise it takes the block path (RemoveShape, RemoveCommit with the hammer's
+// shape). In Area mode and connected delete the mod clears the flag between the
+// dismantle's 9b83c0 call and its read at 2d43de, so pieces are cut like blocks. The
+// redirected call goes through piece_check_thunk, which passes the dismantle's rbp. The
+// flag is put back at the mod's next RemoveShape call or the next dismantle run.
 typedef uint64_t (*PieceCheckFn)(void*, void*, uint64_t, void*);
 static PieceCheckFn g_pieceCheckOrig = nullptr;
 static uint8_t* volatile g_pieceFlag = nullptr;     // cleared flag byte to put back
@@ -1127,19 +1111,31 @@ static void piece_target_restore() {
     uint8_t* f = (uint8_t*)InterlockedExchangePointer((void* volatile*)&g_pieceFlag, nullptr);
     if (f && *f == 0) *f = 1;
 }
-static uint64_t piece_check_hook(void* a, void* b, uint64_t c, void* d) {
+extern "C" uint64_t bt_piece_check(void* a, void* b, uint64_t c, void* d, uint8_t* frame) {
     uint64_t r = g_pieceCheckOrig(a, b, c, d);
     if ((uint32_t)r || g_modOff) return r;
     const bool connected = g_mode == MODE_PREFAB && g_replace && g_replaceStyle == STYLE_CONNECTED;
     if (g_mode != MODE_AREA && !connected) return r;
-    uint8_t* st = dism_state_get();
-    if (!st || !readable(st, 0x88)) { LOG(.str("dismantle: no aim state on this thread")); return r; }
+    uint8_t* st = frame && readable(frame + 0x1f8, 8) ? *(uint8_t**)(frame + 0x1f8) : nullptr;
+    if (!st || !readable(st, 0x88)) { LOG(.str("dismantle: aim state not readable")); return r; }
     if (st[0x80] != 1 || !*(uint64_t*)(st + 0x78)) return r;
     st[0x80] = 0;
     g_pieceFlag = st + 0x80;
     LOG(.str("dismantle: building piece aimed, removed as blocks (").str(connected ? "connected delete" : "area").c(')'));
     return r;
 }
+// rcx, rdx, r8, r9 pass through; the caller's rbp becomes the 5th argument
+extern "C" uint8_t piece_check_thunk[];
+asm(".text\n"
+    ".globl piece_check_thunk\n"
+    "piece_check_thunk:\n"
+    "    push %rbp\n"
+    "    sub $0x30, %rsp\n"
+    "    mov %rbp, 0x20(%rsp)\n"
+    "    call bt_piece_check\n"
+    "    add $0x30, %rsp\n"
+    "    pop %rbp\n"
+    "    ret\n");
 static void* pickup_writer_for(uint8_t* inv) {
     void* sys = *(void**)inv;
     if (!sys || !readable(sys, 8)) return nullptr;
@@ -2350,11 +2346,9 @@ static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* 
     if (filter && (connected || g_mode == MODE_AREA)) {
         // A building piece (foundation, stairs...) dismantled by entity: the dry run gets
         // the entity as filter and the commit is 488670, never RemoveCommit. Normally
-        // piece_check_hook sends pieces down the block path; without it the piece goes
+        // bt_piece_check sends pieces down the block path; without it the piece goes
         // on its own.
-        uint8_t* st = dism_state_get();
-        LOG(.str("remove click on a building piece: removed on its own (check ").str(g_pieceCheckOrig ? "on" : "off")
-            .str(", aim state ").str(st && readable(st, 0x88) ? "" : "none").i(st && readable(st, 0x88) ? st[0x80] : -1).c(')'));
+        LOG(.str("remove click on a building piece: removed on its own (check ").str(g_pieceCheckOrig ? "on" : "off").c(')'));
         flash(T(S_REMOVE_PIECE));
         return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
     }
@@ -4015,7 +4009,7 @@ static DWORD WINAPI init_thread(void*) {
         uint8_t* site = pcall + 10;
         uint8_t* target = site + 5 + *(int32_t*)(site + 1);
         g_pieceCheckOrig = (PieceCheckFn)target;
-        if (hook_calls(target, (void*)&piece_check_hook, &site, 1) != 1) g_pieceCheckOrig = nullptr;
+        if (hook_calls(target, (void*)piece_check_thunk, &site, 1) != 1) g_pieceCheckOrig = nullptr;
     }
     LOG(.str("building pieces as blocks: ").str(g_pieceCheckOrig ? "available" : "not available"));
     uint8_t* hfx = find_hookable("HoverFx", SIG_HOVER_FX, 5);
