@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev12"
+#define MOD_VERSION "0.18.0-dev13"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -328,8 +328,6 @@ static const char* SIG_UI_SMALL_TOGGLE = "48 81 C3 D4 FE 00 00 C7 85 B0 00 00 00
 // stretcher (b1af90(box, {1,1}), E8 at +0xf) and the switch (ccfd00(bool on), E8 at +0x18).
 static const char* SIG_HUD_TOGGLE_ROW = "0F 28 C7 48 8D 4D B0 0F 14 C7 66 48 0F 7E C2 E8 ?? ?? ?? ?? 40 0F B6 CE E8 ?? ?? ?? ?? 48 8D 4D B0 E8";
 static const char* SIG_UI_SIZE = "48 89 54 24 08 0F 57 C0 F3 0F 10 54 24 08 33 C0";
-// Title text of the building box (loca buildTooltipAreaActions, empty): beginText E8 at +0x24.
-static const char* SIG_HUD_TITLE_CALL = "4C 8D 83 0C 0A 01 00 41 B1 01 F2 0F 10 4C 24 40 48 8D 55 00 48 8D 8D D0 00 00 00 0F 29 45 00 F2 0F 11 4D 10 E8";
 static const char* SIG_HUD_ROW_CALL1 = "0F 29 85 B0 00 00 00 F2 0F 11 8D C0 00 00 00 E8 ?? ?? ?? ?? 48 8B 3D ?? ?? ?? ?? E9";
 static const char* SIG_HUD_ROW_CALL2 = "F2 0F 11 8D C0 00 00 00 0F 29 85 B0 00 00 00 E8 ?? ?? ?? ?? 80 7D 36 00";
 static const char* SIG_BINDING_HINT  = "40 55 56 57 48 8D AC 24 E0 FC FF FF 48 81 EC 20 04 00 00 44 8B 0A 48 8B FA 4C 8B C1";
@@ -2342,8 +2340,7 @@ static void preview_diag() {
     LOG(.str("preview: ").i(g_previewCount).str(" highlights, started ").i(g_pvStarted).str(", active frames ").i(f));
 }
 
-static bool g_hudTitleHooked = false;               // the building box title can show messages and the area size
-static volatile DWORD g_hudTitleTick = 0;           // last time it did (the game had no text of its own)
+static volatile DWORD g_floatTick = 0;              // last time the floating info text was drawn
 static volatile DWORD g_hudRowsTick = 0;        // last time the HUD rows were drawn (the info bar then hides its own)
 static volatile LONG g_keysVersion = 0;          // bumped when a key is rebound in the menu
 // A key setting: virtual-key code in the low byte, plus modifiers that must be held.
@@ -2389,7 +2386,7 @@ static void compose_overlay(char* out, int cap) {
     bool vanilla = g_mode == MODE_PREFAB && !g_replace && !g_hover;
     bool flashing = GetTickCount() < g_flashUntil;
     bool hudRows = GetTickCount() - g_hudRowsTick < 400;     // the game's building box shows the state and keys
-    if (hudRows && GetTickCount() - g_hudTitleTick < 400) { out[0] = 0; return; }   // the box's title line shows them
+    if (GetTickCount() - g_floatTick < 400) { out[0] = 0; return; }   // the floating text shows them
     if (hudRows && !flashing && g_mode == MODE_AREA && g_corners > 0) {   // the bar keeps the area size
         b.str("Area ").i(g_corners).c('/').i(g_cfg.corners);
         live_size(b);
@@ -2563,6 +2560,7 @@ static uint8_t* hud_screen_byte() {
     return hud ? hud + 0x1cd8 : nullptr;
 }
 
+static void draw_float_info();
 static void play_ui_hook(void* a, void* b, void* c, void* d) {
     uint8_t* scr = hud_screen_byte();
     if (scr) {
@@ -2582,6 +2580,7 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
         if (!g_menuOpen) g_bindWaiting = -1;
     }
     g_playUiOrig(a, b, c, d);
+    draw_float_info();
 }
 
 // Screen 52: the mod's own window, built like the game's popups (reportSharedWorldPopup):
@@ -2788,7 +2787,7 @@ static void draw_hint_bar() {
     };
     add(UI_ACTION_BACK, g_bindWaiting >= 0 ? "Cancel" : "Close");
     struct { void* p; uint64_t n; } list{ hints, (uint64_t)n };
-    const float pad[4] = { 0, 10, 0, 0 };
+    const float pad[4] = { 40, 40, 40, 40 };               // clear of the screen corner, as the system menu
     ui.drawHints(&list, 0x303, pad, 0, 0);
 }
 
@@ -3026,14 +3025,13 @@ static void draw_hud_rows() {
     g_hudRowsTick = GetTickCount();
 }
 
-// The box's title line (empty in the game) carries the mod's messages and the area size.
-typedef void (*BeginTextFn)(void*, const UiTextString*, const void*, uintptr_t);
-static BeginTextFn g_hudTitleOrig = nullptr;
+// Mod messages (any time) and the area state and size (while building) for the floating text.
 static bool hud_info(char* out, int cap) {
-    if (!g_cfg.hudRows || g_modOff || !g_active || GetTickCount() - g_buildTick > 500) return false;
+    if (!g_cfg.hudRows || !g_active) return false;
     Buf b;
+    bool building = !g_modOff && GetTickCount() - g_buildTick < 500;
     if (GetTickCount() < g_flashUntil) b.str(g_flash);
-    else if (g_mode == MODE_AREA) {
+    else if (building && g_mode == MODE_AREA) {
         b.str("Area ").str(g_scOp == OP_REMOVE ? "remove" : (g_replace ? "replace" : "build")).c(' ').i(g_corners).c('/').i(g_cfg.corners);
         core::Plan pl; float step[3]; bool ok = false;
         if (g_corners > 0 && area_plan_live(&pl, step, &ok)) {
@@ -3045,11 +3043,32 @@ static bool hud_info(char* out, int cap) {
     lstrcpynA(out, b.z(), cap);
     return true;
 }
-static void hud_title_hook(void* text, const UiTextString* str, const void* style, uintptr_t flags) {
-    static char buf[160];
-    UiTextString mine;
-    if ((!str || !str->n) && hud_info(buf, sizeof buf)) { mine = ui_str(buf); str = &mine; g_hudTitleTick = GetTickCount(); }   // the game's own messages win
-    g_hudTitleOrig(text, str, style, flags);
+// Mod messages and the area size as floating text below the screen centre, drawn like
+// the game's snapping hint (cab2a0): centred box, offset down, blurred backdrop, body text.
+static void draw_float_info() {
+    static char text[160];
+    uint8_t* scr = hud_screen_byte();
+    if (!scr || !(*scr == SCREEN_INGAME || (*scr >= 29 && *scr <= 37)) || !hud_info(text, sizeof text)) return;
+    alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, box[0x40] = {};
+    UiStringView name{ "buildingToolsInfo", 17 };
+    g_beginWindow(win, &name, 1, 1, 0, 0);                  // fullscreen, low layer, takes no input
+    ui.beginRoot(root, ui.windowContext(win));
+    ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
+    ui.beginBox(box, 0);
+    uint8_t* n = (uint8_t*)ui_node(box);
+    uint16_t centre = 0x202;
+    ui.setSelfAlign(n, &centre);
+    *(UiVec2*)(n + 0x70) = UiVec2{ 0, 130 };               // offset (the snapping hint sits at +60)
+    const float pad[4] = { 16, 6, 16, 6 };
+    ui.setPadding(n, pad);
+    const float* r = (const float*)(n + 0x114);            // node rect (last layout)
+    ui.blurBehind(*g_uiCtxGlobal, r, 0x3f800000ffffffffull);
+    ui.fillRect(r, 0x3f80000080000000ull);
+    ui_text(text, STYLE_BODY);
+    ui.endBox(box);
+    ui.endBox(root);
+    ui.endWindow(win);
+    g_floatTick = GetTickCount();
 }
 
 static void hud_finish_hook(void* box) {
@@ -3076,12 +3095,6 @@ static void install_hud_rows() {
         LOG(.str("hud rows: not available (hook failed)")); return;
     }
     LOG(.str("hud rows: available"));
-    if (uint8_t* tc = find_unique("HudTitleCall", SIG_HUD_TITLE_CALL)) {
-        uint8_t* ts = tc + 0x24;
-        g_hudTitleOrig = (BeginTextFn)(ts + 5 + *(int32_t*)(ts + 1));
-        g_hudTitleHooked = ts[0] == 0xE8 && hook_calls((uint8_t*)g_hudTitleOrig, (void*)&hud_title_hook, &ts, 1) == 1;
-    }
-    LOG(.str(g_hudTitleHooked ? "hud title: available" : "hud title: not available"));
 }
 
 static void install_menu() {
