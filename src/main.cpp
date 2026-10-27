@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev8"
+#define MOD_VERSION "0.18.0-dev9"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -108,6 +108,7 @@ struct Config {
     int panelBottom  = 0;      // panel distance from the bottom edge (pixels at 1080p)
     int panelTimeout = 5;      // seconds without change before the panel hides (0 = never)
     int panelKeys    = 1;      // key hint line
+    int hudRows      = 1;      // mod state and keys in the game's building HUD box
     int creative     = 0;      // building is free: no charge, no refund, no missing materials
     int keyOff       = VK_F5;  // the whole mod off / on (vanilla game while off)
     int fillLimit    = 500;    // most shapes one connected replace (fill bucket) may repaint
@@ -172,6 +173,7 @@ static void write_full_ini(const Config& c) {
      .t("PanelBottom=").i(c.panelBottom).t("\r\n")
      .t("; Seconds without change before the panel hides (0 = always shown), key hint line\r\nPanelTimeout=").i(c.panelTimeout).t("\r\n")
      .t("PanelKeys=").i(c.panelKeys).t("\r\n")
+     .t("; Mod state and keys as rows of the game's building box, bottom right (1 = on)\r\nHudRows=").i(c.hudRows).t("\r\n")
      .t("; Sound: 1 = game sounds, 2 = Windows sounds, 0 = off\r\nSound=").i(c.sound).t("\r\n")
      .t("; Item pop-up when Replace gives materials back (1 = on)\r\nRefundPopup=").i(c.refundPopup).t("\r\n")
      .t("\r\n[Debug]\r\nLog=").i(c.log).t("\r\n");
@@ -206,6 +208,7 @@ static void load_config() {
     g_cfg.panelBottom  = ini_int(L"Interface", L"PanelBottom", 0);
     g_cfg.panelTimeout = ini_int(L"Interface", L"PanelTimeout", 5);
     g_cfg.panelKeys    = ini_int(L"Interface", L"PanelKeys", 1);
+    g_cfg.hudRows      = ini_int(L"Interface", L"HudRows", 1);
     g_cfg.creative     = ini_int(L"Creative", L"CreativeBuilding", 0) != 0;
     g_cfg.keyOff       = ini_int(L"Keys", L"ToggleMod", VK_F5);
     g_cfg.fillLimit    = ini_int(L"Limits", L"FillLimit", 500);
@@ -312,6 +315,12 @@ static const char* SIG_UI_TAB_DRAW_CALL = "48 8D 54 24 30 48 8D 4D 90 0F 11 44 2
 // padding, 0, 0): the key-hint bar at the bottom of the game's menus.
 static const char* SIG_UI_MAKE_HINT    = "40 53 48 83 EC 40 45 33 D2 66 C7 01 5B 00 4C 89 51 08 44 0F B6 CA 44 88 51 14";
 static const char* SIG_UI_DRAW_HINTS   = "48 8B C4 48 89 58 10 48 89 70 18 55 57 41 56 48 8D A8 A8 FA FF FF 48 81 EC 40 06 00 00";
+// Building HUD box (b5d4e0): its two key rows (E8 at +0xf of each signature) call the row
+// function (bc4e20: action binding + label), the box is finished by the E8 at +0x68 of
+// the second signature. bindingHint (b2f8b0) draws one key icon with a label.
+static const char* SIG_HUD_ROW_CALL1 = "0F 29 85 B0 00 00 00 F2 0F 11 8D C0 00 00 00 E8 ?? ?? ?? ?? 48 8B 3D ?? ?? ?? ?? E9";
+static const char* SIG_HUD_ROW_CALL2 = "F2 0F 11 8D C0 00 00 00 0F 29 85 B0 00 00 00 E8 ?? ?? ?? ?? 80 7D 36 00";
+static const char* SIG_BINDING_HINT  = "40 55 56 57 48 8D AC 24 E0 FC FF FF 48 81 EC 20 04 00 00 44 8B 0A 48 8B FA 4C 8B C1";
 static const char* SIG_HUD_UPDATE = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 88 FE FF FF 48 81 EC 78 02 00 00";
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
 static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 88 B3 D9 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 88 2B 01 00 0F 29 44 24 20 E8";
@@ -2321,6 +2330,7 @@ static void preview_diag() {
     LOG(.str("preview: ").i(g_previewCount).str(" highlights, started ").i(g_pvStarted).str(", active frames ").i(f));
 }
 
+static volatile DWORD g_hudRowsTick = 0;        // last time the HUD rows were drawn (the info bar then hides its own)
 static volatile LONG g_keysVersion = 0;          // bumped when a key is rebound in the menu
 // A key setting: virtual-key code in the low byte, plus modifiers that must be held.
 enum { KEY_SHIFT = 0x1000, KEY_CTRL = 0x2000, KEY_ALT = 0x4000, KEY_MODS = 0x7000 };
@@ -2364,7 +2374,8 @@ static void compose_overlay(char* out, int cap) {
     Buf b;
     bool vanilla = g_mode == MODE_PREFAB && !g_replace && !g_hover;
     bool flashing = GetTickCount() < g_flashUntil;
-    if (vanilla) { if (flashing) b.str(g_flash); lstrcpynA(out, b.z(), cap); return; }
+    bool hudRows = GetTickCount() - g_hudRowsTick < 400;     // the game's building box shows the state
+    if (vanilla || hudRows) { if (flashing) b.str(g_flash); lstrcpynA(out, b.z(), cap); return; }
     // line 1: state (or the latest message)
     if (flashing) b.str(g_flash);
     else {
@@ -2846,6 +2857,152 @@ static void mod_screen_hook(void*, void*, void*, void*) {
     draw_mod_menu();
 }
 
+// ---- mod rows in the game's building HUD box (bottom right, under "Undo Build Action")
+// Each row is the game's bindingHint: key icon + label. The binding (0xc4 bytes) holds
+// two keyboard combos @0/@0x30 and two gamepad combos @0x62/@0x92; a combo (0x30) is
+// the input (12 bytes: device u8 @0 (1 key, 2 mouse), USB HID key code u16 @2, mouse
+// button u8 @4) plus up to three modifier inputs. The row parameters (0x78) are copied
+// from the game's own rows; label TextString @0x58, colour @0x70, @0x2f = take the
+// action's name (cleared).
+typedef void (*HudRowFn)(uint8_t action, void* params);
+typedef void (*HudFinishFn)(void* box);
+typedef void (*BindingHintFn)(const void* binding, const void* params);
+static HudRowFn g_hudRowOrig = nullptr;
+static HudFinishFn g_hudFinishOrig = nullptr;
+static BindingHintFn g_bindingHint = nullptr;
+alignas(16) static uint8_t g_hudRowTpl[0x80];
+static bool g_hudRowTplOk = false;
+
+static int vk_to_hid(int vk) {
+    if (vk >= 'A' && vk <= 'Z') return 4 + vk - 'A';
+    if (vk >= '1' && vk <= '9') return 30 + vk - '1';
+    if (vk == '0') return 39;
+    if (vk >= VK_F1 && vk <= VK_F12) return 58 + vk - VK_F1;
+    if (vk >= VK_F13 && vk <= VK_F24) return 104 + vk - VK_F13;
+    if (vk >= VK_NUMPAD1 && vk <= VK_NUMPAD9) return 89 + vk - VK_NUMPAD1;
+    switch (vk) {
+    case VK_RETURN: return 40; case VK_ESCAPE: return 41; case VK_BACK: return 42; case VK_TAB: return 43;
+    case VK_SPACE: return 44; case VK_OEM_MINUS: return 45; case VK_OEM_PLUS: return 46; case VK_OEM_4: return 47;
+    case VK_OEM_6: return 48; case VK_OEM_5: return 49; case VK_OEM_1: return 51; case VK_OEM_7: return 52;
+    case VK_OEM_3: return 53; case VK_OEM_COMMA: return 54; case VK_OEM_PERIOD: return 55; case VK_OEM_2: return 56;
+    case VK_CAPITAL: return 57; case VK_SNAPSHOT: return 70; case VK_SCROLL: return 71; case VK_PAUSE: return 72;
+    case VK_INSERT: return 73; case VK_HOME: return 74; case VK_PRIOR: return 75; case VK_DELETE: return 76;
+    case VK_END: return 77; case VK_NEXT: return 78; case VK_RIGHT: return 79; case VK_LEFT: return 80;
+    case VK_DOWN: return 81; case VK_UP: return 82; case VK_NUMLOCK: return 83; case VK_DIVIDE: return 84;
+    case VK_MULTIPLY: return 85; case VK_SUBTRACT: return 86; case VK_ADD: return 87; case VK_NUMPAD0: return 98;
+    case VK_DECIMAL: return 99; case VK_OEM_102: return 100;
+    case VK_CONTROL: case VK_LCONTROL: return 224; case VK_SHIFT: case VK_LSHIFT: return 225;
+    case VK_MENU: case VK_LMENU: return 226; case VK_RCONTROL: return 228; case VK_RSHIFT: return 229; case VK_RMENU: return 230;
+    }
+    return 0;
+}
+static int vk_to_mouse(int vk) {
+    switch (vk) { case VK_LBUTTON: return 1; case VK_RBUTTON: return 2; case VK_MBUTTON: return 3; case VK_XBUTTON1: return 4; case VK_XBUTTON2: return 5; }
+    return 0;
+}
+// Fills a binding for a key setting; false if the game has no icon for the key.
+static bool make_binding(int code, uint8_t* b) {
+    memset(b, 0, 0xc4);
+    int vk = code & 0xff, hid = vk_to_hid(vk), mb = vk_to_mouse(vk);
+    if (code <= 0 || (!hid && !mb)) return false;
+    if (hid) { b[0] = 1; *(uint16_t*)(b + 2) = (uint16_t)hid; }
+    else { b[0] = 2; b[4] = (uint8_t)mb; }
+    uint8_t* m = b + 0xc;
+    const int mods[3][2] = { { KEY_CTRL, 224 }, { KEY_SHIFT, 225 }, { KEY_ALT, 226 } };
+    for (auto& md : mods)
+        if (code & md[0]) { m[0] = 1; *(uint16_t*)(m + 2) = (uint16_t)md[1]; m += 0xc; }
+    return true;
+}
+
+static void hud_row_hook(uint8_t action, void* params) {
+    memcpy(g_hudRowTpl, params, 0x78);
+    g_hudRowTplOk = true;
+    g_hudRowOrig(action, params);
+}
+
+static void hud_key_row(int key, const char* label) {
+    if (key <= 0) return;                       // the setting has no key
+    alignas(16) uint8_t bind[0xd0];
+    alignas(16) uint8_t prm[0x80];
+    char text[160];
+    memcpy(prm, g_hudRowTpl, 0x78);
+    if (!make_binding(key, bind)) {             // no icon for this key: its name goes into the label
+        char k[32]; vk_name(key, k);
+        Buf b; b.c('[').str(k).str("]  ").str(label); lstrcpynA(text, b.z(), sizeof text);
+        label = text;
+        prm[0x2c] = 1;                          // draw the row without a binding
+    }
+    prm[0x28] = 0; prm[0x2f] = 0; prm[0x30] = 0; prm[0x41] = 0; prm[0x4c] = 0;
+    *(float*)(prm + 0x48) = 0.f;
+    *(UiTextString*)(prm + 0x58) = ui_str(label);
+    *(uint32_t*)(prm + 0x70) = 0xffffffff; *(float*)(prm + 0x74) = 1.0f;
+    g_bindingHint(bind, prm);
+}
+
+static void hud_area_size(Buf& b) {
+    core::Plan pl; float step[3]; bool ok = false;
+    if (!area_plan_live(&pl, step, &ok)) return;
+    long n = ok ? core::fill_count(pl, g_fill) : 0;
+    if (!ok || n > g_cfg.maxShapes) { b.str(", too big"); return; }
+    b.str(", ").i(pl.count[0]).str(" x ").i(pl.count[2]).str(", height ").i(pl.count[1]).str(": ").i(n).str(n == 1 ? " block" : " blocks");
+}
+
+static void draw_hud_rows() {
+    if (!g_cfg.hudRows || !g_hudRowTplOk || g_modOff || !g_active) return;
+    if (GetTickCount() - g_buildTick > 500) return;            // only while the hammer is building
+    static const char* const styles[] = { "full shape", "overlap only", "connected" };
+    static const char* const fills[] = { "solid", "hollow room", "walls only" };
+    Buf b;
+    if (g_mode == MODE_AREA) {
+        b.str("Area ").str(g_scOp == OP_REMOVE ? "remove" : (g_replace ? "replace" : "build")).str(", corner ")
+         .i(g_corners).c('/').i(g_cfg.corners);
+        hud_area_size(b);
+    } else b.str("Area mode");
+    hud_key_row(g_cfg.keyStructure, b.z());
+    if (g_mode == MODE_AREA) {
+        Buf f; f.str("Fill: ").str(fills[g_fill % 3]); hud_key_row(g_cfg.keyFill, f.z());
+        if (g_corners > 0) hud_key_row(g_cfg.keyCancel, "Clear corners");
+    }
+    hud_key_row(g_cfg.keyReplace, g_replace ? "Replace: on" : "Replace: off");
+    if (g_replace) {
+        int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
+        Buf r; r.str("Replace style: ").str(styles[st]); hud_key_row(g_cfg.keyStyle, r.z());
+    }
+    if (g_hover) {
+        int t = (int)(g_hoverDist * 10.f + 0.5f);
+        Buf h; h.str("Free placement: ").i(t / 10).c('.').i(t % 10).str(" m"); hud_key_row(g_cfg.keyHover, h.z());
+        if (g_cfg.wheelKey > 0) hud_key_row(g_cfg.wheelKey, "Hold + mouse wheel: distance");
+    } else hud_key_row(g_cfg.keyHover, "Free placement");
+    hud_key_row(g_cfg.keyMenu, "Building Tools menu");
+    g_hudRowsTick = GetTickCount();
+}
+
+static void hud_finish_hook(void* box) {
+    static LONG logged = 0;
+    if (g_cfg.hudRows && g_hudRowTplOk && !InterlockedExchange(&logged, 1)) LOG(.str("hud rows: drawn"));
+    draw_hud_rows();
+    g_hudFinishOrig(box);
+}
+
+static void install_hud_rows() {
+    uint8_t* c1 = find_unique("HudRowCall1", SIG_HUD_ROW_CALL1);
+    uint8_t* c2 = find_unique("HudRowCall2", SIG_HUD_ROW_CALL2);
+    g_bindingHint = (BindingHintFn)find_unique("BindingHint", SIG_BINDING_HINT);
+    if (!c1 || !c2 || !g_bindingHint) { LOG(.str("hud rows: not available (code not found)")); return; }
+    uint8_t* s1 = c1 + 0xf; uint8_t* s2 = c2 + 0xf; uint8_t* fs = c2 + 0x68;
+    uint8_t* row = s1 + 5 + *(int32_t*)(s1 + 1);
+    if (s1[0] != 0xE8 || s2[0] != 0xE8 || fs[0] != 0xE8 || s2 + 5 + *(int32_t*)(s2 + 1) != row ||
+        memcmp(fs - 4, "\x48\x8D\x4D\x20", 4) != 0) { LOG(.str("hud rows: not available (layout changed)")); return; }
+    g_hudRowOrig = (HudRowFn)row;
+    g_hudFinishOrig = (HudFinishFn)(fs + 5 + *(int32_t*)(fs + 1));
+    uint8_t* rows[2] = { s1, s2 };
+    if (hook_calls(row, (void*)&hud_row_hook, rows, 2) != 2 ||
+        hook_calls((uint8_t*)g_hudFinishOrig, (void*)&hud_finish_hook, &fs, 1) != 1) {
+        LOG(.str("hud rows: not available (hook failed)")); return;
+    }
+    LOG(.str("hud rows: available"));
+}
+
 static void install_menu() {
     uint8_t* pu = find_unique("PlayUi", SIG_PLAY_UI);
     uint8_t* call = find_unique("PlayUiCall", SIG_PLAY_UI_CALL);
@@ -2900,6 +3057,7 @@ static void install_menu() {
         LOG(.str("menu: not available (hook failed)")); g_playUiOrig = nullptr; return;
     }
     LOG(.str("menu: available (screen 52)"));
+    install_hud_rows();
 }
 
 static DWORD WINAPI input_thread(void*) {
