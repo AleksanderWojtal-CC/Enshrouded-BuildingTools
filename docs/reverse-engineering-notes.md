@@ -411,3 +411,15 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   finalise 4070c0, entries {id, slot, u64 count @+0x10}), binary searches the largest
   affordable shape prefix (cost list prefix at g_pendCost[k]), truncates the list and the
   pending shapes, and rebuilds the Replace refund from a per-shape log of cave volume changes.
+
+## v0.17.4: aim from the per-frame cursor read
+- Player log (0.17.3): first Replace click of the session -> "aim lookup failed: no client
+  cursor known yet". g_clientCC was only learned in client PlaceShape, which the client
+  skips while its ghost is blocked (flying / Airborne Architect).
+- Blueprint system 2d3270 loops over hammer players every frame: events (213b50), item
+  check e7d430, then cursor read 218720(out = rbp+0xf8, player = [rbp-0x68], cursor
+  component = [rbp-0x58]) at 2d340a (inside SIG_CURSOR_CALL, E8 at +15), before the
+  PlaceVoxelObjectEvent loop. rbp+0x50 = undo storage, tested at 2d3687
+  (48 83 7D 50 00, ServerCheck - 0x6b): non-null only in the server world.
+- The mod redirects that one call and keeps the last 4 client cursor components;
+  aim_lookup tries each (exact place match, then within 6 m).
