@@ -100,7 +100,7 @@ struct Config {
     int keyCloser    = VK_NEXT;    // Page Down
     int wheelKey     = 'Q';        // hold + mouse wheel = free placement distance
     int keyFill      = VK_F11;     // area fill: solid / hollow / walls
-    int keyMenu      = VK_INSERT;  // in-game menu (native game UI, experimental)
+    int keyMenu      = VK_HOME;    // in-game menu (native game UI, experimental)
     int refundPopup  = 1;          // show the game's item pop-up for refunds
     int preview      = 1;          // show the area with the game's ghost highlight
     int hoverDist10  = 40;         // free placement distance in tenths of a metre
@@ -194,7 +194,7 @@ static void load_config() {
     g_cfg.keyCloser    = ini_int(L"Keys", L"FreePlacementCloser", VK_NEXT);
     g_cfg.wheelKey     = ini_int(L"Keys", L"FreePlacementWheelKey", 'Q');
     g_cfg.keyFill      = ini_int(L"Keys", L"CycleAreaFill", VK_F11);
-    g_cfg.keyMenu      = ini_int(L"Keys", L"Menu", VK_INSERT);
+    g_cfg.keyMenu      = ini_int(L"Keys", L"Menu", VK_HOME);
     g_cfg.refundPopup  = ini_int(L"Interface", L"RefundPopup", 1);
     g_cfg.preview      = ini_int(L"Area", L"Preview", 1);
     g_cfg.hoverDist10  = ini_int(L"Area", L"FreePlacementDistance", 40);
