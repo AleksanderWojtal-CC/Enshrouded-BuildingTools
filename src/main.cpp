@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev7"
+#define MOD_VERSION "0.18.0-dev8"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -308,6 +308,10 @@ static const char* SIG_UI_FILL_RECT    = "48 89 5C 24 08 57 48 83 EC 20 48 8B F9
 static const char* SIG_UI_TAB_BAR       = "48 8B C4 48 89 58 08 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 38 F8 FF FF";
 static const char* SIG_UI_TAB_LIST_CALL = "41 0F B6 CE 48 89 85 D8 01 00 00 48 89 BD E0 01 00 00 48 89 BD C8 01 00 00";
 static const char* SIG_UI_TAB_DRAW_CALL = "48 8D 54 24 30 48 8D 4D 90 0F 11 44 24 30 E8 ?? ?? ?? ?? 84 C0 74 43 40 38 7D C0";
+// makeHint(hint 0x48, UiActionId, enabled) and drawHints({hints, count}, alignment,
+// padding, 0, 0): the key-hint bar at the bottom of the game's menus.
+static const char* SIG_UI_MAKE_HINT    = "40 53 48 83 EC 40 45 33 D2 66 C7 01 5B 00 4C 89 51 08 44 0F B6 CA 44 88 51 14";
+static const char* SIG_UI_DRAW_HINTS   = "48 8B C4 48 89 58 10 48 89 70 18 55 57 41 56 48 8D A8 A8 FA FF FF 48 81 EC 40 06 00 00";
 static const char* SIG_HUD_UPDATE = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 88 FE FF FF 48 81 EC 78 02 00 00";
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
 static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 88 B3 D9 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 88 2B 01 00 0F 29 44 24 20 E8";
@@ -2583,6 +2587,8 @@ static struct {
     void (*tabBar)(uint8_t menu, uint8_t flag);
     void* (*tabList)(uint8_t menu, void* list, void* state);
     bool (*tabDraw)(void* tab, void* out);
+    void* (*makeHint)(void* hint, uint8_t action, uint8_t enabled);
+    void (*drawHints)(const void* list, uint16_t align, const float* padding, uint8_t, uint8_t);
 } ui;
 enum { STYLE_TITLE = 0x11b94, STYLE_BODY = 0x10a0c };   // text styles in the UI bundle
 
@@ -2731,6 +2737,24 @@ static void bind_key(int vk) {
     LOG(.str("menu: ").str(g_keyActions[k].label).str(" -> ").str(n));
 }
 
+// Bottom-right key hints like the game's menus. A hint shows the key of a UiActionId
+// (1 = Back, the Esc key); custom label flag @+0x1b, label TextString @+0x20.
+enum { UI_ACTION_BACK = 1 };
+static void draw_hint_bar() {
+    alignas(16) static uint8_t hints[16 * 0x48];
+    int n = 0;
+    auto add = [&](uint8_t action, const char* label) {
+        uint8_t* h = hints + n++ * 0x48;
+        ui.makeHint(h, action, 1);
+        h[0x1b] = 1;
+        *(UiTextString*)(h + 0x20) = ui_str(label);
+    };
+    add(UI_ACTION_BACK, g_bindWaiting >= 0 ? "Cancel" : "Close");
+    struct { void* p; uint64_t n; } list{ hints, (uint64_t)n };
+    const float pad[4] = { 0, 10, 0, 0 };
+    ui.drawHints(&list, 0x303, pad, 0, 0);
+}
+
 // Full-screen like the game's own menus: blurred, darkened world, the menu on the left.
 static volatile LONG g_menuPage = 0;                 // 0 = keys, 1 = options
 static const int kMenuPages = 2;
@@ -2794,6 +2818,7 @@ static void draw_mod_menu() {
     ui.setSelfAlign(n, &topLeft);
     ui.setLayout(n, &topLeft);
     ui.setWidth(n, 1000);
+    ui.setStretch(n, UiVec2{ 0, 1 });                       // full height: the hints sit at the bottom
 
     ui_text("Building Tools", STYLE_TITLE);
     if (!g_tabsHooked) {                                  // fallback: plain buttons
@@ -2810,6 +2835,7 @@ static void draw_mod_menu() {
     ui_text("Version " MOD_VERSION ". Esc or the menu key closes the menu.", STYLE_BODY);
 
     ui.endBox(panel);
+    draw_hint_bar();
     ui.endBox(root);
     ui.endWindow(win);
 }
@@ -2847,6 +2873,7 @@ static void install_menu() {
         { (void**)&ui.endText, "UiEndText", SIG_UI_END_TEXT },        { (void**)&ui.settingHeader, "UiSettingHeader", SIG_UI_SETTING_HEADER },
         { (void**)&ui.button, "UiButton", SIG_UI_BUTTON },             { (void**)&ui.setSpacingX, "UiSpacingX", SIG_UI_SPACING_X },
         { (void**)&ui.blurBehind, "UiBlur", SIG_UI_BLUR },             { (void**)&ui.fillRect, "UiFillRect", SIG_UI_FILL_RECT },
+        { (void**)&ui.makeHint, "UiMakeHint", SIG_UI_MAKE_HINT },      { (void**)&ui.drawHints, "UiDrawHints", SIG_UI_DRAW_HINTS },
     };
     bool all = g_beginWindow != nullptr;
     for (auto& f : need) all &= (*f.fn = find_unique(f.name, f.sig)) != nullptr;
