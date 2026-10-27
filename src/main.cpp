@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.17.3"
+#define MOD_VERSION "0.17.4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1761,11 +1761,34 @@ static void aim_record(const CursorXf* place, uint32_t shape, const CursorXf& ai
     memcpy(r.place, place->pos, sizeof(r.place)); r.shape = shape; r.aim = aim; r.tick = GetTickCount();
 }
 
+// Client cursor components seen by the blueprint system's per-frame cursor read
+// (cursor_get_hook). The client skips PlaceShape while its ghost is blocked, which is
+// common when flying (Airborne Architect), so without these the first clicks of a
+// session had no client cursor at all. Single player has one or two client worlds.
+static uint8_t* volatile g_frameCC[4] = {};
+
+static volatile LONG g_frameCCNext = 0;
+static uint8_t* live_cc() { uint8_t* c = g_clientCC; return c ? c : g_frameCC[(g_frameCCNext - 1) & 3]; }
+
+static int aim_candidates(uint8_t* out[5]) {
+    int n = 0;
+    auto add = [&](uint8_t* c) {
+        if (!c || !readable(c + 0x300, 0x70)) return;
+        for (int k = 0; k < n; k++) if (out[k] == c) return;
+        out[n++] = c;
+    };
+    add(g_clientCC);
+    for (int k = 0; k < 4; k++) add(g_frameCC[k]);
+    return n;
+}
+
 static bool aim_lookup(const CursorXf* place, uint32_t shape, CursorXf* out, const char** how) {
-    uint8_t* c = g_clientCC;
-    if (c && readable(c + 0x300, 0x70) && !memcmp(c + 0x300, place->pos, 0x18) &&
-        !zero_pos(*(CursorXf*)(c + 0x338))) {
-        *out = *(CursorXf*)(c + 0x338); *how = "client cursor"; return true;
+    uint8_t* cand[5]; const int nc = aim_candidates(cand);
+    for (int k = 0; k < nc; k++) {
+        uint8_t* c = cand[k];
+        if (!memcmp(c + 0x300, place->pos, 0x18) && !zero_pos(*(CursorXf*)(c + 0x338))) {
+            *out = *(CursorXf*)(c + 0x338); *how = "client cursor"; return true;
+        }
     }
     DWORD now = GetTickCount();
     for (int k = 0; k < 16; k++) {
@@ -1777,19 +1800,39 @@ static bool aim_lookup(const CursorXf* place, uint32_t shape, CursorXf* out, con
     // big shape that overlaps blocks next to the aimed surface), so neither match above
     // exists. The client cursor component still holds the live aim: accept it when it
     // is close to the server's place cursor (the ghost sits next to the aimed shape).
-    if (c && readable(c + 0x300, 0x70) && !zero_pos(*(CursorXf*)(c + 0x338))) {
+    for (int n = 0; n < nc; n++) {
+        uint8_t* c = cand[n];
+        if (zero_pos(*(CursorXf*)(c + 0x338))) continue;
         const CursorXf* a = (const CursorXf*)(c + 0x338);
         int64_t lim = (int64_t)6 << 32;                       // 6 m
         bool close = true;
         for (int k = 0; k < 3; k++) { int64_t d = a->pos[k] - place->pos[k]; if (d < -lim || d > lim) close = false; }
         if (close) { *out = *a; *how = "client cursor (near)"; return true; }
     }
-    if (c && readable(c + 0x300, 0x70)) {
-        const CursorXf* cp = (const CursorXf*)(c + 0x300); const CursorXf* ca = (const CursorXf*)(c + 0x338);
+    for (int n = 0; n < nc; n++) {
+        const CursorXf* cp = (const CursorXf*)(cand[n] + 0x300); const CursorXf* ca = (const CursorXf*)(cand[n] + 0x338);
         LOG(.str("  aim lookup failed: client place (").fix(cp->pos[0]).c(',').fix(cp->pos[1]).c(',').fix(cp->pos[2])
             .str(") client aim (").fix(ca->pos[0]).c(',').fix(ca->pos[1]).c(',').fix(ca->pos[2]).c(')'));
-    } else LOG(.str("  aim lookup failed: no client cursor known yet"));
+    }
+    if (!nc) LOG(.str("  aim lookup failed: no client cursor known yet"));
     return false;
+}
+
+// The blueprint system reads the cursor transform with 218720(out, player, cursor
+// component) for every hammer-holding player each frame, before it looks at the
+// click events, so this also runs while the ghost is blocked. out = caller rbp+0xf8;
+// rbp+0x50 is the undo storage, which only the server world has.
+typedef uint8_t* (*CursorGetFn)(uint8_t* out, uint8_t* player, uint8_t* cc);
+static CursorGetFn g_cursorGetOrig = nullptr;
+static uint8_t* cursor_get_hook(uint8_t* out, uint8_t* player, uint8_t* cc) {
+    uint8_t* r = g_cursorGetOrig(out, player, cc);
+    uint8_t* frame = out - 0xf8;
+    if (!cc || !readable(frame + 0x50, 8) || *(void**)(frame + 0x50)) return r;     // server world
+    for (int k = 0; k < 4; k++) if (g_frameCC[k] == cc) return r;
+    LONG k = InterlockedIncrement(&g_frameCCNext) - 1;      // a new world (load) replaces the oldest
+    g_frameCC[k & 3] = cc;
+    LOG(.str("client cursor ").i(k + 1).str(" found"));
+    return r;
 }
 
 // ---- area removal (right click in Area mode)
@@ -1821,7 +1864,7 @@ static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* 
     if (n == 0) {
         for (int a = 0; a < 3; a++) g_scStep[a] = bx->mx[a] - bx->mn[a];
         g_scCursorOff = 0x338;
-        uint8_t* cc = g_clientCC;
+        uint8_t* cc = live_cc();
         if (cc && readable(cc + 0x338, 0x18)) for (int a = 0; a < 3; a++) g_scOff[a] = xf->pos[a] - ((int64_t*)(cc + 0x338))[a];
         else for (int a = 0; a < 3; a++) g_scOff[a] = 0;
     }
@@ -2079,7 +2122,7 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
 // live client cursor. false when no area is being set up.
 static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
     LONG nc = g_corners;
-    uint8_t* cc = g_clientCC;
+    uint8_t* cc = live_cc();
     if (g_mode != MODE_AREA || nc < 1 || nc > g_cfg.corners - 1 || !cc) return false;
     LONG off = g_scCursorOff;
     if (!readable(cc + off, 0x18)) return false;
@@ -2518,6 +2561,15 @@ static DWORD WINAPI init_thread(void*) {
     g_bounds = (BoundsFn)bounds;
     // both call-site patterns must live in the same function, close together
     g_cursorLayoutOk = cc && pc && pc > cc && pc - cc < 0x400;
+    // the cursor read is the E8 inside the signature; the hook tells worlds apart by
+    // rbp+0x50, which the blueprint system tests (cmp qword [rbp+0x50],0) before ServerCheck
+    static const uint8_t kUndoTest[5] = { 0x48, 0x83, 0x7D, 0x50, 0x00 };
+    if (g_cursorLayoutOk && sc && sc - 0x6b > cc && !memcmp(sc - 0x6b, kUndoTest, 5)) {
+        uint8_t* site = cc + 15;
+        g_cursorGetOrig = (CursorGetFn)(site + 5 + *(int32_t*)(site + 1));
+        if (hook_calls((uint8_t*)g_cursorGetOrig, (void*)&cursor_get_hook, &site, 1) != 1) g_cursorGetOrig = nullptr;
+        if (!g_cursorGetOrig) LOG(.str("cursor read hook not installed (aim only from clicks)"));
+    }
     // the server/client branch must sit directly before the placement call
     g_worldLayoutOk = g_cursorLayoutOk && sc && sc + 81 == pc;
     if (!place || !bounds || !remove || !pay || !pcommit || !rcommit || !matItem || !refundBuild || !blit || !g_worldLayoutOk) {

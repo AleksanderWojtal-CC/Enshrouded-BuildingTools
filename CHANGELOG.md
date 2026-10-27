@@ -3,6 +3,13 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.17.4
+
+- Fix: Replace often said "could not read the aimed block, try again", above all while
+  flying (Airborne Architect) and on the first clicks after loading. The game skips its
+  own placement preview while the ghost is blocked, and the mod only learned where you
+  aim from that preview. It now reads your aim every frame.
+
 ## 0.17.3
 
 - New: **partial area and connected actions.** When an area build, area replace or
