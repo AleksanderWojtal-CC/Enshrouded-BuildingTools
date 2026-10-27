@@ -127,9 +127,10 @@ Language
   menu > Language picks one by hand; Language= under [Interface] in the ini does
   the same (auto, en, de, fr, it, ja, ko, pl, pt-BR, ru, es, th, tr, uk, zh-CN,
   zh-TW). The translations are text files in the BuildingTools-Languages folder.
-  All except English are drafts and may contain mistakes, sorry! Corrections are
-  very welcome: edit the file, test it in the game (it is read when the language
-  is set and when the menu opens), and send it in a Nexus comment or on GitHub:
+  English and Polish are checked; the others are drafts and may contain
+  mistakes, sorry! Corrections are very welcome: edit the file, test it in the
+  game (it is read when the language is set and when the menu opens), and send
+  it in a Nexus comment or on GitHub:
   https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools
   Language=test shows every text longer and in [brackets ~~], to check that
   long translations fit.

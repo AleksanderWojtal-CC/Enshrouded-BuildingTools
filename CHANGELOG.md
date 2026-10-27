@@ -7,13 +7,14 @@ changelog on Nexus Mods, so keep it short and written for players.
 
 - New: **the mod speaks your language.** Menu, building box rows, floating text, info bar
   and messages follow the game's language, in all 15 languages of the game's language
-  menu. Translations other than English are drafts and may contain mistakes, sorry!
-  Corrections are very welcome on Nexus or GitHub (see TRANSLATING.md).
+  menu. English and Polish are checked; the other translations are drafts and may contain
+  mistakes, sorry! Corrections are very welcome on Nexus or GitHub (see TRANSLATING.md).
 - The translations are plain text files in the new `BuildingTools-Languages` folder next
   to the mod, so anyone can fix a word and see it in the game.
 - New option **Language** (Options tab, or `Language=` in the ini): follow the game, or
   pick one by hand.
 - Key names and distances use the language's own form (for example `Strg`, `4,0 m`).
+- Polish translation checked and corrected by Aleksander.
 
 ## 0.19.0
 

@@ -4,9 +4,9 @@ The mod shows its texts in the game's language. English is built in; every other
 language is a plain text file in the `BuildingTools-Languages` folder next to
 `dinput8.dll` (in this repository: [`lang/`](lang)).
 
-All translations except English started as drafts written without a native speaker, so
-they may contain mistakes or words that differ from the game's own. Corrections are very
-welcome, from one word to a whole file.
+English and Polish are checked. The other translations started as drafts written without
+a native speaker, so they may contain mistakes or words that differ from the game's own.
+Corrections are very welcome, from one word to a whole file.
 
 ## Languages
 

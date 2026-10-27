@@ -1,5 +1,5 @@
 # Enshrouded Building Tools: Polish texts.
-# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Checked in the game by a native speaker (Aleksander, 0.20.0).
 # Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
@@ -114,7 +114,7 @@ menu.press_key = Naciśnij klawisz...
 menu.no_key = Brak
 menu.keys_help = Kliknij klawisz, aby go zmienić. Zmiana zostanie zapisana w BuildingTools.ini.
 menu.keys_waiting = Naciśnij nowy klawisz, także z Shift, Ctrl lub Alt. Esc anuluje, Delete czyści.
-menu.translation_note = To tłumaczenie może zawierać błędy, przepraszamy! Poprawki mile widziane (Nexus lub GitHub).
+menu.translation_note =
 menu.key_menu = Menu Building Tools
 menu.key_area = Tryb obszaru wł. / wył.
 menu.key_replace = Zastępowanie wł. / wył.
