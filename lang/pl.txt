@@ -144,4 +144,4 @@ option.fill_hollow = Pudełko
 option.fill_walls = Tylko ściany
 option.free = Tryb Swobodny
 option.language = Język
-option.language_game = Jak w grze
+option.language_game = Użyj języka gry
