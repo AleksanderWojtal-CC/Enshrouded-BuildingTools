@@ -1096,6 +1096,37 @@ static uint64_t deps_hook(void* sys, uint8_t* out, uint32_t size) {
     }
     return r;
 }
+// ---- what the hammer holds
+// The shape state the building functions get is the selected ItemInfo; its
+// EquipmentSetup (+0x104) holds voxelData.isBuildingVoxel (+0x440), voxelObject
+// (+0x458) and terrainVoxelObject (+0x468). Building pieces (foundations, stairs...)
+// are voxel objects that are not building voxels; the dismantle's block path takes
+// terrain or building-voxel shapes only.
+enum { ITEM_OTHER = 0, ITEM_PIECE = 1, ITEM_SHAPE = 2, ITEM_TERRAIN = 3 };
+static int item_kind(const void* item) {
+    const uint8_t* it = (const uint8_t*)item;
+    if (!it || !readable(it + 0x440, 0x38)) return ITEM_OTHER;
+    const bool vobj = (*(const uint64_t*)(it + 0x458) | *(const uint64_t*)(it + 0x460)) != 0;
+    const bool terr = (*(const uint64_t*)(it + 0x468) | *(const uint64_t*)(it + 0x470)) != 0;
+    if (terr) return ITEM_TERRAIN;
+    if (vobj) return it[0x440] ? ITEM_SHAPE : ITEM_PIECE;
+    return ITEM_OTHER;
+}
+// Small shapes (the first row of the shape picker, one 0.5 m block) are the ones the
+// fill bucket works with; bigger shapes replace and delete as a whole.
+static const float kSmallShape = 0.51f;
+static bool small_box(const Aabb* b) {
+    for (int a = 0; a < 3; a++) if (b->mx[a] - b->mn[a] > kSmallShape) return false;
+    return true;
+}
+static bool small_item(void* item) {
+    if (!g_bounds || !item) return true;
+    const float pos[4] = { 0.f, 0.f, 0.f, 0.f }, rot[4] = { 0.f, 0.f, 0.f, 1.f };
+    Aabb b; memset(&b, 0, sizeof(b));
+    g_bounds(&b, item, pos, rot, 1.f);
+    return small_box(&b);
+}
+
 // ---- building pieces as blocks (Area remove, connected delete)
 // The dismantle system removes a building piece (foundation, stairs...) as one entity
 // when the aimed entity flag of its state at [rbp+0x1f8] is set (+0x80 == 1, entity at
@@ -1111,11 +1142,15 @@ static void piece_target_restore() {
     uint8_t* f = (uint8_t*)InterlockedExchangePointer((void* volatile*)&g_pieceFlag, nullptr);
     if (f && *f == 0) *f = 1;
 }
-extern "C" uint64_t bt_piece_check(void* a, void* b, uint64_t c, void* d, uint8_t* frame) {
+extern "C" uint64_t bt_piece_check(void* a, void* b, uint64_t c, void* d, uint8_t* frame, void* item) {
     uint64_t r = g_pieceCheckOrig(a, b, c, d);
     if ((uint32_t)r || g_modOff) return r;
     const bool connected = g_mode == MODE_PREFAB && g_replace && g_replaceStyle == STYLE_CONNECTED;
     if (g_mode != MODE_AREA && !connected) return r;
+    // a piece in the hammer, or a big shape with the fill bucket: the game's own removal
+    const int kind = item_kind(item);
+    if (kind != ITEM_SHAPE && kind != ITEM_TERRAIN) return r;
+    if (g_mode != MODE_AREA && !small_item(item)) return r;
     uint8_t* st = frame && readable(frame + 0x1f8, 8) ? *(uint8_t**)(frame + 0x1f8) : nullptr;
     if (!st || !readable(st, 0x88)) { LOG(.str("dismantle: aim state not readable")); return r; }
     if (st[0x80] != 1 || !*(uint64_t*)(st + 0x78)) return r;
@@ -1124,7 +1159,8 @@ extern "C" uint64_t bt_piece_check(void* a, void* b, uint64_t c, void* d, uint8_
     LOG(.str("dismantle: building piece aimed, removed as blocks (").str(connected ? "connected delete" : "area").c(')'));
     return r;
 }
-// rcx, rdx, r8, r9 pass through; the caller's rbp becomes the 5th argument
+// rcx, rdx, r8, r9 pass through; the caller's rbp and rsi (the selected item) become
+// the 5th and 6th arguments
 extern "C" uint8_t piece_check_thunk[];
 asm(".text\n"
     ".globl piece_check_thunk\n"
@@ -1132,6 +1168,7 @@ asm(".text\n"
     "    push %rbp\n"
     "    sub $0x30, %rsp\n"
     "    mov %rbp, 0x20(%rsp)\n"
+    "    mov %rsi, 0x28(%rsp)\n"
     "    call bt_piece_check\n"
     "    add $0x30, %rsp\n"
     "    pop %rbp\n"
@@ -2349,7 +2386,11 @@ static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* 
         // bt_piece_check sends pieces down the block path; without it the piece goes
         // on its own.
         LOG(.str("remove click on a building piece: removed on its own (check ").str(g_pieceCheckOrig ? "on" : "off").c(')'));
-        flash(T(S_REMOVE_PIECE));
+        if (!g_pieceCheckOrig) flash(T(S_REMOVE_PIECE));
+        return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
+    }
+    if (connected && list && !small_box((Aabb*)box)) {
+        LOG(.str("connected delete: big shape, removed as one shape"));
         return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
     }
     if (connected && list) {
@@ -2458,7 +2499,7 @@ static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
 }
 
 static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, CursorXf* xf) {
-    const bool replace = g_replace != 0;
+    const bool replace = g_replace != 0 && item_kind(state) != ITEM_PIECE;     // pieces place as in the game
     const LONG mode = g_mode;
     const bool modActive = replace || mode == MODE_AREA;
     if (!modActive) return g_placeOrig(list, ctx, state, pdata, xf);
@@ -2512,7 +2553,8 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
     }
 
     uint8_t r = 0;
-    if (mode == MODE_PREFAB && g_replaceStyle == STYLE_CONNECTED) {
+    const bool bigShape = mode == MODE_PREFAB && g_replaceStyle == STYLE_CONNECTED && !small_item(state);
+    if (mode == MODE_PREFAB && g_replaceStyle == STYLE_CONNECTED && !bigShape) {
         r = connected_fill(list, ctx, state, pdata, target);
         LeaveCriticalSection(&g_stateLock);
         if (r) beep(MB_ICONASTERISK);
@@ -2520,6 +2562,7 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
     }
     if (mode == MODE_PREFAB) {
         pend_begin(ctx, target, true, shape);
+        if (bigShape) { g_pend.style = STYLE_FULL; LOG(.str("  big shape with the fill bucket: full-shape replace")); }
         refund_reset();
         r = price_shape(list, ctx, state, pdata, &target, true) ? 1 : 0;
         { int na = 0; for (int m = 1; m < 0x100; m++) na += g_allow[m];

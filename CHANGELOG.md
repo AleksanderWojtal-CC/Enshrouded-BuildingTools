@@ -12,6 +12,11 @@ changelog on Nexus Mods, so keep it short and written for players.
   blocks of the area (or the touching blocks of the clicked material) are removed and
   refunded. In Prefab mode without connected delete, a right click still removes the
   whole piece as in the game.
+- **A building piece in the hammer works as in the game:** Replace and the fill bucket
+  leave it alone (Area mode still repeats it).
+- **The fill bucket works with the small shapes** (the first row of the shape picker).
+  With a bigger shape selected, connected replace repaints one whole shape and connected
+  delete removes one whole shape, as the full-shape style does.
 
 ## 0.20.0
 
