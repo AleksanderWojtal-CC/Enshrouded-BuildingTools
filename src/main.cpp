@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev5"
+#define MOD_VERSION "0.18.0-dev6"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -292,6 +292,14 @@ static const char* SIG_UI_END_TEXT     = "40 55 56 57 48 8D 6C 24 B9 48 81 EC F0
 static const char* SIG_UI_SETTING_OPTION_CALL = "48 8D 8D 20 04 00 00 E8 ?? ?? ?? ?? 0F B6 8D B0 66 00 00 44 0A E0 8B C1";
 // settingHeader(TextString* title, float gap): section title of the game's options.
 static const char* SIG_UI_SETTING_HEADER = "48 81 EC A8 01 00 00 48 83 79 08 00 0F 29 B4 24 90 01 00 00 0F 28 F1 0F 84 ?? ?? ?? ??";
+// doButton(params 0xa8): the game's button; true when clicked.
+static const char* SIG_UI_BUTTON       = "48 8B C4 48 81 EC C8 00 00 00 0F 10 41 78 48 8D 54 24 20 F2 0F 10 89 88 00 00 00";
+// setSpacingX: children side by side (setSpacing stacks them vertically).
+static const char* SIG_UI_SPACING_X    = "45 0F B6 D0 C7 81 B8 00 00 00 01 00 00 00 44 0F B6 89 BC 00 00 00 41 0F B6 C1";
+// blurBehind(ui ctx, rect, color): the blur behind the game's full-screen menus;
+// fillRect(rect, color): a flat colour over a rect (their dark tint).
+static const char* SIG_UI_BLUR         = "48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 81 EC E0 00 00 00 49 8B F8";
+static const char* SIG_UI_FILL_RECT    = "48 89 5C 24 08 57 48 83 EC 20 48 8B F9 48 8B DA 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ??";
 static const char* SIG_HUD_UPDATE = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 88 FE FF FF 48 81 EC 78 02 00 00";
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
 static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 88 B3 D9 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 88 2B 01 00 0F 29 44 24 20 E8";
@@ -2301,6 +2309,7 @@ static void preview_diag() {
     LOG(.str("preview: ").i(g_previewCount).str(" highlights, started ").i(g_pvStarted).str(", active frames ").i(f));
 }
 
+static volatile LONG g_keysVersion = 0;          // bumped when a key is rebound in the menu
 static void vk_name(int vk, char* out) {
     if (vk >= VK_F1 && vk <= VK_F24) { Buf b; b.c('F').i(vk - VK_F1 + 1); lstrcpynA(out, b.z(), 16); return; }
     UINT sc = MapVirtualKeyA((UINT)vk, MAPVK_VK_TO_VSC);
@@ -2326,15 +2335,15 @@ static void compose_overlay(char* out, int cap) {
         if (g_hover) { int t = (int)(g_hoverDist * 10.f + 0.5f); b.str("  |  free ").i(t / 10).c('.').i(t % 10).str(" m"); }
         if (creative_on()) b.str("  |  creative");
     }
-    // line 2: keys (their names never change while the game runs)
+    // line 2: keys (named again after a rebinding in the menu)
     if (g_cfg.panelKeys) {
-        static char k[8][16]; static bool named = false;
-        if (!named) {
+        static char k[8][16]; static LONG named = -1;
+        if (named != g_keysVersion) {
             vk_name(g_cfg.keyStructure, k[0]); vk_name(g_cfg.keyReplace, k[1]); vk_name(g_cfg.keyCancel, k[2]);
             vk_name(g_cfg.keyStyle, k[3]); vk_name(g_cfg.keyHover, k[4]); vk_name(g_cfg.keyFill, k[5]);
             if (g_cfg.keyOff > 0) vk_name(g_cfg.keyOff, k[6]);
             if (g_cfg.wheelKey > 0) vk_name(g_cfg.wheelKey, k[7]);
-            named = true;
+            named = g_keysVersion;
         }
         b.str("\n").str(k[0]).str(" area  ").str(k[1]).str(" replace  ").str(k[2]).str(" clear  ")
          .str(k[3]).str(" style  ").str(k[4]).str(" free  ").str(k[5]).str(" fill");
@@ -2467,6 +2476,7 @@ static PlayUiFn g_playUiOrig = nullptr, g_modScreenOrig = nullptr;
 static uint8_t** g_uiCtxGlobal = nullptr;          // the UI context pointer (rip global)
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
 static volatile LONG g_menuOpen = 0;
+static volatile LONG g_bindWaiting = -1;           // key action in the menu waiting for its new key
 
 // Same chain and null checks as the play-state UI itself, which reads it right after.
 static uint8_t* hud_screen_byte() {
@@ -2483,7 +2493,8 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
     if (scr) {
         static int last = -1;
         LONG req = InterlockedExchange(&g_menuReq, 0);
-        if (req == 1 && *scr == SCREEN_INGAME) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD); LOG(.str("menu: open")); }
+        bool openable = *scr == SCREEN_INGAME || (*scr >= 29 && *scr <= 37);   // the game, or a multi-tool (hammer) screen
+        if (req == 1 && openable) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD); LOG(.str("menu: open")); }
         else if (req == 1) LOG(.str("menu: not opened, screen ").i(*scr).str(" is up"));
         else if (req == 2 && *scr == SCREEN_MOD) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_INGAME); LOG(.str("menu: close")); }
         if (*scr != last) {
@@ -2493,6 +2504,7 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
             last = *scr;
         }
         g_menuOpen = *scr == SCREEN_MOD;
+        if (!g_menuOpen) g_bindWaiting = -1;
     }
     g_playUiOrig(a, b, c, d);
 }
@@ -2524,6 +2536,10 @@ static struct {
     void (*endText)(void*);
     bool (*settingOption)(void*, uint8_t*);
     void (*settingHeader)(const UiTextString*, float);
+    bool (*button)(const void*);
+    void (*setSpacingX)(void*, const UiVec2*, uintptr_t);
+    void (*blurBehind)(void*, const float*, uint64_t);
+    void (*fillRect)(const float*, uint64_t);
 } ui;
 enum { STYLE_TITLE = 0x11b94, STYLE_BODY = 0x10a0c };   // text styles in the UI bundle
 
@@ -2563,7 +2579,21 @@ static bool ui_option(const char* label, const char* const* names, int count, LO
     return true;
 }
 
-// The hotkey settings as rows of the game's options. Changes apply at once.
+// The game's button (params 0xa8 as the Deletion Confirm menu fills them; text @+0x78).
+static bool ui_button(const char* text, bool enabled = true) {
+    alignas(16) uint8_t prm[0xc0] = {};
+    *(uint32_t*)(prm + 0x04) = 0x10202;
+    *(uint16_t*)(prm + 0x08) = 0x100;
+    *(uint64_t*)(prm + 0x10) = 3;                            // style
+    *(float*)(prm + 0x4c) = 10.0f;
+    *(float*)(prm + 0x50) = 5.0f;
+    *(float*)(prm + 0x54) = 1.0f;                            // scale
+    prm[0x58] = enabled;
+    *(UiTextString*)(prm + 0x78) = ui_str(text);
+    return ui.button(prm) && enabled;
+}
+
+// Options page: the hotkey settings as rows of the game's options. Changes apply at once.
 static void draw_tool_settings() {
     static const char* const offOn[] = { "Off", "On" };
     static const char* const modes[] = { "Prefab (vanilla)", "Area" };
@@ -2571,8 +2601,6 @@ static void draw_tool_settings() {
     static const LONG styleIds[] = { STYLE_FULL, STYLE_OVERLAP, STYLE_CONNECTED };
     static const char* const fills[] = { "Solid", "Hollow room", "Walls only" };
     LONG v;
-    UiTextString h = ui_str("Tools");
-    ui.settingHeader(&h, 0);
     if (ui_option("Mode", modes, 2, g_mode, &v)) set_mode(v);
     if (ui_option("Replace", offOn, 2, g_replace ? 1 : 0, &v)) set_replace(v);
     int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
@@ -2581,32 +2609,98 @@ static void draw_tool_settings() {
     if (ui_option("Free placement", offOn, 2, g_hover ? 1 : 0, &v)) set_hover(v);
 }
 
+// Keys page: one row per action, the button shows its key; click it, then press the
+// new key (the input thread catches it). Esc cancels, Delete or Backspace clears.
+struct KeyAction { const char* label; int* key; };
+static KeyAction g_keyActions[] = {
+    { "Building Tools menu", &g_cfg.keyMenu },
+    { "Area mode on / off", &g_cfg.keyStructure },
+    { "Replace on / off", &g_cfg.keyReplace },
+    { "Replace style", &g_cfg.keyStyle },
+    { "Area fill", &g_cfg.keyFill },
+    { "Clear area corners", &g_cfg.keyCancel },
+    { "Free placement on / off", &g_cfg.keyHover },
+    { "Free placement farther", &g_cfg.keyFarther },
+    { "Free placement closer", &g_cfg.keyCloser },
+    { "Distance (hold + mouse wheel)", &g_cfg.wheelKey },
+    { "Whole mod off / on", &g_cfg.keyOff },
+};
+static const int kKeyActions = sizeof g_keyActions / sizeof g_keyActions[0];
+
+static void draw_keys() {
+    for (int k = 0; k < kKeyActions; k++) {
+        alignas(16) uint8_t row[0x40] = {}, label[0x40] = {};
+        ui.beginBox(row, 0);
+        UiVec2 gap{ 24, 0 };
+        ui.setSpacingX(ui_node(row), &gap, 0);
+        uint16_t midLeft = 0x201;
+        ui.setLayout(ui_node(row), &midLeft);
+        ui.beginBox(label, 0);
+        ui.setWidth(ui_node(label), 420);
+        ui_text(g_keyActions[k].label, STYLE_BODY);
+        ui.endBox(label);
+        char name[32];
+        if (g_bindWaiting == k) lstrcpynA(name, "Press a key...", 32);
+        else if (*g_keyActions[k].key > 0) vk_name(*g_keyActions[k].key, name);
+        else lstrcpynA(name, "None", 32);
+        if (ui_button(name) && g_bindWaiting < 0) { g_bindWaiting = k; LOG(.str("menu: rebinding ").str(g_keyActions[k].label)); }
+        ui.endBox(row);
+    }
+    ui_text(g_bindWaiting >= 0 ? "Press the new key. Esc cancels, Delete clears the key."
+                               : "Click a key to change it. Saved to BuildingTools.ini.", STYLE_BODY);
+}
+
+// Called by the input thread with the key pressed while an action waits for one.
+static void bind_key(int vk) {
+    LONG k = g_bindWaiting;
+    if (k < 0 || k >= kKeyActions) return;
+    if (vk == VK_ESCAPE) { g_bindWaiting = -1; LOG(.str("menu: rebinding cancelled")); return; }
+    if (vk == VK_DELETE || vk == VK_BACK) vk = 0;
+    if (g_keyActions[k].key == &g_cfg.keyMenu && vk == 0) { g_bindWaiting = -1; return; }   // keep a way in
+    for (int j = 0; j < kKeyActions; j++)                    // a key does one thing: take it from the other action
+        if (j != k && vk > 0 && *g_keyActions[j].key == vk) *g_keyActions[j].key = 0;
+    *g_keyActions[k].key = vk;
+    write_full_ini(g_cfg);
+    InterlockedIncrement(&g_keysVersion);
+    g_bindWaiting = -1;
+    char n[16] = "none"; if (vk > 0) vk_name(vk, n);
+    LOG(.str("menu: ").str(g_keyActions[k].label).str(" -> ").str(n));
+}
+
+// Full-screen like the game's own menus: blurred, darkened world, the menu on the left.
+static LONG g_menuPage = 0;                          // 0 = keys, 1 = options
 static void draw_mod_menu() {
-    alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, fancy[0x100] = {};
+    alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, tabs[0x40] = {};
     UiStringView name{ "buildingToolsMenu", 17 };
     g_beginWindow(win, &name, 1, 9, -1, 1);
     ui.beginRoot(root, ui.windowContext(win));
     ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
-    UiColor dim{ 0x80000000, 1.0f };
-    ui.setBackground(root, &dim);
+    const float* screen = (const float*)((uint8_t*)ui_node(root) + 0x114);   // node rect (last layout)
+    ui.blurBehind(*g_uiCtxGlobal, screen, 0x3f800000ffffffffull);
+    ui.fillRect(screen, 0x3f800000a0000000ull);   // {ABGR colour, intensity}
 
     ui.beginBox(panel, 0);
     void* n = ui_node(panel);
-    const float pad[4] = { 90, 60, 90, 60 };
+    const float pad[4] = { 120, 110, 60, 80 };
     ui.setPadding(n, pad);
-    UiVec2 gap{ 0, 30 };
+    UiVec2 gap{ 0, 22 };
     ui.setSpacing(n, &gap, 0);
-    uint16_t centre = 0x202, column = 0x102;
-    ui.setSelfAlign(n, &centre);
-    ui.setLayout(n, &column);
-    ui.setWidth(n, 900);
-    *(uint32_t*)(fancy + 0) = 8;                            // frame style of the game's popups
-    *(float*)(fancy + 4) = 1.0f;                            // scale
-    ui.fancyBox(panel, fancy);
+    uint16_t topLeft = 0x101;
+    ui.setSelfAlign(n, &topLeft);
+    ui.setLayout(n, &topLeft);
+    ui.setWidth(n, 1000);
 
     ui_text("Building Tools", STYLE_TITLE);
-    draw_tool_settings();
-    ui_text("Version " MOD_VERSION ". Esc or Home closes the menu.", STYLE_BODY);
+    ui.beginBox(tabs, 0);
+    UiVec2 tgap{ 16, 0 };
+    ui.setSpacingX(ui_node(tabs), &tgap, 0);
+    if (ui_button("Keys", g_menuPage != 0)) { g_menuPage = 0; g_bindWaiting = -1; }
+    if (ui_button("Options", g_menuPage != 1)) { g_menuPage = 1; g_bindWaiting = -1; }
+    ui.endBox(tabs);
+    UiTextString h = ui_str(g_menuPage == 0 ? "Keys" : "Options");
+    ui.settingHeader(&h, 0);
+    if (g_menuPage == 0) draw_keys(); else draw_tool_settings();
+    ui_text("Version " MOD_VERSION ". Esc or the menu key closes the menu.", STYLE_BODY);
 
     ui.endBox(panel);
     ui.endBox(root);
@@ -2644,6 +2738,8 @@ static void install_menu() {
         { (void**)&ui.setStretch, "UiStretch", SIG_UI_STRETCH },         { (void**)&ui.setWidth, "UiWidth", SIG_UI_WIDTH },
         { (void**)&ui.fancyBox, "UiFancyBox", SIG_UI_FANCY_BOX },        { (void**)&ui.beginText, "UiBeginText", SIG_UI_BEGIN_TEXT },
         { (void**)&ui.endText, "UiEndText", SIG_UI_END_TEXT },        { (void**)&ui.settingHeader, "UiSettingHeader", SIG_UI_SETTING_HEADER },
+        { (void**)&ui.button, "UiButton", SIG_UI_BUTTON },             { (void**)&ui.setSpacingX, "UiSpacingX", SIG_UI_SPACING_X },
+        { (void**)&ui.blurBehind, "UiBlur", SIG_UI_BLUR },             { (void**)&ui.fillRect, "UiFillRect", SIG_UI_FILL_RECT },
     };
     bool all = g_beginWindow != nullptr;
     for (auto& f : need) all &= (*f.fn = find_unique(f.name, f.sig)) != nullptr;
@@ -2683,11 +2779,28 @@ static DWORD WINAPI input_thread(void*) {
         }
         {   // in-game menu
             bool down = focus && g_playUiOrig && g_cfg.keyMenu > 0 && (GetAsyncKeyState(g_cfg.keyMenu) & 0x8000);
+            if (g_bindWaiting >= 0) {           // rebinding: the next key pressed (not a mouse button)
+                static bool held[256]; static LONG armed = -1;
+                if (armed != g_bindWaiting) {   // keys already down when it started do not count
+                    for (int vk = 8; vk < 256; vk++) held[vk] = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                    armed = g_bindWaiting;
+                }
+                for (int vk = 8; vk < 256 && focus; vk++) {
+                    if (vk == VK_SHIFT || vk == VK_CONTROL || vk == VK_MENU) continue;   // use the left/right codes
+                    bool d = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                    if (d && !held[vk]) { bind_key(vk); armed = -1; prevMenu = prevEsc = true; break; }
+                    held[vk] = d;
+                }
+                if (g_bindWaiting < 0) armed = -1;
+                for (bool& p : prev) p = true;
+                continue;
+            }
             if (down && !prevMenu) { g_menuReq = g_menuOpen ? 2 : 1; LOG(.str("key: menu")); }
             prevMenu = down;
             bool esc = focus && g_menuOpen && (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
             if (esc && !prevEsc) { g_menuReq = 2; LOG(.str("key: esc in menu")); }
             prevEsc = esc;
+            if (g_menuOpen) { for (bool& p : prev) p = true; continue; }   // tool keys sleep while the menu is up
         }
         int keys[8] = { g_cfg.keyStructure, g_cfg.keyReplace, g_cfg.keyCancel, g_cfg.keyStyle, g_cfg.keyHover,
                         g_hover ? g_cfg.keyFarther : 0, g_hover ? g_cfg.keyCloser : 0, g_cfg.keyFill };

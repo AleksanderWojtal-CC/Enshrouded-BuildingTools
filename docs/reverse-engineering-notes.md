@@ -481,3 +481,14 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   (interactive), byte 0 @0xc40. Returns true when the u8 value changed.
 - settingHeader (`c8c6e0`)(TextString* title, float gap). dev5 draws the tool settings
   (mode, replace, style, fill, free placement) with these.
+- Full-screen menus (HudMenu, `bd933c` chunk): blurBehind(ui ctx, node rect, {0xffffffff,
+  1.0}) then a dark tint fillRect(`cf8a00`)(rect, colour from bundle+0xfa74), side images
+  at bundle+0xd300, menuTabBar, drawHints. Node rect = node+0x114 (last layout).
+- Layout/selfAlignment u16 values are alignments (low byte x, high byte y; 1 start,
+  2 centre, 3 end). Direction comes from spacing: setSpacing (`11b3810`, [node+0xb8]=2)
+  stacks vertically, setSpacingX (`11b3480`, [node+0xb8]=1) side by side.
+- doButton (`cc8fb0`) params 0xa8 as the Deletion Confirm menu fills them: +4 dword
+  0x10202, +8 word 0x100, +0xa warning byte, +0x10 qword 3 (style), +0x4c 10.0,
+  +0x50 5.0, +0x54 1.0 (scale), +0x58 enabled, +0x78 TextString. Returns true on click.
+- dev6: full-screen menu (blur, dark tint, menu at the left), Keys and Options tabs,
+  key rebinding saved to the ini; opens from InGame and multi-tool screens 29-37.
