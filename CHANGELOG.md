@@ -15,6 +15,14 @@ changelog on Nexus Mods, so keep it short and written for players.
 - **Options tab:** mode, Replace, replace style, area fill and free placement, as rows
   like the game's settings. The F-keys keep working.
 - The menu key itself can be changed in the Keys tab or with `Menu=` in the ini.
+- New: **the mod's keys in the game's building box** (bottom right, under "Undo Build
+  Action"), with the game's own key icons: Area mode, Replace and Free placement with the
+  game's on/off switch, plus fill, replace style, clear corners, wheel distance and the
+  menu key while they apply. `HudRows=0` in the ini turns them off.
+- New: **info as floating text** below the screen centre, drawn like the game's snapping
+  hint (blurred, soft backdrop): area state, size and block count, and the mod's short
+  messages. The old info bar at the bottom only shows up when the building box is not
+  there (for example with `HudRows=0`).
 
 ## 0.17.4
 

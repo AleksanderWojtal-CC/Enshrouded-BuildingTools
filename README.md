@@ -23,8 +23,11 @@ A client-side mod for **Enshrouded 1.0 (single player)** that extends the Constr
   not only the one you stand in, also outside a base. The material picker, the red
   "missing materials" ghost and the crafting menus count them too. Chests of the base you
   are in are used first; the loot deposit still only fills local chests.
-- The mod uses the game's own UI sounds and adds a small info bar at the bottom of the screen.
-  Keys and options live in `BuildingTools.ini`.
+- **Menu in the game's own UI** (Home): change keys (also Shift / Ctrl / Alt combinations)
+  and options in a full-screen menu with the game's tabs. While you build, the mod's keys
+  sit in the game's building box with the game's key icons and on/off switches, and the
+  area size and messages show as floating text below the crosshair.
+  Everything is also in `BuildingTools.ini`.
 
 Materials are charged and refunded through the game's own building code, and edits
 replicate like vanilla building.

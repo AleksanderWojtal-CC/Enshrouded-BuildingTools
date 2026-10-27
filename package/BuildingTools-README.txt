@@ -1,4 +1,4 @@
-Enshrouded Building Tools 0.14.1 (single player)
+Enshrouded Building Tools 0.18.0 (single player)
 ==============================================
 
 Files in the game folder
@@ -7,6 +7,7 @@ Files in the game folder
   BuildingTools.log     what the mod did (previous session: BuildingTools.prev.log)
 
 Keys (with the Construction Hammer)
+  Home  Building Tools menu: change keys and options in the game's own UI
   F5  whole mod off / on (off = vanilla game, other mod keys do nothing)
   F6  switch Prefab mode (vanilla) <-> Area mode
   F7  Replace on/off (works in both modes)
@@ -74,9 +75,25 @@ Undo after area actions
   the banner) and gives back exactly their materials. Remove the rest with an
   area remove.
 
+Menu (Home)
+  A full-screen menu like the game's own, also while holding the hammer. Switch
+  tabs with Q / E or a click; Esc or Home closes it.
+  Keys tab: click a key, then press the new one. Shift, Ctrl and Alt
+  combinations work (Shift+K). Esc cancels, Delete clears. Saved at once.
+  Options tab: mode, Replace, replace style, area fill, free placement.
+
+Building box and floating text
+  While you build, the game's building box (bottom right) lists the mod's keys
+  with the game's key icons: Area mode, Replace and Free placement with an
+  on/off switch, then fill, replace style, clear corners, the wheel distance and
+  the menu key while they apply. The area state, size and block count and the
+  mod's short messages show as floating text below the crosshair.
+  HudRows=0 under [Interface] turns both off and brings back the info panel.
+
 Info panel and sounds
-  The info panel sits at the bottom edge of the screen, shows the mod's state
-  and keys, and hides after 5 seconds without changes (it comes back with the
+  The info panel at the bottom edge of the screen is used when the building box
+  rows are off (HudRows=0). It shows the mod's state and keys, and hides after
+  5 seconds without changes (it comes back with the
   next change). Under [Interface] in BuildingTools.ini (close the game first):
   PanelScale (size in percent), PanelBottom (lift it up, pixels at 1080p),
   PanelTimeout (seconds, 0 = always visible), PanelKeys (0 = no key line).
@@ -88,9 +105,11 @@ Changing keys and settings
   All keys and options are in BuildingTools.ini in the game folder (this
   version rewrites an older ini once so it lists every option; your values are
   kept). Close the game, open the file with Notepad, change a number, save.
+  Easier: change keys and options in the menu (Home), which saves the ini.
   Keys are Windows key codes: F1..F12 = 112..123, A..Z = 65..90, 0..9 = 48..57,
   Page Up 33, Page Down 34, Insert 45, Delete 46, Home 36, End 35,
-  Numpad 0..9 = 96..105. 0 turns a key off. Example: to use F4 for Area mode,
+  Numpad 0..9 = 96..105. 0 turns a key off. Add 4096 for Shift, 8192 for
+  Ctrl, 16384 for Alt (Shift+K = 4096 + 75 = 4171). Example: to use F4 for Area mode,
   set ToggleAreaMode=115. The comments in the file explain each option.
   Delete the ini to get all defaults back.
 

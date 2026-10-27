@@ -34,7 +34,7 @@ back exactly.
 Click two opposite corners: the selected shape is repeated over a line, floor, wall
 or box. Left click builds (or replaces with Replace on), right click removes.
 Fill (F11): solid, hollow room (walls + floor + ceiling) or walls only.
-The info bar shows the live size and block count before you confirm.
+Floating text below the crosshair shows the live size and block count before you confirm.
 
 [b]Free placement[/b] (F10)
 The block ghost hovers in front of you instead of sticking to surfaces.
@@ -53,12 +53,17 @@ base. The material picker, the missing-materials ghost and the crafting menus co
 too. The loot deposit stays local. Chests of a base the game has not loaded (far away) may
 not count.
 
+[b]Menu in the game's own UI[/b] (Home)
+A full-screen menu that looks like the game's: Keys tab (click a key, press the new one,
+Shift/Ctrl/Alt combinations work) and Options tab. While you build, the mod's keys sit in
+the game's building box with the game's key icons and on/off switches.
+
 [b]Details[/b]
 [list]
 [*]Costs, refunds and undo go through the game's own building code.
-[*]Game UI sounds, small info bar at the bottom of the screen, auto-hides.
+[*]Game UI sounds, keys in the game's building box, info as floating text like the game's hints.
 [*]F5 turns the whole mod off and on (vanilla game while off).
-[*]All keys and options in BuildingTools.ini (instructions inside).
+[*]All keys and options in the menu (Home) and in BuildingTools.ini.
 [*]Big areas: the game's undo memory is small, so undo covers the first ~30 blocks
 of a large area; use an area remove for the rest.
 [/list]
