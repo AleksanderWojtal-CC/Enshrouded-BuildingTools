@@ -43,6 +43,7 @@ which is also shipped in the zip.
 
 | Key | Action |
 |---|---|
+| Home | Building Tools menu: change keys and options in the game's own UI |
 | F6 | Prefab mode (vanilla) / Area mode |
 | F7 | Replace on/off |
 | F8 | Clear area corners |
@@ -50,6 +51,8 @@ which is also shipped in the zip.
 | F10 | Free placement on/off (Q + wheel: distance) |
 | F11 | Area fill: solid / hollow room / walls only |
 | F5 | Whole mod off / on (off = vanilla game) |
+
+All keys can be changed in the menu (Keys tab), also to Shift, Ctrl or Alt combinations.
 
 What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
