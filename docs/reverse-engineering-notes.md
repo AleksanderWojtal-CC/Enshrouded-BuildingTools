@@ -423,3 +423,23 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   (48 83 7D 50 00, ServerCheck - 0x6b): non-null only in the server world.
 - The mod redirects that one call and keeps the last 4 client cursor components;
   aim_lookup tries each (exact place match, then within 6 m).
+
+## v0.18 (in progress): native in-game menu
+- The game's UI is immediate mode: screens are code run every frame. Creative Mode 3.0
+  (private "Flame" SDK) uses about 95 of these functions; used only as a map, every
+  address below was located and checked in our exe.
+- Play-state UI `c4fc40` ("doPlayStateUi()"), one caller `bc24ba`, no arguments used.
+  hud = [[[ui ctx 281e498]+0xd0]]+0x38 (same ui ctx as the sounds); current
+  `HudScreenType` byte at hud+0x1cd8 (1 InGame, 51 NoUi skips the UI, 0 Invalid).
+  Opens window `PlayStateBaseWindow` (beginWindow a32b50(win, &StringView, 1, 2, -1, 0)),
+  named box `doPlayStateUi()`, then dispatches on the screen at `c5028b`:
+  52 TechGallery -> `cc6ad0` (call at `c50a9e`), 53 YcPlayground -> `ce77d0` (call at
+  `c50a97`, used by Creative Mode), others below.
+- `ecs::OpenHudScreenEvent {+8 playerEntityId, +0xc interactionHostId, +0x10 screen}` is the
+  game's own way to open a screen (not used yet).
+- TechGallery `cc6ad0` is a developer test screen ("Test1"), a complete minimal example:
+  beginWindow a32b50(&win, &StringView{"Test1",5}, 0, 0, -1, 0); ctx = windowContext a3eb90(&win);
+  beginRoot a301b0(&box, ctx); ... beginText b0e280(&text, &TextString, style, 0) with
+  style = [ui ctx]+0xc8 (bundle) + 0x10a0c; endText b15a60; endBox a336a0; endWindow a330b0.
+- StringView = {const char*, size_t}. TextString = {const char*, size_t, uint64 hash},
+  hash = FNV-1a 64 of the text (named boxes use the same hash of their name).
