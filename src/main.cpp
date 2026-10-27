@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev14"
+#define MOD_VERSION "0.18.0-dev15"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -3062,7 +3062,7 @@ static bool hud_info(char* out, int cap) {
 }
 // Mod messages and the area size as floating text below the screen centre, drawn like
 // the game's snapping hint (cab2a0): centred box, offset down, blurred backdrop, body text.
-// The game's soft rounded backdrop, as behind the snapping hint, a bit more transparent.
+// The game's backdrop of the snapping hint: blur behind the rect, then the soft rounded frame.
 static void soft_backdrop(const float* node) {
     void* ctx = *g_uiCtxGlobal;
     uint8_t* bundle = *(uint8_t**)((uint8_t*)ctx + 0xc8);
@@ -3071,12 +3071,13 @@ static void soft_backdrop(const float* node) {
     alignas(16) const float radii[4] = { c, c, c, c };
     alignas(16) uint8_t tex[16]; memcpy(tex, bundle + 0xd3b0, 16);
     alignas(16) float borders[4]; memcpy(borders, bundle + 0xd3c0, 16);
+    ui.blurBehind(ctx, rect, 0x3f800000ffffffffull);
     bool draw = ui.passId(ui.passObj(ctx)) == 4;
     if (draw) ui.blend(ui.drawList(ui.passObj(ctx)), 3);
     uint32_t h = 0;
     uint32_t image = *ui.resolveImage(ui.imageCtx(), &h, tex);
     if (draw) {
-        ui.nineSlice(ui.drawList(ui.passObj(ctx)), rect, image, borders, radii, 0x3f800000a0ffffffull);   // 63% opaque
+        ui.nineSlice(ui.drawList(ui.passObj(ctx)), rect, image, borders, radii, 0x3f800000ffffffffull);
         ui.blend(ui.drawList(ui.passObj(ctx)), 0);
     }
 }
