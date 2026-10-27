@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev11"
+#define MOD_VERSION "0.18.0-dev12"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -324,6 +324,9 @@ static const char* SIG_UI_DRAW_HINTS   = "48 8B C4 48 89 58 10 48 89 70 18 55 57
 static const char* SIG_UI_SMALL_TOGGLE = "48 81 C3 D4 FE 00 00 C7 85 B0 00 00 00 FF FF FF FF C7 85 B4 00 00 00 00 00 80 3F EB 23 48 8B 88 C8 00 00 00 "
     "48 8D B5 B8 00 00 00 48 8B 81 D8 D4 00 00 48 8D 99 C4 FE 00 00 48 89 85 B8 00 00 00 E8 ?? ?? ?? ?? 4C 8B C3 48 8D 95 A8 00 00 00 "
     "48 8B C8 E8 ?? ?? ?? ?? 48 8B D0 48 8D 4C 24 50 4C 8B C6 E8";
+// The building box's toggle row (ccff30, "first person view"): after the key row a
+// stretcher (b1af90(box, {1,1}), E8 at +0xf) and the switch (ccfd00(bool on), E8 at +0x18).
+static const char* SIG_HUD_TOGGLE_ROW = "0F 28 C7 48 8D 4D B0 0F 14 C7 66 48 0F 7E C2 E8 ?? ?? ?? ?? 40 0F B6 CE E8 ?? ?? ?? ?? 48 8D 4D B0 E8";
 static const char* SIG_UI_SIZE = "48 89 54 24 08 0F 57 C0 F3 0F 10 54 24 08 33 C0";
 // Title text of the building box (loca buildTooltipAreaActions, empty): beginText E8 at +0x24.
 static const char* SIG_HUD_TITLE_CALL = "4C 8D 83 0C 0A 01 00 41 B1 01 F2 0F 10 4C 24 40 48 8D 55 00 48 8D 8D D0 00 00 00 0F 29 45 00 F2 0F 11 4D 10 E8";
@@ -2339,7 +2342,8 @@ static void preview_diag() {
     LOG(.str("preview: ").i(g_previewCount).str(" highlights, started ").i(g_pvStarted).str(", active frames ").i(f));
 }
 
-static bool g_hudTitleHooked = false;               // the building box title shows messages and the area size
+static bool g_hudTitleHooked = false;               // the building box title can show messages and the area size
+static volatile DWORD g_hudTitleTick = 0;           // last time it did (the game had no text of its own)
 static volatile DWORD g_hudRowsTick = 0;        // last time the HUD rows were drawn (the info bar then hides its own)
 static volatile LONG g_keysVersion = 0;          // bumped when a key is rebound in the menu
 // A key setting: virtual-key code in the low byte, plus modifiers that must be held.
@@ -2385,7 +2389,7 @@ static void compose_overlay(char* out, int cap) {
     bool vanilla = g_mode == MODE_PREFAB && !g_replace && !g_hover;
     bool flashing = GetTickCount() < g_flashUntil;
     bool hudRows = GetTickCount() - g_hudRowsTick < 400;     // the game's building box shows the state and keys
-    if (hudRows && g_hudTitleHooked) { out[0] = 0; return; }      // the box's title line shows them
+    if (hudRows && GetTickCount() - g_hudTitleTick < 400) { out[0] = 0; return; }   // the box's title line shows them
     if (hudRows && !flashing && g_mode == MODE_AREA && g_corners > 0) {   // the bar keeps the area size
         b.str("Area ").i(g_corners).c('/').i(g_cfg.corners);
         live_size(b);
@@ -2620,6 +2624,8 @@ static struct {
     uint32_t* (*resolveImage)(void* ctx, uint32_t* handle, const void* texture);
     void (*drawImage)(void* box, const uint32_t* handle, const void* color);
     void (*setSize)(void*, UiVec2);
+    void* (*stretcher)(void* box, UiVec2);                  // optional: the HUD toggle row
+    void (*hudSwitch)(uint8_t on);
 } ui;
 enum { STYLE_TITLE = 0x11b94, STYLE_BODY = 0x10a0c };   // text styles in the UI bundle
 
@@ -2814,12 +2820,13 @@ static void* mod_tab_list(uint8_t menu, void* list, void* state) {
     }
     return &notEmpty;
 }
-// Its tab widget: a click on one of the mod's tabs switches the page; the game never
-// sees it (it would switch to one of its own screens).
+// Its tab widget returns true for the active tab and the hovered one; a click on a
+// hovered tab switches the page. The game never sees it (it would switch screens).
+static bool g_menuClick = false;                     // left button went down this frame
 static bool mod_tab_draw(void* tab, void* out) {
-    bool clicked = ui.tabDraw(tab, out);
-    if (!g_modTabs) return clicked;
-    if (clicked) {
+    bool hot = ui.tabDraw(tab, out);                  // the active tab, or the one under the mouse
+    if (!g_modTabs) return hot;
+    if (hot && g_menuClick && !((uint8_t*)tab)[0x30]) {
         uint64_t h = *(uint64_t*)((uint8_t*)tab + 0x28);
         for (int k = 0; k < kMenuPages; k++)
             if (ui_str(g_pageNames[k]).hash == h && g_menuPage != k) { g_menuPage = k; g_bindWaiting = -1; LOG(.str("menu: page ").str(g_pageNames[k])); }
@@ -2837,6 +2844,12 @@ static void draw_mod_menu() {
     const float* screen = (const float*)((uint8_t*)ui_node(root) + 0x114);   // node rect (last layout)
     ui.blurBehind(*g_uiCtxGlobal, screen, 0x3f800000ffffffffull);
     ui.fillRect(screen, 0x3f800000a0000000ull);   // {ABGR colour, intensity}
+    {   // mouse click edge for the tabs
+        static bool wasDown = false;
+        bool down = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+        g_menuClick = down && !wasDown;
+        wasDown = down;
+    }
     if (g_tabsHooked) { g_modTabs = true; ui.tabBar(3, 0); g_modTabs = false; }
 
     ui.beginBox(panel, 0);
@@ -2973,17 +2986,17 @@ static void hud_key_row(int key, const char* label, int state = -1) {
     *(float*)(prm + 0x48) = 0.f;
     *(UiTextString*)(prm + 0x58) = ui_str(label);
     *(uint32_t*)(prm + 0x70) = 0xffffffff; *(float*)(prm + 0x74) = 1.0f;
-    bool sw = state >= 0 && ui.imageCtx;
-    if (sw) {
+    bool sw = state >= 0 && (ui.hudSwitch || ui.imageCtx);
+    if (sw) {                                   // as the game's "first person view" row
         ui.beginBox(row, 0);
-        UiVec2 gap{ 12, 0 };
+        UiVec2 gap{ 10, 0 };
         ui.setSpacingX(ui_node(row), &gap, 0);
-        uint16_t midLeft = 0x201;
-        ui.setLayout(ui_node(row), &midLeft);
+        ui.setStretch(ui_node(row), UiVec2{ 1, 0 });
     }
     g_bindingHint(bind, prm);
     if (sw) {
-        hud_mark(state > 0);
+        if (ui.hudSwitch) { ui.stretcher(row, UiVec2{ 1, 1 }); ui.hudSwitch(state > 0); }
+        else hud_mark(state > 0);
         ui.endBox(row);
     }
 }
@@ -2993,7 +3006,7 @@ static void draw_hud_rows() {
     if (GetTickCount() - g_buildTick > 500) return;            // only while the hammer is building
     static const char* const styles[] = { "Style: full", "Style: overlap", "Style: connected" };
     static const char* const fills[] = { "Fill: solid", "Fill: hollow", "Fill: walls" };
-    bool sw = ui.imageCtx != nullptr;
+    bool sw = ui.hudSwitch || ui.imageCtx;
     hud_key_row(g_cfg.keyStructure, sw ? "Area mode" : (g_mode == MODE_AREA ? "Area mode: on" : "Area mode: off"), g_mode == MODE_AREA);
     if (g_mode == MODE_AREA) {
         hud_key_row(g_cfg.keyFill, fills[g_fill % 3]);
@@ -3035,7 +3048,7 @@ static bool hud_info(char* out, int cap) {
 static void hud_title_hook(void* text, const UiTextString* str, const void* style, uintptr_t flags) {
     static char buf[160];
     UiTextString mine;
-    if (hud_info(buf, sizeof buf)) { mine = ui_str(buf); str = &mine; }
+    if ((!str || !str->n) && hud_info(buf, sizeof buf)) { mine = ui_str(buf); str = &mine; g_hudTitleTick = GetTickCount(); }   // the game's own messages win
     g_hudTitleOrig(text, str, style, flags);
 }
 
@@ -3106,6 +3119,10 @@ static void install_menu() {
         ui.settingOption = (bool (*)(void*, uint8_t*))(oc + 12 + *(int32_t*)(oc + 8));
     all &= ui.settingOption != nullptr;
     if (!all) { LOG(.str("menu: not available (UI functions not found)")); g_playUiOrig = nullptr; return; }
+    if (uint8_t* tr = find_unique("HudToggleRow", SIG_HUD_TOGGLE_ROW)) {   // the HUD rows' on/off switch (optional)
+        ui.stretcher = (void* (*)(void*, UiVec2))(tr + 0x14 + *(int32_t*)(tr + 0x10));
+        ui.hudSwitch = (void (*)(uint8_t))(tr + 0x1d + *(int32_t*)(tr + 0x19));
+    }
     {   // the small on/off mark for the HUD rows (optional)
         uint8_t* t = find_unique("UiSmallToggle", SIG_UI_SMALL_TOGGLE);
         uint8_t* sz = find_unique("UiSize", SIG_UI_SIZE);

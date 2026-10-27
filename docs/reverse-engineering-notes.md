@@ -529,3 +529,9 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   fancyToggleSmallOn bundle+0xfed4 (white), Off bundle+0xfec4 (colour qword bundle+0xd4d8).
 - Building box title (b5d9a6 beginText): loca hud.building.buildTooltipAreaActions (bundle+0x41f0), empty
   in the game; dev11 replaces its string with mod messages and the area size.
+- HUD toggle row `ccff30`(u8 action, bool on, TextString* label) ("first person view"): box, spacingX 10,
+  stretch (1,0), key row bc4e20, stretcher `b1af90`(box, {1,1}), pill switch `ccfd00`(bool on), endBox.
+  (The small mark at c28190 is the eye open/closed visibility icon.)
+- Box title: the game uses it for messages like "Area protected by flame"; dev12 fills it only when empty.
+- Tab widget cd0100 returns active || hovered (a41390 = point in node), not clicked: page switch needs our
+  own click edge.
