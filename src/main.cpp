@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev1"
+#define MOD_VERSION "0.18.0-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -263,6 +263,10 @@ static const char* SIG_PLAY_UI_CALL = "EB 05 E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? E8 ??
 // Screen dispatch inside it: screen 52 (TechGallery, a developer test screen) calls
 // the function at the je target, screen 53 (YcPlayground) the next one.
 static const char* SIG_SCREEN_DISPATCH = "48 8B 45 80 0F B6 08 83 E9 34 0F 84 ?? ?? ?? ?? 83 F9 01 0F 84";
+// toggleHudScreen(ui ctx, screen): queues a screen change ("[GameUi] toggleHudScreen to
+// %k" in the game log); the game then switches input and cursor like for its own menus.
+static const char* SIG_TOGGLE_SCREEN =
+    "48 89 5C 24 10 48 89 74 24 18 57 48 81 EC 80 00 00 00 48 8B 81 D0 00 00 00 0F B6 F2 48 8B 98 C0 3C 03 00";
 static const char* SIG_HUD_UPDATE = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 88 FE FF FF 48 81 EC 78 02 00 00";
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
 static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 88 B3 D9 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 88 2B 01 00 0F 29 44 24 20 E8";
@@ -2414,11 +2418,13 @@ static DWORD WINAPI wheel_thread(void*) {
 // ---- in-game menu (native game UI), stage 1 experiment
 // The play-state UI runs every frame on the UI thread and draws the screen named by
 // the HudScreenType byte at hud+0x1cd8 (1 = InGame). Screen 52 (TechGallery) is a
-// developer test screen that no game path opens; the mod opens it by writing that
-// byte from inside the play-state UI and will draw its own menu in that slot.
+// developer test screen that no game path opens; the mod opens it with the game's
+// toggleHudScreen from inside the play-state UI and will draw its own menu in that slot.
 // Screen 53 is left alone (Creative Mode uses it).
 enum { SCREEN_INGAME = 1, SCREEN_MOD = 52 };
 typedef void (*PlayUiFn)(void*, void*, void*, void*);
+typedef uint8_t (*ToggleScreenFn)(void* uiCtx, uint8_t screen);
+static ToggleScreenFn g_toggleScreen = nullptr;
 static PlayUiFn g_playUiOrig = nullptr, g_modScreenOrig = nullptr;
 static uint8_t** g_uiCtxGlobal = nullptr;          // the UI context pointer (rip global)
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
@@ -2439,9 +2445,9 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
     if (scr) {
         static int last = -1;
         LONG req = InterlockedExchange(&g_menuReq, 0);
-        if (req == 1 && *scr == SCREEN_INGAME) { *scr = SCREEN_MOD; LOG(.str("menu: open")); }
+        if (req == 1 && *scr == SCREEN_INGAME) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD); LOG(.str("menu: open")); }
         else if (req == 1) LOG(.str("menu: not opened, screen ").i(*scr).str(" is up"));
-        else if (req == 2 && *scr == SCREEN_MOD) { *scr = SCREEN_INGAME; LOG(.str("menu: close")); }
+        else if (req == 2 && *scr == SCREEN_MOD) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_INGAME); LOG(.str("menu: close")); }
         if (*scr != last) { LOG(.str("hud screen ").i(last).str(" -> ").i(*scr)); last = *scr; }
         g_menuOpen = *scr == SCREEN_MOD;
     }
@@ -2459,7 +2465,8 @@ static void install_menu() {
     uint8_t* pu = find_unique("PlayUi", SIG_PLAY_UI);
     uint8_t* call = find_unique("PlayUiCall", SIG_PLAY_UI_CALL);
     uint8_t* disp = find_unique("ScreenDispatch", SIG_SCREEN_DISPATCH);
-    if (!pu || !call || !disp) { LOG(.str("menu: not available (UI code not found)")); return; }
+    g_toggleScreen = (ToggleScreenFn)find_unique("ToggleScreen", SIG_TOGGLE_SCREEN);
+    if (!pu || !call || !disp || !g_toggleScreen) { LOG(.str("menu: not available (UI code not found)")); return; }
     uint8_t* site = call + 2;
     uint8_t* je = disp + 10;                                     // 0F 84 rel32 -> E8 <screen 52>
     uint8_t* s52 = je + 6 + *(int32_t*)(je + 2);

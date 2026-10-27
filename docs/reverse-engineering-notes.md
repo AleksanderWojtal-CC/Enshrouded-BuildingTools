@@ -443,3 +443,12 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   style = [ui ctx]+0xc8 (bundle) + 0x10a0c; endText b15a60; endBox a336a0; endWindow a330b0.
 - StringView = {const char*, size_t}. TextString = {const char*, size_t, uint64 hash},
   hash = FNV-1a 64 of the text (named boxes use the same hash of their name).
+- Test (dev1, writing the byte directly): screen 52 showed the test screen (red corner
+  squares, check mark, "dies ist ein test"), the HUD disappeared, Home closed it, Esc went
+  52 -> 2 (SystemMenu). No cursor and the character still walked: input/cursor are set
+  on the screen transition, not per frame.
+- `d60260` toggleHudScreen(ui ctx, screen): queues message type 1 on [ctx+0xd0]+0x33cc0
+  and logs "[GameUi] toggleHudScreen to %k"; used by the game to open/close screens
+  (85 callers). dev2 opens/closes screen 52 through it.
+- `1205610` isMenuScreen(screen) (jump table): true for every menu-like screen, including
+  TechGallery and YcPlayground. `12056b0` is true for screens 29..37 (multi-tool menus).
