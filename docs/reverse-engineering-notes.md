@@ -452,3 +452,14 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   (85 callers). dev2 opens/closes screen 52 through it.
 - `1205610` isMenuScreen(screen) (jump table): true for every menu-like screen, including
   TechGallery and YcPlayground. `12056b0` is true for screens 29..37 (multi-tool menus).
+- Test (dev2, toggleHudScreen): cursor shows on screen 52 (isMenuScreen is true for it),
+  but camera and walking still work and Esc goes to the system menu.
+- Window input: beginWindow stores layer at window+0x7c, inputMask at +0x74, flags at
+  +0x78. Flags bit 0 is modal: the UI system skips input for windows on lower layers
+  while a modal window on a higher layer covers the same input mask (`118b8a0`,
+  `11be190`). Every real menu opens its window with fullscreen=1 and flags=1 (layer
+  9 for YcPlayground, 0x16 or 0xb for others); TechGallery uses fullscreen=0, layer 0,
+  flags 0, so the world keeps the input. dev3 redirects the test screen's beginWindow call
+  (screen fn + 0x73) to open it fullscreen, layer 9, modal.
+- Other screen predicates: `1205720` true for 2, 3, 38, 39, 40, 49, 50; `1205830` true for
+  29, 31-33, 36, 37; `1205690` true for 21, 22, 41.

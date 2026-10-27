@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev2"
+#define MOD_VERSION "0.18.0-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -267,6 +267,9 @@ static const char* SIG_SCREEN_DISPATCH = "48 8B 45 80 0F B6 08 83 E9 34 0F 84 ??
 // %k" in the game log); the game then switches input and cursor like for its own menus.
 static const char* SIG_TOGGLE_SCREEN =
     "48 89 5C 24 10 48 89 74 24 18 57 48 81 EC 80 00 00 00 48 8B 81 D0 00 00 00 0F B6 F2 48 8B 98 C0 3C 03 00";
+// beginWindow(window, name, fullscreen, layer, inputMask, flags). Flags bit 0 makes the
+// window modal: windows on lower layers (the game world among them) get no input.
+static const char* SIG_BEGIN_WINDOW = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 50 48 8B 05 ?? ?? ?? ?? 45 8B D9";
 static const char* SIG_HUD_UPDATE = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 88 FE FF FF 48 81 EC 78 02 00 00";
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
 static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 88 B3 D9 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 88 2B 01 00 0F 29 44 24 20 E8";
@@ -2448,13 +2451,26 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
         if (req == 1 && *scr == SCREEN_INGAME) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD); LOG(.str("menu: open")); }
         else if (req == 1) LOG(.str("menu: not opened, screen ").i(*scr).str(" is up"));
         else if (req == 2 && *scr == SCREEN_MOD) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_INGAME); LOG(.str("menu: close")); }
-        if (*scr != last) { LOG(.str("hud screen ").i(last).str(" -> ").i(*scr)); last = *scr; }
+        if (*scr != last) {
+            LOG(.str("hud screen ").i(last).str(" -> ").i(*scr));
+            // Esc on our screen: the game opens its system menu; go back to the game instead.
+            if (last == SCREEN_MOD && *scr == 2) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_INGAME); LOG(.str("menu: esc, back to game")); }
+            last = *scr;
+        }
         g_menuOpen = *scr == SCREEN_MOD;
     }
     g_playUiOrig(a, b, c, d);
 }
 
-// Screen 52. Stage 1 still runs the game's own test screen to prove the slot works.
+// Screen 52. Stage 1 still runs the game's own test screen to prove the slot works,
+// but opens its window like the game's menus do (fullscreen, layer 9, modal) so the
+// world stops taking mouse and keys.
+typedef void* (*BeginWindowFn)(void* win, const void* name, uint8_t fullscreen, int32_t layer, int32_t inputMask, int32_t flags);
+static BeginWindowFn g_beginWindow = nullptr;
+static void* mod_begin_window(void* win, const void* name, uint8_t, int32_t, int32_t inputMask, int32_t) {
+    return g_beginWindow(win, name, 1, 9, inputMask, 1);
+}
+
 static void mod_screen_hook(void* a, void* b, void* c, void* d) {
     static LONG logged = 0;
     if (!InterlockedExchange(&logged, 1)) LOG(.str("menu: screen drawn"));
@@ -2476,6 +2492,12 @@ static void install_menu() {
     g_uiCtxGlobal = (uint8_t**)(pu + 0x12 + 7 + *(int32_t*)(pu + 0x12 + 3));
     g_modScreenOrig = (PlayUiFn)(s52 + 5 + *(int32_t*)(s52 + 1));
     g_playUiOrig = (PlayUiFn)pu;
+    uint8_t* bw = (uint8_t*)g_modScreenOrig + 0x73;               // its beginWindow call
+    g_beginWindow = (BeginWindowFn)find_unique("BeginWindow", SIG_BEGIN_WINDOW);
+    if (!g_beginWindow || bw[0] != 0xE8 || bw + 5 + *(int32_t*)(bw + 1) != (uint8_t*)g_beginWindow ||
+        hook_calls((uint8_t*)g_beginWindow, (void*)&mod_begin_window, &bw, 1) != 1) {
+        LOG(.str("menu: not available (window call not found)")); g_playUiOrig = nullptr; return;
+    }
     if (hook_calls((uint8_t*)g_modScreenOrig, (void*)&mod_screen_hook, &s52, 1) != 1 ||
         hook_calls(pu, (void*)&play_ui_hook, &site, 1) != 1) {
         LOG(.str("menu: not available (hook failed)")); g_playUiOrig = nullptr; return;
@@ -2484,7 +2506,7 @@ static void install_menu() {
 }
 
 static DWORD WINAPI input_thread(void*) {
-    bool prev[8] = {}, prevOff = false, prevMenu = false;
+    bool prev[8] = {}, prevOff = false, prevMenu = false, prevEsc = false;
     for (;;) {
         Sleep(15);
         if (!g_active) continue;
@@ -2510,6 +2532,9 @@ static DWORD WINAPI input_thread(void*) {
             bool down = focus && g_playUiOrig && g_cfg.keyMenu > 0 && (GetAsyncKeyState(g_cfg.keyMenu) & 0x8000);
             if (down && !prevMenu) { g_menuReq = g_menuOpen ? 2 : 1; LOG(.str("key: menu")); }
             prevMenu = down;
+            bool esc = focus && g_menuOpen && (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
+            if (esc && !prevEsc) { g_menuReq = 2; LOG(.str("key: esc in menu")); }
+            prevEsc = esc;
         }
         int keys[8] = { g_cfg.keyStructure, g_cfg.keyReplace, g_cfg.keyCancel, g_cfg.keyStyle, g_cfg.keyHover,
                         g_hover ? g_cfg.keyFarther : 0, g_hover ? g_cfg.keyCloser : 0, g_cfg.keyFill };
