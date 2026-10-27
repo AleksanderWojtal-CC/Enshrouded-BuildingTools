@@ -30,6 +30,7 @@
     X(S_BUILD_CORNER, "msg.build_corner", "Build corner {0} of {1} set") \
     X(S_REPLACE_CORNER, "msg.replace_corner", "Replace corner {0} of {1} set") \
     X(S_REMOVE_CORNER, "msg.remove_corner", "Remove corner {0} of {1} set") \
+    X(S_REMOVE_PIECE, "msg.remove_piece", "Building pieces are removed one at a time (Area remove works on blocks)") \
     X(S_TOO_BIG, "msg.too_big", "Too big: {0} shapes (max {1})") \
     X(S_PLACED, "msg.placed", "Placed {0} shapes") \
     X(S_PLACED_PARTIAL, "msg.placed_partial", "Placed {0} of {1} shapes (not enough material)") \

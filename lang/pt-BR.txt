@@ -31,6 +31,7 @@ msg.corners_cleared = Cantos limpos
 msg.build_corner = Construir: canto {0} de {1} definido
 msg.replace_corner = Substituir: canto {0} de {1} definido
 msg.remove_corner = Remover: canto {0} de {1} definido
+msg.remove_piece = Peças de construção são removidas uma por vez (remover área funciona em blocos)
 msg.too_big = Grande demais: {0} formas (máx. {1})
 msg.placed = Formas colocadas: {0}
 msg.placed_partial = Formas colocadas: {0} de {1} (material insuficiente)

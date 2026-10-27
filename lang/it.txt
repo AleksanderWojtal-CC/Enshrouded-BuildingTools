@@ -31,6 +31,7 @@ msg.corners_cleared = Angoli cancellati
 msg.build_corner = Costruisci: angolo {0} di {1} impostato
 msg.replace_corner = Sostituisci: angolo {0} di {1} impostato
 msg.remove_corner = Rimuovi: angolo {0} di {1} impostato
+msg.remove_piece = I pezzi da costruzione si rimuovono uno alla volta (la rimozione ad area agisce sui blocchi)
 msg.too_big = Troppo grande: {0} forme (max {1})
 msg.placed = Forme piazzate: {0}
 msg.placed_partial = Forme piazzate: {0} di {1} (materiale insufficiente)

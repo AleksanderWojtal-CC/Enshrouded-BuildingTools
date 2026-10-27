@@ -38,6 +38,7 @@ terrain while a terrain material is selected).
 [b]Area mode[/b] (F6)
 Click two opposite corners: the selected shape is repeated over a line, floor, wall
 or box. Left click builds (or replaces with Replace on), right click removes.
+Remove works on blocks; building pieces such as foundations are removed one at a time.
 Fill (F11): solid, hollow room (walls + floor + ceiling) or walls only.
 Floating text below the crosshair shows the live size and block count before you confirm.
 

@@ -31,6 +31,7 @@ msg.corners_cleared = Ecken gelöscht
 msg.build_corner = Bauen: Ecke {0} von {1} gesetzt
 msg.replace_corner = Ersetzen: Ecke {0} von {1} gesetzt
 msg.remove_corner = Entfernen: Ecke {0} von {1} gesetzt
+msg.remove_piece = Bauteile werden einzeln entfernt (Bereich-Entfernen wirkt auf Blöcke)
 msg.too_big = Zu groß: {0} Formen (max. {1})
 msg.placed = {0} Formen platziert
 msg.placed_partial = {0} von {1} Formen platziert (nicht genug Material)

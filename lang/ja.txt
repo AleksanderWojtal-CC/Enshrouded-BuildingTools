@@ -31,6 +31,7 @@ msg.corners_cleared = 角をクリアしました
 msg.build_corner = 建築：角 {0}/{1} を設定
 msg.replace_corner = 置き換え：角 {0}/{1} を設定
 msg.remove_corner = 撤去：角 {0}/{1} を設定
+msg.remove_piece = 建築パーツは1つずつ撤去されます（範囲撤去はブロックのみ）
 msg.too_big = 大きすぎます：{0} 個（最大 {1}）
 msg.placed = {0} 個を配置しました
 msg.placed_partial = {1} 個中 {0} 個を配置しました（素材不足）

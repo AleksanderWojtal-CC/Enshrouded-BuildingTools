@@ -31,6 +31,7 @@ msg.corners_cleared = 모서리 지움
 msg.build_corner = 건축: 모서리 {0}/{1} 설정
 msg.replace_corner = 교체: 모서리 {0}/{1} 설정
 msg.remove_corner = 제거: 모서리 {0}/{1} 설정
+msg.remove_piece = 건축 부품은 하나씩 제거됩니다 (영역 제거는 블록에만 적용)
 msg.too_big = 너무 큽니다: {0}개 (최대 {1})
 msg.placed = {0}개 배치함
 msg.placed_partial = {1}개 중 {0}개 배치함 (재료 부족)

@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.20.0"
+#define MOD_VERSION "0.20.1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -2297,7 +2297,16 @@ static uint8_t connected_remove(CostList* list, void* ctx, void* state, Aabb* bx
 static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* xfp, void* filter, uint8_t check) {
     if (g_ownRemoveTid == GetCurrentThreadId() || !is_server_ctx(ctx) || !box || !xfp)
         return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
-    if (g_mode == MODE_PREFAB && g_replace && g_replaceStyle == STYLE_CONNECTED && list) {
+    const bool connected = g_mode == MODE_PREFAB && g_replace && g_replaceStyle == STYLE_CONNECTED;
+    if (filter && (connected || g_mode == MODE_AREA)) {
+        // A building piece (foundation, stairs...) is an object, dismantled by entity: the
+        // dry run gets the entity as filter and the commit is 488670, never RemoveCommit.
+        // Area and connected removal only work on blocks, so the piece goes on its own.
+        LOG(.str("remove click on a building piece: removed on its own"));
+        flash(T(S_REMOVE_PIECE));
+        return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
+    }
+    if (connected && list) {
         EnterCriticalSection(&g_stateLock);
         uint8_t r = connected_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
         LeaveCriticalSection(&g_stateLock);

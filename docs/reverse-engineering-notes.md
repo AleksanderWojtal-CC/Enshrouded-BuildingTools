@@ -576,3 +576,15 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
 - Fonts: separate font groups `enshrouded_Japanese`, `_Korean`, `_SimplifiedChinese`,
   `_TraditionalChinese` (`UiFontLanguageGroupResource`). TextStrings are taken as UTF-8
   (checked with Polish in 0.20.0-dev1).
+
+## v0.20.1: player report (area remove on foundations)
+- The dismantle system (2d3c80) has two paths. Cursor target entity (cursor +0x78) null:
+  blocks, RemoveShape at 2d465a with filter 0, PayCost 2d46b0, RemoveCommit 487af0.
+  Entity set (placed building pieces such as foundations, 4x2x4 m): RemoveShape at
+  2d4b04 with the entity id as filter (6th arg) and check 1, PayCost 2d4b5a, then
+  488670(ctx, info, objectId), which removes the entity by id (9ad6f0 looks it up in a
+  hash set) and never reaches RemoveCommit. These are the only two RemoveShape callers.
+- So Area remove priced the area at the corner 2 click but the game removed only the
+  clicked piece, and every corner click removed its piece (no commit to suppress).
+  v0.20.1: RemoveShape with a non-null filter in Area mode or connected delete runs
+  vanilla (one piece) with a banner, corners kept.

@@ -31,6 +31,7 @@ msg.corners_cleared = Coins effacés
 msg.build_corner = Construire : coin {0} sur {1} placé
 msg.replace_corner = Remplacer : coin {0} sur {1} placé
 msg.remove_corner = Retirer : coin {0} sur {1} placé
+msg.remove_piece = Les pièces de construction se retirent une par une (le retrait de zone agit sur les blocs)
 msg.too_big = Trop grand : {0} formes (max {1})
 msg.placed = Formes placées : {0}
 msg.placed_partial = Formes placées : {0} sur {1} (pas assez de matériau)

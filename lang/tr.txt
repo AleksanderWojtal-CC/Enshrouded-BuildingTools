@@ -31,6 +31,7 @@ msg.corners_cleared = Köşeler temizlendi
 msg.build_corner = İnşa: köşe {0}/{1} ayarlandı
 msg.replace_corner = Değiştirme: köşe {0}/{1} ayarlandı
 msg.remove_corner = Kaldırma: köşe {0}/{1} ayarlandı
+msg.remove_piece = Yapı parçaları tek tek kaldırılır (alan kaldırma bloklarda çalışır)
 msg.too_big = Çok büyük: {0} şekil (en fazla {1})
 msg.placed = Yerleştirilen şekil: {0}
 msg.placed_partial = Yerleştirilen şekil: {0}/{1} (yeterli malzeme yok)
