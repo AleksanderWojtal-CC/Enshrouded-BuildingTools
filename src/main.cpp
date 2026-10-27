@@ -1099,18 +1099,30 @@ static uint64_t deps_hook(void* sys, uint8_t* out, uint32_t size) {
 // ---- what the hammer holds
 // The shape state the building functions get is the selected ItemInfo; its
 // EquipmentSetup (+0x104) holds voxelData.isBuildingVoxel (+0x440), voxelObject
-// (+0x458) and terrainVoxelObject (+0x468). Building pieces (foundations, stairs...)
-// are voxel objects that are not building voxels; the dismantle's block path takes
-// terrain or building-voxel shapes only.
-enum { ITEM_OTHER = 0, ITEM_PIECE = 1, ITEM_SHAPE = 2, ITEM_TERRAIN = 3 };
+// (+0x458), terrainVoxelObject (+0x468) and voxelBlueprintMaterialPool (+0x4a4).
+// Small shapes (first row of the shape picker) are building voxels; bigger shapes and
+// building pieces (foundations, stairs...) are voxel objects placed as one entity.
+// Bigger shapes take their material from a material pool, pieces have their own.
+// The dismantle's block path takes terrain or building-voxel shapes only.
+enum { ITEM_OTHER = 0, ITEM_PIECE = 1, ITEM_SHAPE = 2, ITEM_TERRAIN = 3, ITEM_BIG_SHAPE = 4 };
 static int item_kind(const void* item) {
     const uint8_t* it = (const uint8_t*)item;
-    if (!it || !readable(it + 0x440, 0x38)) return ITEM_OTHER;
+    if (!it || !readable(it + 0x440, 0x78)) return ITEM_OTHER;
     const bool vobj = (*(const uint64_t*)(it + 0x458) | *(const uint64_t*)(it + 0x460)) != 0;
     const bool terr = (*(const uint64_t*)(it + 0x468) | *(const uint64_t*)(it + 0x470)) != 0;
+    const bool pool = (*(const uint64_t*)(it + 0x4a4) | *(const uint64_t*)(it + 0x4ac)) != 0;
     if (terr) return ITEM_TERRAIN;
-    if (vobj) return it[0x440] ? ITEM_SHAPE : ITEM_PIECE;
+    if (vobj) return it[0x440] ? ITEM_SHAPE : pool ? ITEM_BIG_SHAPE : ITEM_PIECE;
     return ITEM_OTHER;
+}
+static void log_item(const char* what, const void* item) {
+    const uint8_t* it = (const uint8_t*)item;
+    if (!it || !readable(it, 0x4b8)) { LOG(.str(what).str(": item not readable")); return; }
+    static const char* kinds[] = { "other", "piece", "small shape", "terrain", "big shape" };
+    LOG(.str(what).str(": item ").x(*(const uint32_t*)it).str(" kind ").str(kinds[item_kind(it)])
+        .str(" building voxel ").i(it[0x440]).str(" object ").x(*(const uint64_t*)(it + 0x458))
+        .str(" blueprint ").x(*(const uint64_t*)(it + 0x494)).str(" pool ").x(*(const uint64_t*)(it + 0x4a4))
+        .str(" override ").i((int8_t)it[0x4b4]));
 }
 // Small shapes (the first row of the shape picker, one 0.5 m block) are the ones the
 // fill bucket works with; bigger shapes replace and delete as a whole.
@@ -1149,6 +1161,7 @@ extern "C" uint64_t bt_piece_check(void* a, void* b, uint64_t c, void* d, uint8_
     if (g_mode != MODE_AREA && !connected) return r;
     // a piece in the hammer, or a big shape with the fill bucket: the game's own removal
     const int kind = item_kind(item);
+    log_item("dismantle", item);
     if (kind != ITEM_SHAPE && kind != ITEM_TERRAIN) return r;
     if (g_mode != MODE_AREA && !small_item(item)) return r;
     uint8_t* st = frame && readable(frame + 0x1f8, 8) ? *(uint8_t**)(frame + 0x1f8) : nullptr;
@@ -2500,6 +2513,7 @@ static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
 
 static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, CursorXf* xf) {
     const bool replace = g_replace != 0 && item_kind(state) != ITEM_PIECE;     // pieces place as in the game
+    if (g_replace) log_item("click", state);
     const LONG mode = g_mode;
     const bool modActive = replace || mode == MODE_AREA;
     if (!modActive) return g_placeOrig(list, ctx, state, pdata, xf);
