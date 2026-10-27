@@ -16,7 +16,10 @@
 #
 # mode byte: 0 = vanilla, 1 = replace overlap only, 2 = replace full shape.
 # allow[m] = 1 for materials Replace may repaint (removable at that spot).
-# vols[m] counts repainted voxels per old material (refund).
+# vols[m] tallies the repainted old material (refund): building voxels 1 each,
+# terrain voxels their density (255 = a full voxel).
+# Registers also used: r8 = voxel data (2 bytes per voxel: material, density),
+# rdx = copy of rcx (scratch here, restored), xmm2 = 255.0, xmm0 free.
 #
 # The blob is copied next to the game image at runtime (rip-relative data and the
 # jump slots move with it).
@@ -65,7 +68,44 @@ bt_cave_start:
     # i.e. an empty voxel.) The terrain path sees the old building voxel as
     # density 0, so it always writes.
     jmp qword ptr [rip + bt_cave_cont]
-3:  # air or terrain: overlap only leaves it, full shape builds it as usual
+3:  # air or terrain
+    test r11b, r11b
+    jz 6f                                            # air
+    lea rax, [rip + bt_cave_allow]
+    cmp byte ptr [rax + r11], 0
+    je 6f                                            # not removable here: as vanilla
+    cmp r11b, byte ptr [r10 + 0xa1]
+    je 6f                                            # already the new material
+    # Existing terrain voxel: repaint it. rdx is a copy of the voxel index (the
+    # density path reads it), so it serves as scratch and is restored after.
+    movzx edx, byte ptr [r8 + rcx*2 + 1]             # its density
+    test dl, dl
+    jz 8f
+    inc dword ptr [rip + bt_cave_hits + 8]           # hits[2]: terrain voxels repainted (log only)
+    lea rax, [rip + bt_cave_vols]
+    lock add dword ptr [rax + r11*4], edx            # refund tally in density units (255 = full)
+    cmp byte ptr [r10 + 0xa0], 0
+    jne 4f
+    # new building material: the block path writes it (density byte 0, volume += 1)
+    mov edx, ecx
+    jmp qword ptr [rip + bt_cave_cont]
+4:  # new terrain material: same density, new material, priced by that density
+    cvtsi2ss xmm0, edx
+    divss xmm0, xmm2                                 # xmm2 = 255.0 in the whole blit
+    mov rax, qword ptr [r10 + 0x38]
+    addss xmm0, dword ptr [rax]
+    movss dword ptr [rax], xmm0
+    mov edx, ecx
+    cmp byte ptr [r10 + 0x30], 0
+    jne 7f                                           # count only (dry run)
+    movzx eax, byte ptr [r10 + 0xa1]
+    mov byte ptr [r8 + rcx*2], al
+7:  # full shape then raises the density to the shape's, as the game's terrain placement
+    cmp byte ptr [rip + bt_cave_mode], 1
+    je 9f
+    jmp 5b
+8:  mov edx, ecx
+6:  # air, protected terrain or the same material: overlap leaves it, full builds as usual
     cmp byte ptr [rip + bt_cave_mode], 1
     je 9f
     jmp 5b
@@ -76,7 +116,7 @@ bt_cave_cont:  .quad 0
 bt_cave_skip:  .quad 0
 bt_cave_mode:  .byte 0
     .p2align 2
-bt_cave_hits:  .long 0, 0
+bt_cave_hits:  .long 0, 0, 0
 bt_cave_allow: .space 256
     .p2align 2
 bt_cave_vols:  .space 256 * 4

@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.19.0-dev1"
+#define MOD_VERSION "0.19.0-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1492,7 +1492,7 @@ static void pend_begin(void* ctx, const CursorXf& tmpl, bool replace, uint32_t s
     g_pend.style = g_replaceStyle == STYLE_CONNECTED ? STYLE_OVERLAP : g_replaceStyle;   // cave mode
     memset(g_allow, 0, sizeof(g_allow));
     if (g_caveAllow) memset(g_caveAllow, 0, 256);
-    if (g_caveHits) { g_caveHits[0] = 0; g_caveHits[1] = 0; }
+    if (g_caveHits) { g_caveHits[0] = 0; g_caveHits[1] = 0; g_caveHits[2] = 0; }
     for (int k = 0; k < 4; k++) g_pend.rot[k] = tmpl.rot[k];
 }
 static void pend_add(const int64_t* pos) {
@@ -1547,12 +1547,14 @@ static bool price_shape(CostList* list, void* ctx, void* state, void* pdata, Cur
 
 static void refund_reset() { memset(g_caveVols, 0, 256 * 4); memset(g_volPrev, 0, sizeof(g_volPrev)); g_volLogN = 0; g_volLogFull = false; }
 
-// The game's refund builder: appends refund entries for per-material voxel counts
-// (1.0 per voxel) to `list`. Returns the total volume (0 = nothing built).
+// The game's refund builder: appends refund entries for per-material volumes to `list`
+// (building: 1.0 per voxel; terrain: density / 255, as the game's removal measures it).
+// `cnt` holds the cave's tally: building voxels, terrain density sums.
+// Returns the total volume (0 = nothing built).
 static float refund_entries(CostList* list, void* ctx, const uint32_t* cnt) {
     alignas(16) float vols[256]; float total = 0.f;
     vols[0] = 0.f;
-    for (int m = 1; m < 256; m++) { vols[m] = (float)cnt[m]; total += vols[m]; }
+    for (int m = 1; m < 256; m++) { vols[m] = m < 0x80 ? (float)cnt[m] / 255.f : (float)cnt[m]; total += vols[m]; }
     if (total <= 0.f || !g_refundBuildOrig) return 0.f;
     VolList vl = { vols, 0x100 };
     void** lootSlot = (void**)((uint8_t*)ctx + 0x40);
@@ -1783,7 +1785,7 @@ static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdat
         step[a] = (int64_t)((double)(int64_t)(sz * 16.0 + 0.5) * (core::kFix / 16.0));
     }
     if (step[0] <= 0 || step[1] <= 0 || step[2] <= 0) return 0;
-    // The clicked material: the building material with the most volume in the first cell,
+    // The clicked material: the material (building or terrain) with the most volume in the first cell,
     // leaving out the material being placed. The cell is shape-sized, so with a big shape
     // it often also holds blocks already repainted; those must not win the vote.
     CursorXf xf = start;
@@ -1791,12 +1793,12 @@ static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdat
     price_removal(list, ctx, state, &xf);
     const int mine = pdata ? ((uint8_t*)pdata)[0x454] : 0;           // the material being placed
     int target = 0; float best = 0.f;
-    for (int m = 0x80; m < 0x100; m++) if (m != mine && g_remVols[m] > best) { best = g_remVols[m]; target = m; }
+    for (int m = 1; m < 0x100; m++) if (m != mine && g_remVols[m] > best) { best = g_remVols[m]; target = m; }
     LOG(.str("connected replace: clicked material ").x(target).str(" volume ").f(best).str(", new material ").x(mine)
-        .str(mine >= 0x80 ? " volume " : "").f(mine >= 0x80 ? g_remVols[mine] : 0.f));
+        .str(" volume ").f(mine > 0 ? g_remVols[mine] : 0.f));
     if (!target) {
-        bool own = mine >= 0x80 && g_remVols[mine] > 0.f;
-        flash(own ? "Connected replace: that is already your material" : "Connected replace: no building block there");
+        bool own = mine > 0 && g_remVols[mine] > 0.f;
+        flash(own ? "Connected replace: that is already your material" : "Connected replace: nothing to replace there");
         beep(MB_ICONHAND); return 0;
     }
     const int limit = g_cfg.fillLimit;
@@ -2219,7 +2221,7 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
         refund_reset();
         r = price_shape(list, ctx, state, pdata, &target, true) ? 1 : 0;
         { int na = 0; for (int m = 1; m < 0x100; m++) na += g_allow[m];
-          LOG(.str("  pricing blit: voxels ").u(g_caveHits[0]).str(" solid ").u(g_caveHits[1])
+          LOG(.str("  pricing blit: voxels ").u(g_caveHits[0]).str(" solid ").u(g_caveHits[1]).str(" terrain ").u(g_caveHits[2])
               .str(" removable volume ").f(g_removedVolume).str(" materials allowed ").i(na)); }
         if (r) refund_build(list, ctx);
         if (!r) { flash("Nothing to replace there"); g_pend.n = 0; }
