@@ -16,7 +16,12 @@ changelog on Nexus Mods, so keep it short and written for players.
   leave it alone (Area mode still repeats it).
 - **The fill bucket works with the small shapes** (the first row of the shape picker).
   With a bigger shape selected, connected replace repaints one whole shape and connected
-  delete removes one whole shape, as the full-shape style does.
+  delete removes one whole shape, as the full-shape style does. Replace with a bigger
+  shape repaints the part the new shape covers.
+- Fix: the mod's rows in the building box no longer disappear while the hammer aims at
+  the sky.
+- A one-shape Replace you can't pay for now says "Not enough material" instead of doing
+  nothing.
 
 ## 0.20.0
 
