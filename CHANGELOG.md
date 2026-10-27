@@ -3,6 +3,19 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.18.0
+
+- New: **Building Tools menu in the game's own UI.** Press Home (also while holding the
+  hammer) for a full-screen menu that looks and works like the game's menus: blurred
+  world, the game's tab bar (Q / E), mouse cursor, and Esc to close. The character and
+  camera stay still while it is open.
+- **Keys tab:** click a key, then press the new one. Shift, Ctrl and Alt combinations
+  work (for example Shift+K). Esc cancels, Delete clears. Saved to BuildingTools.ini at
+  once; a key taken from another action is removed there.
+- **Options tab:** mode, Replace, replace style, area fill and free placement, as rows
+  like the game's settings. The F-keys keep working.
+- The menu key itself can be changed in the Keys tab or with `Menu=` in the ini.
+
 ## 0.17.4
 
 - Fix: Replace often said "could not read the aimed block, try again", above all while
