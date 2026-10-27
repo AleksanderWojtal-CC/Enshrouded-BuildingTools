@@ -79,5 +79,10 @@ and Creative Mode's to CreativeModeLoader.dll, and create dinput8-chain.ini:
 CreativeMode=CreativeModeLoader.dll
 BuildingTools=BuildingTools.dll[/code]
 
-Source code and build instructions: <GitHub URL>
+[b]Found a bug?[/b]
+Please report it here, with your BuildingTools.log attached:
+[url=https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools/issues/new?template=bug_report.yml]Bug report form[/url]
+Ideas are welcome too: [url=https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools/issues/new?template=feature_request.yml]Idea form[/url]
+
+Source code and build instructions: https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools
 ```

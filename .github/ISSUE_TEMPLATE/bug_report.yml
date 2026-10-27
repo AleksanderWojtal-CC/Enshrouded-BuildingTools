@@ -1,0 +1,78 @@
+name: Bug report
+description: Something in Building Tools does not work as it should
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The log files are the most useful part:
+        they are in the game folder, next to `enshrouded.exe`
+        (Steam: right click Enshrouded → Manage → Browse local files).
+  - type: input
+    id: version
+    attributes:
+      label: Mod version
+      description: Shown in the banner "Building Tools <version> ready" when the game starts.
+      placeholder: "0.17.3"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can I make it happen?
+      description: The steps, as exact as you can. Which tool and mode (Replace, Area mode, free placement...), which shape and material, where you aimed.
+      placeholder: |
+        1. Turn on Area mode (F6), fill: hollow room (F11)
+        2. Pick a 2 m stone block
+        3. Click two corners on a slope
+        4. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does it happen?
+      options:
+        - Every time
+        - Sometimes
+        - Happened once
+    validations:
+      required: true
+  - type: checkboxes
+    id: options
+    attributes:
+      label: Options and other mods
+      description: Tick what applies.
+      options:
+        - label: "CreativeBuilding=1 is on"
+        - label: "GlobalMagicChests=1 is on"
+        - label: "I use other mods with a dinput8.dll (Creative Mode, XHL) via dinput8-chain.ini"
+        - label: "It still happens after pressing F5 twice (mod off and on)"
+  - type: textarea
+    id: other-mods
+    attributes:
+      label: Other mods
+      description: Any other mods you have installed.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log files
+      description: |
+        Drag `BuildingTools.log` (and `BuildingTools.prev.log` if the problem was in the
+        previous session) into this box. If you still have it, add `BuildingTools.ini` too.
+        Please do this right after the problem happens, before you start the game again.
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or video
+      description: Optional, but very helpful for targeting or placement problems.
