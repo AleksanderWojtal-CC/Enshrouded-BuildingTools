@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev4"
+#define MOD_VERSION "0.18.0-dev5"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -287,6 +287,11 @@ static const char* SIG_UI_WIDTH        = "0F 57 C0 C7 81 90 00 00 00 00 00 00 00
 static const char* SIG_UI_FANCY_BOX    = "48 8B C4 55 41 56 48 8D A8 B8 FE FF FF 48 81 EC 38 02 00 00 48 89 58 20";
 static const char* SIG_UI_BEGIN_TEXT   = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 41 56 48 83 EC 50 48 8B DA 41 0F B6 F9";
 static const char* SIG_UI_END_TEXT     = "40 55 56 57 48 8D 6C 24 B9 48 81 EC F0 00 00 00 0F 29 BC 24 B0 00 00 00";
+// settingOption(params, u8* value): a settings row with arrows, as in the game's options.
+// Its start is not unique (an identical copy exists), so it is found by a call: E8 at +7.
+static const char* SIG_UI_SETTING_OPTION_CALL = "48 8D 8D 20 04 00 00 E8 ?? ?? ?? ?? 0F B6 8D B0 66 00 00 44 0A E0 8B C1";
+// settingHeader(TextString* title, float gap): section title of the game's options.
+static const char* SIG_UI_SETTING_HEADER = "48 81 EC A8 01 00 00 48 83 79 08 00 0F 29 B4 24 90 01 00 00 0F 28 F1 0F 84 ?? ?? ?? ??";
 static const char* SIG_HUD_UPDATE = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 88 FE FF FF 48 81 EC 78 02 00 00";
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
 static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 88 B3 D9 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 88 2B 01 00 0F 29 44 24 20 E8";
@@ -2435,6 +2440,19 @@ static DWORD WINAPI wheel_thread(void*) {
 }
 
 // ------------------------------------------------------------------ hotkeys
+// ---- tool settings, changed by the hotkeys and by the in-game menu
+static void set_mode(LONG m) {
+    g_mode = m; g_corners = 0; g_cancelReq = 1;
+    LOG(.str("mode -> ").str(m == MODE_AREA ? "area" : "prefab"));
+}
+static void set_replace(LONG r) { g_replace = r; LOG(.str("replace -> ").i(r)); }
+static void set_replace_style(LONG st) {
+    g_replaceStyle = st;
+    LOG(.str("replace style -> ").str(st == STYLE_FULL ? "full" : st == STYLE_OVERLAP ? "overlap" : "connected"));
+}
+static void set_fill(LONG f) { g_fill = f; LOG(.str("fill -> ").i(f)); }
+static void set_hover(LONG h) { g_hover = h; g_cxLogged = 0; LOG(.str("free placement -> ").i(h)); }
+
 // ---- in-game menu (native game UI), stage 1 experiment
 // The play-state UI runs every frame on the UI thread and draws the screen named by
 // the HudScreenType byte at hud+0x1cd8 (1 = InGame). Screen 52 (TechGallery) is a
@@ -2504,6 +2522,8 @@ static struct {
     void (*fancyBox)(void*, const void*);
     void (*beginText)(void*, const UiTextString*, const void*, uintptr_t);
     void (*endText)(void*);
+    bool (*settingOption)(void*, uint8_t*);
+    void (*settingHeader)(const UiTextString*, float);
 } ui;
 enum { STYLE_TITLE = 0x11b94, STYLE_BODY = 0x10a0c };   // text styles in the UI bundle
 
@@ -2520,6 +2540,46 @@ static void ui_text(const char* t, int style) {
     ui.endText(text);
 }
 static void* ui_node(uint8_t* box) { return *(void**)(box + 8); }
+
+// settingOption parameters (0xc48 bytes): up to 64 entries of 0x30 {u32 value, TextString
+// label @+8}, entry count u8 @0xc00, row label @0xc08, description @0xc20, arrows @0xc3a,
+// interactive @0xc3c.
+static bool ui_option(const char* label, const char* const* names, int count, LONG cur, LONG* out) {
+    alignas(16) static uint8_t prm[0xc80];
+    memset(prm, 0, sizeof prm);
+    for (int k = 0; k < count; k++) {
+        uint8_t* e = prm + k * 0x30;
+        *(uint32_t*)e = (uint32_t)k;
+        *(UiTextString*)(e + 8) = ui_str(names[k]);
+    }
+    prm[0xc00] = (uint8_t)count;
+    *(UiTextString*)(prm + 0xc08) = ui_str(label);
+    *(UiTextString*)(prm + 0xc20) = ui_str("");
+    prm[0xc3a] = 1;
+    *(uint32_t*)(prm + 0xc3c) = 1;
+    uint8_t v = (uint8_t)cur;
+    if (!ui.settingOption(prm, &v) || v == cur || v >= count) return false;
+    *out = v;
+    return true;
+}
+
+// The hotkey settings as rows of the game's options. Changes apply at once.
+static void draw_tool_settings() {
+    static const char* const offOn[] = { "Off", "On" };
+    static const char* const modes[] = { "Prefab (vanilla)", "Area" };
+    static const char* const styles[] = { "Full shape", "Overlap only", "Connected (fill bucket)" };
+    static const LONG styleIds[] = { STYLE_FULL, STYLE_OVERLAP, STYLE_CONNECTED };
+    static const char* const fills[] = { "Solid", "Hollow room", "Walls only" };
+    LONG v;
+    UiTextString h = ui_str("Tools");
+    ui.settingHeader(&h, 0);
+    if (ui_option("Mode", modes, 2, g_mode, &v)) set_mode(v);
+    if (ui_option("Replace", offOn, 2, g_replace ? 1 : 0, &v)) set_replace(v);
+    int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
+    if (ui_option("Replace style", styles, 3, st, &v)) set_replace_style(styleIds[v]);
+    if (ui_option("Area fill", fills, core::FILL_COUNT, g_fill, &v)) set_fill(v);
+    if (ui_option("Free placement", offOn, 2, g_hover ? 1 : 0, &v)) set_hover(v);
+}
 
 static void draw_mod_menu() {
     alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, fancy[0x100] = {};
@@ -2545,8 +2605,8 @@ static void draw_mod_menu() {
     ui.fancyBox(panel, fancy);
 
     ui_text("Building Tools", STYLE_TITLE);
-    ui_text("This is where the Building Tools menu will be: tools, options and keys.", STYLE_BODY);
-    ui_text("Version " MOD_VERSION ". Esc or Home closes it.", STYLE_BODY);
+    draw_tool_settings();
+    ui_text("Version " MOD_VERSION ". Esc or Home closes the menu.", STYLE_BODY);
 
     ui.endBox(panel);
     ui.endBox(root);
@@ -2583,10 +2643,13 @@ static void install_menu() {
         { (void**)&ui.setSelfAlign, "UiSelfAlign", SIG_UI_SELF_ALIGN },  { (void**)&ui.setLayout, "UiLayout", SIG_UI_LAYOUT },
         { (void**)&ui.setStretch, "UiStretch", SIG_UI_STRETCH },         { (void**)&ui.setWidth, "UiWidth", SIG_UI_WIDTH },
         { (void**)&ui.fancyBox, "UiFancyBox", SIG_UI_FANCY_BOX },        { (void**)&ui.beginText, "UiBeginText", SIG_UI_BEGIN_TEXT },
-        { (void**)&ui.endText, "UiEndText", SIG_UI_END_TEXT },
+        { (void**)&ui.endText, "UiEndText", SIG_UI_END_TEXT },        { (void**)&ui.settingHeader, "UiSettingHeader", SIG_UI_SETTING_HEADER },
     };
     bool all = g_beginWindow != nullptr;
     for (auto& f : need) all &= (*f.fn = find_unique(f.name, f.sig)) != nullptr;
+    if (uint8_t* oc = find_unique("UiSettingOptionCall", SIG_UI_SETTING_OPTION_CALL))
+        ui.settingOption = (bool (*)(void*, uint8_t*))(oc + 12 + *(int32_t*)(oc + 8));
+    all &= ui.settingOption != nullptr;
     if (!all) { LOG(.str("menu: not available (UI functions not found)")); g_playUiOrig = nullptr; return; }
     if (hook_calls((uint8_t*)g_modScreenOrig, (void*)&mod_screen_hook, &s52, 1) != 1 ||
         hook_calls(pu, (void*)&play_ui_hook, &site, 1) != 1) {
@@ -2633,29 +2696,24 @@ static DWORD WINAPI input_thread(void*) {
             if (down && !prev[k]) {
                 if (k == 0) {
                     LONG m = g_mode == MODE_PREFAB ? MODE_AREA : MODE_PREFAB;
-                    g_mode = m; g_corners = 0; g_cancelReq = 1;
+                    set_mode(m);
                     flash(m == MODE_AREA ? "Area mode" : "Prefab mode (vanilla)");
-                    LOG(.str("key: mode -> ").str(m == MODE_AREA ? "area" : "prefab"));
                 } else if (k == 1) {
-                    LONG r = !g_replace; g_replace = r;
+                    LONG r = !g_replace; set_replace(r);
                     flash(r ? "Replace ON" : "Replace OFF");
-                    LOG(.str("key: replace -> ").i(r));
                 } else if (k == 3) {
                     LONG st = g_replaceStyle == STYLE_FULL ? STYLE_OVERLAP : g_replaceStyle == STYLE_OVERLAP ? STYLE_CONNECTED : STYLE_FULL;
-                    g_replaceStyle = st;
+                    set_replace_style(st);
                     flash(st == STYLE_FULL ? "Replace style: full shape" : st == STYLE_OVERLAP ? "Replace style: overlap only"
                           : "Replace style: connected (fill bucket, Prefab mode)");
-                    LOG(.str("key: replace style -> ").str(st == STYLE_FULL ? "full" : st == STYLE_OVERLAP ? "overlap" : "connected"));
                 } else if (k == 7) {
-                    LONG f = (g_fill + 1) % core::FILL_COUNT; g_fill = f;
+                    LONG f = (g_fill + 1) % core::FILL_COUNT; set_fill(f);
                     flash(f == core::FILL_SOLID ? "Area fill: solid" : f == core::FILL_HOLLOW ? "Area fill: hollow room (walls, floor, ceiling)" : "Area fill: walls only");
-                    LOG(.str("key: fill -> ").i(f));
                 } else if (k == 5 || k == 6) {
                     hover_step(k == 5 ? 0.5f : -0.5f);
                 } else if (k == 4) {
-                    LONG h = !g_hover; g_hover = h; g_cxLogged = 0;
+                    LONG h = !g_hover; set_hover(h);
                     flash(h ? "Free placement ON (no surface snapping)" : "Free placement OFF");
-                    LOG(.str("key: free placement -> ").i(h));
                 } else {
                     g_cancelReq = 1; g_corners = 0;
                     flash("Corners cleared");

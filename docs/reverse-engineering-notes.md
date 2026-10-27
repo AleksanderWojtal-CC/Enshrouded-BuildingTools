@@ -472,3 +472,12 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   in the UI bundle ([ui ctx]+0xc8): +0x11b94 (title), +0x10a0c (body), +0x11bec, +0x10abc.
   Node field writes: layout u16 @+0x6e, selfAlignment @+0x6c, stretch @+0x90,
   padding @+0xa8. dev4 draws the mod's own panel this way.
+- Test (dev4): the panel draws with the game's frame and fonts; the root background
+  dimming did not show (to look at later).
+- settingOption (`ad0d70`, found by its call at `c44c59`; the function start has an
+  identical twin): params 0xc48 bytes. Entries of 0x30 {u32 value, TextString label @+8}
+  from 0, entry count u8 @0xc00 (max 64), row label TextString @0xc08, description
+  TextString @0xc20, dword 0x10000 @0xc38 (arrows byte @0xc3a), dword 1 @0xc3c
+  (interactive), byte 0 @0xc40. Returns true when the u8 value changed.
+- settingHeader (`c8c6e0`)(TextString* title, float gap). dev5 draws the tool settings
+  (mode, replace, style, fill, free placement) with these.
