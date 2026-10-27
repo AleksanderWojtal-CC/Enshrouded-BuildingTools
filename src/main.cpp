@@ -1452,10 +1452,12 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
     uint8_t r = g_payOrig(mode, list, consume);
     // A mod action the inventory cannot pay for is dropped by the game without a word
     // (nothing is built or replaced), so say why.
-    if (!r && consume && list && mode && mode[0] == 0 && g_actShapes > 1 && list == g_actList) {
+    const bool multi = g_actShapes > 1 && list == g_actList;
+    const bool oneReplace = !multi && list == g_refundList && g_refundN > 0;     // Replace, one shape
+    if (!r && consume && list && mode && mode[0] == 0 && (multi || oneReplace)) {
         uint64_t items = 0;
         for (uint64_t k = 0; k < list->count; k++) items += *(uint32_t*)(((CostEntry*)list->data)[k].b + 0x14);
-        Buf b; b.fmt(T(S_NOT_ENOUGH), num(g_actShapes).s, num((int64_t)items).s);
+        Buf b; b.fmt(T(S_NOT_ENOUGH), num(multi ? g_actShapes : 1).s, num((int64_t)items).s);
         flash(b.z()); beep(MB_ICONHAND);
         LOG(.str("charge refused: ").i(g_actShapes).str(" shapes, ").u(list->count).str(" cost entries, ").u(items).str(" items"));
     }
@@ -3462,7 +3464,9 @@ static bool make_binding(int code, uint8_t* b) {
     return true;
 }
 
+static volatile DWORD g_gameRowTick = 0;      // last time the game drew its own building box rows
 static void hud_row_hook(uint8_t action, void* params) {
+    g_gameRowTick = GetTickCount();
     memcpy(g_hudRowTpl, params, 0x78);
     g_hudRowTplOk = true;
     g_hudRowOrig(action, params);
@@ -3518,7 +3522,9 @@ static void hud_key_row(int key, const char* label, int state = -1) {
 
 static void draw_hud_rows() {
     if (!g_cfg.hudRows || !g_hudRowTplOk || g_modOff || !g_active) return;
-    if (GetTickCount() - g_buildTick > 500) return;            // only while the hammer is building
+    // only in the hammer's building box: the game draws its undo row there every frame,
+    // also while the hammer aims at the sky (no place cursor then)
+    if (GetTickCount() - g_gameRowTick > 200) return;
     static const Str styles[] = { S_HUD_STYLE_FULL, S_HUD_STYLE_OVERLAP, S_HUD_STYLE_CONNECTED };
     static const Str fills[] = { S_HUD_FILL_SOLID, S_HUD_FILL_HOLLOW, S_HUD_FILL_WALLS };
     bool sw = ui.hudSwitch || ui.imageCtx;
