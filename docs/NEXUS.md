@@ -27,6 +27,7 @@ Aim at existing blocks and click: they take your current material, also a terrai
 material. Three styles (F9): full shape, overlap only (repaints just what is there,
 keeps its exact form), or connected: a fill bucket that repaints every touching block of
 the clicked material (up to FillLimit, default 500), leaving other materials alone.
+Roof materials also spread diagonally, so a whole sloped roof is caught in one click.
 The old material is refunded with the normal item pop-up, and undo puts everything
 back exactly. With a terrain material selected it also repaints the ground, for
 example dirt into stone.

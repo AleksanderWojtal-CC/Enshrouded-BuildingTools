@@ -33,7 +33,9 @@ Prefab mode
                    coarser. Stops at FillLimit shapes ([Limits] in the ini,
                    default 500). Prefab mode only (in Area mode it works like
                    overlap only). The clicked block's material is the one that
-                   spreads.
+                   spreads. Roof materials also spread diagonally (side to
+                   side, up and down and across), so sloped roofs are
+                   followed.
                    Right click deletes instead: every touching block of the
                    clicked material is removed and refunded, other materials
                    in the same spots stay.

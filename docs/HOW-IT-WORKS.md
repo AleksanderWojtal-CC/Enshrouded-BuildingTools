@@ -129,7 +129,9 @@ in the first cell). The walk stops at `FillLimit` cells. The found cells are the
 and committed like an Area replace in overlap style, with the blit's allow table holding
 only the clicked material, so other materials in the same cells are left alone.
 The clicked material can be terrain too, when the removal dry run reports it (a terrain
-material is selected).
+material is selected). When the clicked material is a roof material (`isRoofBlock` in the
+game's material config, looked up the way the removal table builder does), the walk
+also takes the 20 diagonal neighbours, so it follows sloped roofs.
 
 ## Connected delete
 

@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.19.0"
+#define MOD_VERSION "0.19.0-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1731,23 +1731,36 @@ static uint8_t structure_fill(CostList* list, void* ctx, void* state, void* pdat
     return g_pend.n > 0 ? 1 : 0;
 }
 
+// Roof materials spread diagonally. The game's per-material config
+// (BuildingTerraformingConfig, found by e75970(registry, id); building material m has
+// id m - 0x80) has isRoofBlock at +0x6c; the removal table builder 48f070 reads it the same way.
+typedef uint8_t* (*MatConfigFn)(void* registry, uint8_t id);
+static MatConfigFn g_matConfig = nullptr;
+static bool is_roof(void* ctx, int m) {
+    if (!g_matConfig || !ctx || m < 0x80) return false;
+    void* reg = *(void**)((uint8_t*)ctx + 0xf8);
+    uint8_t* cfg = reg ? g_matConfig(reg, (uint8_t)(m - 0x80)) : nullptr;
+    return cfg && cfg[0x6c] != 0;
+}
+
 // ---- connected cells (fill bucket)
 // Breadth-first walk over a grid of shape-sized cells from cell (0,0,0) along the six
-// world axes; a cell joins when `probe(i, j, k)` says it holds the clicked material.
+// world axes (with `diag`, also the 20 diagonal neighbours: roofs climb diagonally);
+// a cell joins when `probe(i, j, k)` says it holds the clicked material.
 // Found cells go to g_floodQ (the start first); returns their number, at most `limit`.
 static int32_t g_floodQ[kMaxPending][3];
 template <class Probe>
-static int flood_cells(int limit, Probe probe, bool* capped) {
-    // Every found cell probes up to 6 neighbours, so up to 6 * FillLimit + 1 cells are
-    // visited: the table holds 2^18 (FillLimit is at most 20000), always under half full.
-    static const uint32_t kSeen = 1u << 18;
+static int flood_cells(int limit, bool diag, Probe probe, bool* capped) {
+    // Every found cell probes up to 26 neighbours, so up to 26 * FillLimit + 1 cells are
+    // visited: the table holds 2^20 (FillLimit is at most 20000), always under half full.
+    static const uint32_t kSeen = 1u << 20;
     static uint64_t seen[kSeen];                        // open addressing, 0 = empty
     memset(seen, 0, sizeof(seen));
     auto key = [](int i, int j, int k) -> uint64_t {
         return ((uint64_t)(uint32_t)(i + 0x100000) << 42) | ((uint64_t)(uint32_t)(j + 0x100000) << 21) | (uint64_t)(uint32_t)(k + 0x100000) | (1ull << 63);
     };
     auto visit = [&](int i, int j, int k) -> bool {     // false if seen before (or table full)
-        uint64_t kk = key(i, j, k); uint32_t h = (uint32_t)((kk * 0x9E3779B97F4A7C15ull) >> 46);
+        uint64_t kk = key(i, j, k); uint32_t h = (uint32_t)((kk * 0x9E3779B97F4A7C15ull) >> 44);
         for (uint32_t n = 0; n < kSeen; n++, h = (h + 1) & (kSeen - 1)) {
             if (seen[h] == kk) return false;
             if (!seen[h]) { seen[h] = kk; return true; }
@@ -1757,10 +1770,18 @@ static int flood_cells(int limit, Probe probe, bool* capped) {
     int head = 0, tail = 0;
     *capped = false;
     visit(0, 0, 0); g_floodQ[tail][0] = 0; g_floodQ[tail][1] = 0; g_floodQ[tail][2] = 0; tail++;
-    static const int dirs[6][3] = { {1,0,0}, {-1,0,0}, {0,1,0}, {0,-1,0}, {0,0,1}, {0,0,-1} };
+    // the six faces first, then edges and corners
+    static int dirs[26][3]; static int nd = 0;
+    if (!nd) {
+        for (int pass = 1; pass <= 3; pass++)
+            for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++)
+                if ((x != 0) + (y != 0) + (z != 0) == pass) { dirs[nd][0] = x; dirs[nd][1] = y; dirs[nd][2] = z; nd++; }
+    }
+    const int ndirs = diag ? 26 : 6;
     while (head < tail) {
         const int32_t* c = g_floodQ[head++];
-        for (const auto& d : dirs) {
+        for (int q = 0; q < ndirs; q++) {
+            const int* d = dirs[q];
             int i = c[0] + d[0], j = c[1] + d[1], k = c[2] + d[2];
             if (!visit(i, j, k)) continue;
             if (tail >= limit || tail >= kMaxPending) { *capped = true; continue; }
@@ -1802,14 +1823,15 @@ static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdat
         beep(MB_ICONHAND); return 0;
     }
     const int limit = g_cfg.fillLimit;
+    const bool diag = is_roof(ctx, target);
     int probes = 0; bool capped = false;
-    const int tail = flood_cells(limit, [&](int i, int j, int k) {
+    const int tail = flood_cells(limit, diag, [&](int i, int j, int k) {
         xf.pos[0] = start.pos[0] + i * step[0]; xf.pos[1] = start.pos[1] + j * step[1]; xf.pos[2] = start.pos[2] + k * step[2];
         memset(g_remVols, 0, sizeof(g_remVols));
         price_removal(list, ctx, state, &xf); probes++;
         return g_remVols[target] > 0.f;
     }, &capped);
-    LOG(.str("connected replace: ").i(tail).str(" cells, ").i(probes).str(" probes").str(capped ? ", stopped at FillLimit" : ""));
+    LOG(.str("connected replace: ").i(tail).str(" cells, ").i(probes).str(" probes").str(diag ? " (roof, diagonal)" : "").str(capped ? ", stopped at FillLimit" : ""));
     // price and queue every found cell (overlap style, only the clicked material)
     pend_begin(ctx, start, true, state ? *(uint32_t*)state : 0);
     g_pend.style = STYLE_OVERLAP;
@@ -2021,12 +2043,13 @@ static uint8_t connected_remove(CostList* list, void* ctx, void* state, Aabb* bx
     if (!target) { flash("Connected delete: nothing to remove there"); beep(MB_ICONHAND); return 0; }
     only_remove(target);
     const int limit = g_cfg.fillLimit;
+    const bool diag = is_roof(ctx, target);
     int probes = 0; bool capped = false;
-    const int tail = flood_cells(limit, [&](int i, int j, int k) {
+    const int tail = flood_cells(limit, diag, [&](int i, int j, int k) {
         probe(i, j, k); probes++;
         return g_remVols[target] > 0.f;
     }, &capped);
-    LOG(.str("connected delete: ").i(tail).str(" cells, ").i(probes).str(" probes").str(capped ? ", stopped at FillLimit" : ""));
+    LOG(.str("connected delete: ").i(tail).str(" cells, ").i(probes).str(" probes").str(diag ? " (roof, diagonal)" : "").str(capped ? ", stopped at FillLimit" : ""));
     // the real dry runs: refund entries for the clicked material go to the game's list
     uint8_t any = 0;
     for (int n = 0; n < tail; n++) {
@@ -3645,6 +3668,12 @@ static DWORD WINAPI init_thread(void*) {
             g_removeTableOk = hook_calls(fn, (void*)&remove_table_hook, sites, 2) == 2;
         }
         LOG(.str("connected delete: ").str(g_removeTableOk ? "available" : "not available"));
+        // the table builder 48f070 (called at +0x144) looks up the material config (call at
+        // +0xe0, id = m + 0x80 as a byte at +0xd3) and tests isRoofBlock (+0xef)
+        uint8_t* tb = rel(fn ? fn + 0x144 : nullptr);
+        if (tb && !memcmp(tb + 0xd3, "\x8D\x93\x80\x00\x00\x00", 6) && !memcmp(tb + 0xef, "\x40\x38\x68\x6C", 4))
+            g_matConfig = (MatConfigFn)rel(tb + 0xe0);
+        LOG(.str("diagonal roof fill: ").str(g_matConfig ? "available" : "not available"));
     }
     g_refundBuildOrig = (RefundBuildFn)hook(refundBuild, 5, (void*)&refund_build_hook);
     if (!g_refundBuildOrig) { LOG(.str("refund hook failed; mod disabled")); return 0; }
