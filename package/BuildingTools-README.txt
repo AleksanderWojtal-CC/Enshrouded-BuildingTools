@@ -33,10 +33,15 @@ Prefab mode
                    coarser. Stops at FillLimit shapes ([Limits] in the ini,
                    default 500). Prefab mode only (in Area mode it works like
                    overlap only). The clicked block's material is the one that
-                   spreads; clicking ground (terrain) does nothing.
-  Replace repaints blocks (building materials) only; the ground is never
-  touched. Any material can be the new one, also a terrain material (the
-  blocks then become that terrain).
+                   spreads.
+                   Right click deletes instead: every touching block of the
+                   clicked material is removed and refunded, other materials
+                   in the same spots stay.
+  Any material can be the new one, also a terrain material (the blocks then
+  become that terrain). The ground is repainted (and with connected, deleted)
+  only while a terrain material is selected, the same rule the hammer uses
+  for removing ground; it keeps its shape and is refunded by how much of it
+  was there.
 
 Area mode (2 corners)
   Click two opposite corners; the current shape is repeated over the area

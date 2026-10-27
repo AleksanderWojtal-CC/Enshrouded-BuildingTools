@@ -28,7 +28,11 @@ material. Three styles (F9): full shape, overlap only (repaints just what is the
 keeps its exact form), or connected: a fill bucket that repaints every touching block of
 the clicked material (up to FillLimit, default 500), leaving other materials alone.
 The old material is refunded with the normal item pop-up, and undo puts everything
-back exactly.
+back exactly. With a terrain material selected it also repaints the ground, for
+example dirt into stone.
+With the connected style, a right click deletes instead: every touching block of the
+clicked material is removed and refunded, everything else stays (blocks, roofs, and
+terrain while a terrain material is selected).
 
 [b]Area mode[/b] (F6)
 Click two opposite corners: the selected shape is repeated over a line, floor, wall

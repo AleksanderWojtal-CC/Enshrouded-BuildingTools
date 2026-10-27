@@ -3,6 +3,18 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.19.0
+
+- New: **connected delete.** With Replace on and the style set to connected (fill
+  bucket), a right click removes every touching block of the clicked material, up to
+  FillLimit. Other materials in the same spots stay. Works on blocks and roofs, and on
+  terrain while a terrain material is selected (the hammer's own rule). The material is
+  refunded with the normal pop-up; undo covers the first 30 or so shapes, as Area remove.
+- New: **Replace works on terrain.** With a terrain material selected, Replace (all three
+  styles) repaints ground too, for example dirt into stone, keeping its shape. The fill
+  bucket spreads over terrain as well. The old terrain is refunded by how much of it was
+  there.
+
 ## 0.18.0
 
 - New: **Building Tools menu in the game's own UI.** Press Home (also while holding the
