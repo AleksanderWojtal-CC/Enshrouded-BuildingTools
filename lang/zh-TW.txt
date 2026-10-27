@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: Traditional Chinese texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = .
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} 已就緒
+msg.ready_creative = Building Tools {0} 已就緒（創意建造）
+msg.unsupported = Building Tools：不支援此遊戲版本
+msg.mod_off = Building Tools 已關閉（無模組遊戲）  |  按 {0} 開啟
+msg.mod_on = Building Tools 已開啟  |  按 {0} 關閉
+msg.mode_area = 區域模式
+msg.mode_prefab = 一般模式（遊戲原版）
+msg.replace_on = 替換 開
+msg.replace_off = 替換 關
+msg.style_full = 替換方式：整個形狀
+msg.style_overlap = 替換方式：僅重疊部分
+msg.style_connected = 替換方式：相連（油漆桶，一般模式；右鍵刪除）
+msg.fill_solid = 區域填充：實心
+msg.fill_hollow = 區域填充：空心房間（牆、地板、天花板）
+msg.fill_walls = 區域填充：僅牆壁
+msg.free_on = 自由放置 開（不吸附表面）
+msg.free_off = 自由放置 關
+msg.free_distance = 自由放置距離：{0} 公尺
+msg.corners_cleared = 已清除角點
+msg.build_corner = 建造：已設定角點 {0}/{1}
+msg.replace_corner = 替換：已設定角點 {0}/{1}
+msg.remove_corner = 移除：已設定角點 {0}/{1}
+msg.too_big = 太大：{0} 個形狀（最多 {1}）
+msg.placed = 已放置 {0} 個形狀
+msg.placed_partial = 已放置 {0}/{1} 個形狀（材料不足）
+msg.removed = 已移除 {0} 個形狀
+msg.undo_covers = 可復原 {0} 個
+msg.not_enough = 材料不足以建造 {0} 個形狀（需要 {1} 個物品）
+msg.undo_needs = 復原需要把被替換的材料放回背包
+msg.nothing_to_replace = 這裡沒有可替換的東西
+msg.replace_read_fail = 替換：無法讀取瞄準的方塊，請再試一次
+msg.creplace_own = 相連替換：這已經是你的材料
+msg.creplace_nothing = 相連替換：這裡沒有可替換的東西
+msg.creplace_capped = 相連替換：僅前 {0} 個形狀（FillLimit）
+msg.cdelete_unavailable = 相連刪除：此遊戲版本無法使用
+msg.cdelete_nothing = 相連刪除：這裡沒有可移除的東西
+msg.cdelete_capped = 相連刪除：僅前 {0} 個形狀（FillLimit）
+msg.language_set = Building Tools 語言：繁體中文
+
+# Info bar at the bottom of the screen (short words)
+bar.area = 區域 {0}/{1}
+bar.area_build = 區域建造 {0}/{1}
+bar.area_replace = 區域替換 {0}/{1}
+bar.area_remove = 區域移除 {0}/{1}
+bar.hollow = 空心
+bar.walls = 牆壁
+bar.prefab = 一般
+bar.prefab_replace = 一般替換
+bar.full = 整個形狀
+bar.overlap = 重疊
+bar.connected = 相連
+bar.free = 自由 {0} 公尺
+bar.creative = 創意
+bar.size = {0}x{1} 高{2} = {3}
+bar.too_big = 太大（最多 {0}）
+bar.key_area = 區域
+bar.key_replace = 替換
+bar.key_clear = 清除
+bar.key_style = 方式
+bar.key_free = 自由
+bar.key_fill = 填充
+bar.key_wheel = +滾輪 距離
+bar.key_off = 關閉
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = 區域模式
+hud.area_on = 區域模式：開
+hud.area_off = 區域模式：關
+hud.fill_solid = 填充：實心
+hud.fill_hollow = 填充：空心
+hud.fill_walls = 填充：牆壁
+hud.clear = 清除角點
+hud.replace = 替換
+hud.replace_on = 替換：開
+hud.replace_off = 替換：關
+hud.style_full = 方式：整體
+hud.style_overlap = 方式：重疊
+hud.style_connected = 方式：相連
+hud.free = 自由放置
+hud.free_on = 自由放置：開
+hud.free_off = 自由放置：關
+hud.wheel = + 滾輪：{0} 公尺
+hud.menu = 工具選單
+
+# Floating text under the crosshair
+float.too_big = 太大
+float.size = {0} x {1}，高 {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Shift
+key.alt = Alt
+key.number = 按鍵 {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = 按鍵
+menu.options = 選項
+menu.footer = 版本 {0}。按 Esc 或選單鍵關閉選單。
+menu.close = 關閉
+menu.cancel = 取消
+menu.press_key = 請按一個鍵...
+menu.no_key = 無
+menu.keys_help = 點擊按鍵即可變更，儲存在 BuildingTools.ini。
+menu.keys_waiting = 請按新的鍵，也可以加 Shift、Ctrl 或 Alt。Esc 取消，Delete 清除。
+menu.translation_note = 此翻譯可能有錯誤，敬請見諒！歡迎提供修正（Nexus 或 GitHub）。
+menu.key_menu = Building Tools 選單
+menu.key_area = 區域模式 開 / 關
+menu.key_replace = 替換 開 / 關
+menu.key_style = 替換方式
+menu.key_fill = 區域填充
+menu.key_clear = 清除區域角點
+menu.key_free = 自由放置 開 / 關
+menu.key_farther = 自由放置 更遠
+menu.key_closer = 自由放置 更近
+menu.key_wheel = 距離（按住 + 滑鼠滾輪）
+menu.key_off = 整個模組 關 / 開
+
+# Options tab
+option.off = 關
+option.on = 開
+option.mode = 模式
+option.mode_prefab = 一般（遊戲原版）
+option.mode_area = 區域
+option.replace = 替換
+option.style = 替換方式
+option.style_full = 整個形狀
+option.style_overlap = 僅重疊部分
+option.style_connected = 相連（油漆桶）
+option.fill = 區域填充
+option.fill_solid = 實心
+option.fill_hollow = 空心房間
+option.fill_walls = 僅牆壁
+option.free = 自由放置
+option.language = 語言
+option.language_game = 與遊戲相同

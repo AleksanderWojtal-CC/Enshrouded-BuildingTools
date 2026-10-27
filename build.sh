@@ -51,8 +51,10 @@ if [ "$1" = "package" ]; then
     cp build/dinput8.dll build/pkg/
     sed "s/^Enshrouded Building Tools [0-9.]*/Enshrouded Building Tools $VERSION/" package/BuildingTools-README.txt > build/pkg/BuildingTools-README.txt
     cp LICENSE build/pkg/BuildingTools-LICENSE.txt
+    mkdir -p build/pkg/BuildingTools-Languages
+    cp lang/*.txt build/pkg/BuildingTools-Languages/
     ZIP="dist/EnshroudedBuildingTools-$VERSION.zip"
     rm -f "$ZIP"
-    (cd build/pkg && zip -q -9 "../../$ZIP" dinput8.dll BuildingTools-README.txt BuildingTools-LICENSE.txt)
+    (cd build/pkg && zip -q -9 "../../$ZIP" dinput8.dll BuildingTools-README.txt BuildingTools-LICENSE.txt BuildingTools-Languages/*.txt)
     echo "packaged $ZIP"
 fi

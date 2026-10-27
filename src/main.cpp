@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.19.0"
+#define MOD_VERSION "0.20.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -61,6 +61,15 @@ struct Buf {
         return *this;
     }
     Buf& fix(int64_t v) { return f((double)v / core::kFix); } // fixed point -> metres
+    // A (translated) text with {0}..{3} replaced by the arguments.
+    Buf& fmt(const char* t, const char* a0 = "", const char* a1 = "", const char* a2 = "", const char* a3 = "") {
+        const char* a[4] = { a0, a1, a2, a3 };
+        while (*t) {
+            if (t[0] == '{' && t[1] >= '0' && t[1] <= '3' && t[2] == '}') { str(a[t[1] - '0']); t += 3; }
+            else c(*t++);
+        }
+        return *this;
+    }
     const char* z() { s[n] = 0; return s; }
 };
 
@@ -114,6 +123,7 @@ struct Config {
     int keyOff       = VK_F5;  // the whole mod off / on (vanilla game while off)
     int fillLimit    = 500;    // most shapes one connected replace (fill bucket) may repaint
     int globalChests = 0;      // building and crafting use the magic chests of every base
+    char language[16] = "auto";  // text language: auto (as the game), or a file code (pl, de, ...)
 };
 static Config g_cfg;
 
@@ -177,6 +187,8 @@ static void write_full_ini(const Config& c) {
      .t("; Mod state and keys as rows of the game's building box, bottom right (1 = on)\r\nHudRows=").i(c.hudRows).t("\r\n")
      .t("; Sound: 1 = game sounds, 2 = Windows sounds, 0 = off\r\nSound=").i(c.sound).t("\r\n")
      .t("; Item pop-up when Replace gives materials back (1 = on)\r\nRefundPopup=").i(c.refundPopup).t("\r\n")
+     .t("; Text language: auto = as the game, or en, de, fr, it, ja, ko, pl, pt-BR, ru, es, th, tr,\r\n")
+     .t(";     uk, zh-CN, zh-TW (files in the BuildingTools-Languages folder)\r\nLanguage=").t(c.language).t("\r\n")
      .t("\r\n[Debug]\r\nLog=").i(c.log).t("\r\n");
     wchar_t p[MAX_PATH];
     lstrcpyW(p, g_dir); lstrcatW(p, L"BuildingTools.ini");
@@ -214,6 +226,17 @@ static void load_config() {
     g_cfg.keyOff       = ini_int(L"Keys", L"ToggleMod", VK_F5);
     g_cfg.fillLimit    = ini_int(L"Limits", L"FillLimit", 500);
     g_cfg.globalChests = ini_int(L"Chests", L"GlobalMagicChests", 0) != 0;
+    bool noLanguage;
+    {
+        wchar_t p[MAX_PATH], w[16];
+        lstrcpyW(p, g_dir); lstrcatW(p, L"BuildingTools.ini");
+        GetPrivateProfileStringW(L"Interface", L"Language", L"?", w, 16, p);
+        noLanguage = w[0] == L'?' && !w[1];
+        if (noLanguage) lstrcpyW(w, L"auto");
+        int k = 0;
+        for (; w[k] && k < 15; k++) g_cfg.language[k] = w[k] < 128 ? (char)w[k] : '?';
+        g_cfg.language[k] = 0;
+    }
     if (g_cfg.maxShapes < 1) g_cfg.maxShapes = 1;
     if (g_cfg.maxShapes > 20000) g_cfg.maxShapes = 20000;
     if (g_cfg.fillLimit < 1) g_cfg.fillLimit = 1;
@@ -222,8 +245,209 @@ static void load_config() {
     if (ini_int(L"Keys", L"CycleAreaFill", -1) == -1 || ini_int(L"Interface", L"RefundPopup", -1) == -1 ||
         ini_int(L"Area", L"Preview", -1) == -1 || ini_int(L"Creative", L"CreativeBuilding", -1) == -1 ||
         ini_int(L"Keys", L"ToggleMod", -1) == -1 || ini_int(L"Limits", L"FillLimit", -1) == -1 ||
-        ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1)
+        ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1 || noLanguage)
         write_full_ini(g_cfg);
+}
+
+// -------------------------------------------------------------- localization
+// The texts follow the game's language: its in-game override (user_settings.json in the
+// Steam cloud folder), else the Steam language, else English. Language= in the ini
+// picks one by hand. English is built in; the others are read from
+// BuildingTools-Languages\<code>.txt (UTF-8, "key = text" lines) when the language is set.
+#include "strings.h"
+
+static const char* const kStrKey[S_COUNT] = {
+#define BT_STR_KEY(id, key, en) key,
+    BT_STRINGS(BT_STR_KEY)
+#undef BT_STR_KEY
+};
+static const char* const kStrEn[S_COUNT] = {
+#define BT_STR_EN(id, key, en) en,
+    BT_STRINGS(BT_STR_EN)
+#undef BT_STR_EN
+};
+static const char* volatile g_str[S_COUNT];   // the current language (null = English)
+static volatile LONG g_lang = 0;               // index in kLanguages, -1 = the test language
+static volatile LONG g_keysVersion = 0;        // bumped when a key is rebound or the language changes
+
+static const char* T(Str s) { const char* t = g_str[s]; return t ? t : kStrEn[s]; }
+
+// A number, or tenths as "4.0" with the language's decimal mark, for Buf::fmt.
+struct Num { char s[24]; };
+static Num num(int64_t v) { Num n; Buf b; b.i(v); lstrcpynA(n.s, b.z(), sizeof n.s); return n; }
+static Num tenths(int t) { Num n; Buf b; b.i(t / 10).str(T(S_DECIMAL)).i(t % 10); lstrcpynA(n.s, b.z(), sizeof n.s); return n; }
+
+// Copies UTF-8 text, never cutting a character in two.
+static void copy_text(char* d, const char* s, int cap) {
+    int n = 0;
+    while (s[n] && n < cap - 1) n++;
+    if (s[n]) while (n > 0 && ((uint8_t)s[n] & 0xc0) == 0x80) n--;
+    memcpy(d, s, n); d[n] = 0;
+}
+
+static bool same_ascii(const char* a, const char* b) {
+    for (; *a && *b; a++, b++) {
+        char x = *a >= 'A' && *a <= 'Z' ? *a + 32 : *a, y = *b >= 'A' && *b <= 'Z' ? *b + 32 : *b;
+        if (x != y) return false;
+    }
+    return *a == *b;
+}
+
+// Whole file, zero terminated (never freed: the texts point into it).
+static char* read_file(const wchar_t* path, DWORD* size = nullptr) {
+    HANDLE h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return nullptr;
+    DWORD n = GetFileSize(h, nullptr), got = 0;
+    char* d = n < (8u << 20) ? (char*)HeapAlloc(GetProcessHeap(), 0, n + 1) : nullptr;
+    if (d && (!ReadFile(h, d, n, &got, nullptr) || got != n)) { HeapFree(GetProcessHeap(), 0, d); d = nullptr; }
+    CloseHandle(h);
+    if (d) { d[n] = 0; if (size) *size = n; }
+    return d;
+}
+
+static int lang_by_code(const char* code) {
+    for (int k = 0; k < kLanguageCount; k++) if (same_ascii(code, kLanguages[k].code)) return k;
+    return same_ascii(code, "test") ? -1 : -2;
+}
+
+// The game's own language choice (Settings > Gameplay): "languageIdOverride" in
+// <Steam>\userdata\<account>\1203620\remote\user_settings.json, "None" = the Steam language.
+static int lang_from_game() {
+    wchar_t steam[MAX_PATH] = L"";
+    if (HMODULE sc = GetModuleHandleW(L"steamclient64.dll")) GetModuleFileNameW(sc, steam, MAX_PATH);
+    int cut = 0;
+    if (steam[0]) cut = 1;
+    else { lstrcpyW(steam, g_dir); cut = 4; }    // <Steam>\steamapps\common\Enshrouded\ (default library)
+    for (int i = lstrlenW(steam); i > 0 && cut; i--)
+        if (steam[i - 1] == L'\\') { steam[i] = 0; if (--cut) steam[i - 1] = 0; }
+    wchar_t pat[MAX_PATH], best[MAX_PATH] = L"", f[MAX_PATH];
+    lstrcpyW(pat, steam); lstrcatW(pat, L"userdata\\*");
+    WIN32_FIND_DATAW fd; FILETIME newest = {};
+    HANDLE fh = FindFirstFileW(pat, &fd);
+    if (fh == INVALID_HANDLE_VALUE) return -2;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == L'.') continue;
+        if (lstrlenW(steam) + lstrlenW(fd.cFileName) > MAX_PATH - 60) continue;
+        lstrcpyW(f, steam); lstrcatW(f, L"userdata\\"); lstrcatW(f, fd.cFileName); lstrcatW(f, L"\\1203620\\remote\\user_settings.json");
+        WIN32_FILE_ATTRIBUTE_DATA a;
+        if (GetFileAttributesExW(f, GetFileExInfoStandard, &a) && CompareFileTime(&a.ftLastWriteTime, &newest) > 0) {
+            newest = a.ftLastWriteTime; lstrcpyW(best, f);
+        }
+    } while (FindNextFileW(fh, &fd));
+    FindClose(fh);
+    if (!best[0]) return -2;
+    char* js = read_file(best);
+    if (!js) return -2;
+    int r = -2;
+    static const char key[] = "\"languageIdOverride\"";
+    for (char* q = js; *q; q++) {
+        if (memcmp(q, key, sizeof key - 1)) continue;
+        q += sizeof key - 1;
+        while (*q == ' ' || *q == '\t' || *q == ':') q++;
+        if (*q++ != '"') break;
+        char v[16]; int n = 0;
+        while (*q && *q != '"' && n < 15) v[n++] = *q++;
+        v[n] = 0;
+        for (int k = 0; k < kLanguageCount && r < 0; k++)
+            for (const char* g : kLanguages[k].game) if (g && same_ascii(v, g)) r = k;
+        LOG(.str("language: game setting ").str(v));
+        break;
+    }
+    HeapFree(GetProcessHeap(), 0, js);
+    return r;
+}
+
+static int lang_from_steam() {
+    HMODULE m = GetModuleHandleW(L"steam_api64.dll");
+    if (!m) return -2;
+    typedef void* (*AppsFn)();
+    typedef const char* (*LangFn)(void*);
+    AppsFn apps = (AppsFn)GetProcAddress(m, "SteamAPI_SteamApps_v009");
+    if (!apps) apps = (AppsFn)GetProcAddress(m, "SteamAPI_SteamApps_v008");
+    LangFn lang = (LangFn)GetProcAddress(m, "SteamAPI_ISteamApps_GetCurrentGameLanguage");
+    void* a = apps ? apps() : nullptr;
+    const char* v = a && lang ? lang(a) : nullptr;
+    if (!v) return -2;
+    LOG(.str("language: Steam ").str(v));
+    for (int k = 0; k < kLanguageCount; k++)
+        for (const char* n : kLanguages[k].steam) if (n && same_ascii(v, n)) return k;
+    return -2;
+}
+
+// Loads a language's texts. Keys missing from its file stay English.
+static void lang_load(int k) {
+    const char* next[S_COUNT] = {};
+    int found = 0;
+    if (k == -1) {                               // test language: longer, marked texts, to spot overflow and missed texts
+        static char buf[S_COUNT * 40 + 16384];
+        int n = 0;
+        for (int s = 0; s < S_COUNT; s++) {
+            const char* e = kStrEn[s];
+            int len = lstrlenA(e);
+            if (s == S_DECIMAL || !len) { next[s] = e; continue; }
+            if (n + len + len / 2 + 8 > (int)sizeof buf) break;
+            next[s] = buf + n;
+            buf[n++] = '[';
+            memcpy(buf + n, e, len); n += len;
+            for (int x = 0; x < len * 4 / 10 + 1; x++) buf[n++] = '~';
+            buf[n++] = ']'; buf[n++] = 0;
+            found++;
+        }
+    } else if (k > 0) {
+        wchar_t p[MAX_PATH], code[16];
+        int c = 0;
+        for (; kLanguages[k].code[c]; c++) code[c] = (wchar_t)kLanguages[k].code[c];
+        code[c] = 0;
+        lstrcpyW(p, g_dir); lstrcatW(p, L"BuildingTools-Languages\\"); lstrcatW(p, code); lstrcatW(p, L".txt");
+        DWORD size = 0;
+        char* d = read_file(p, &size);
+        if (!d) LOG(.str("language: ").str(kLanguages[k].code).str(".txt not found in BuildingTools-Languages, using English"));
+        char* q = d;
+        if (q && (uint8_t)q[0] == 0xef && (uint8_t)q[1] == 0xbb && (uint8_t)q[2] == 0xbf) q += 3;   // UTF-8 BOM
+        while (q && *q) {
+            char* line = q;
+            while (*q && *q != '\n') q++;
+            if (*q) *q++ = 0;
+            char* end = line + lstrlenA(line);
+            while (end > line && (end[-1] == '\r' || end[-1] == ' ' || end[-1] == '\t')) *--end = 0;
+            while (*line == ' ' || *line == '\t') line++;
+            if (!*line || *line == '#' || *line == ';') continue;
+            char* eq = line;
+            while (*eq && *eq != '=') eq++;
+            if (!*eq) continue;
+            char* ke = eq;
+            while (ke > line && (ke[-1] == ' ' || ke[-1] == '\t')) ke--;
+            *ke = 0;
+            char* v = eq + 1;
+            while (*v == ' ' || *v == '\t') v++;
+            char* w = v;                         // "\n" in a text is a line break
+            for (char* r = v; *r; r++) { if (r[0] == '\\' && r[1] == 'n') { *w++ = '\n'; r++; } else *w++ = *r; }
+            *w = 0;
+            for (int s = 0; s < S_COUNT; s++) if (!lstrcmpA(line, kStrKey[s])) { next[s] = v; found++; break; }
+        }
+    }
+    for (int s = 0; s < S_COUNT; s++) g_str[s] = next[s];
+    g_lang = k;
+    InterlockedIncrement(&g_keysVersion);       // key names ("Ctrl+") again
+    LOG(.str("language: ").str(k >= 0 ? kLanguages[k].code : "test").c(' ').i(found).c('/').i(S_COUNT).str(" texts"));
+}
+
+// The language to use now: the ini choice, else the game's.
+static int lang_wanted() {
+    if (!same_ascii(g_cfg.language, "auto")) {
+        int k = lang_by_code(g_cfg.language);
+        if (k >= -1) return k;
+        LOG(.str("language: unknown Language=").str(g_cfg.language).str(" in the ini, following the game"));
+    }
+    int k = lang_from_game();
+    if (k < 0) k = lang_from_steam();
+    return k < 0 ? 0 : k;
+}
+static volatile LONG g_langSet = 0;
+// At start, and again when the menu opens (the game's language may have changed).
+static void lang_update() {
+    int k = lang_wanted();
+    if (!g_langSet || k != g_lang) { g_langSet = 1; lang_load(k); }
 }
 
 // --------------------------------------------------------------- game access
@@ -468,10 +692,10 @@ static volatile LONG g_corners = 0;      // corners captured so far (0..2)
 static volatile LONG g_cancelReq = 0;
 static volatile LONG g_active = 0;       // hooks installed
 static volatile DWORD g_flashUntil = 0;  // overlay transient message
-static char g_flash[128];
+static char g_flash[512];
 
 static void flash(const char* msg) {
-    lstrcpynA(g_flash, msg, sizeof(g_flash));
+    copy_text(g_flash, msg, sizeof(g_flash));
     g_flashUntil = GetTickCount() + 2500;
 }
 // Sounds: the game's own UI sounds (FbUiBundle.sounds), played on the HUD thread.
@@ -1110,7 +1334,7 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
             u->list = nullptr;
             if (!g_payOrig(mode, &take, 1)) {
                 LOG(.str("undo of replace refused: the old material it gave back is not in the inventory"));
-                flash("Undo needs the replaced material back in your inventory");
+                flash(T(S_UNDO_NEEDS));
                 beep(MB_ICONHAND);
                 return 0;
             }
@@ -1137,7 +1361,7 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
     if (!r && consume && list && mode && mode[0] == 0 && g_actShapes > 1 && list == g_actList) {
         uint64_t items = 0;
         for (uint64_t k = 0; k < list->count; k++) items += *(uint32_t*)(((CostEntry*)list->data)[k].b + 0x14);
-        Buf b; b.str("Not enough material for ").i(g_actShapes).str(" shapes (needs ").u(items).str(" items)");
+        Buf b; b.fmt(T(S_NOT_ENOUGH), num(g_actShapes).s, num((int64_t)items).s);
         flash(b.z()); beep(MB_ICONHAND);
         LOG(.str("charge refused: ").i(g_actShapes).str(" shapes, ").u(list->count).str(" cost entries, ").u(items).str(" items"));
     }
@@ -1677,9 +1901,9 @@ static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     if (pd.replace) LOG(.str("  commit blit: voxels ").u(g_caveHits[0] - h0).str(" solid ").u(g_caveHits[1] - h1));
     LOG(.str("commit: ").i(pd.n).str(" shapes, written ").i(placed).str(pd.replace ? (pd.style == STYLE_OVERLAP ? " (replace overlap / connected)" : " (replace full)") : ""));
     int of = g_partialOf; g_partialOf = 0;
-    if (pd.n > 1 || of) { Buf b; b.str("Placed ").i(placed).str(" shapes");
-        if (of > pd.n) b.str(" of ").i(of).str(" (not enough material)");
-        if (us.recorded < pd.n) b.str("  |  undo covers ").i(us.recorded);
+    if (pd.n > 1 || of) { Buf b;
+        if (of > pd.n) b.fmt(T(S_PLACED_PARTIAL), num(placed).s, num(of).s); else b.fmt(T(S_PLACED), num(placed).s);
+        if (us.recorded < pd.n) b.str("  |  ").fmt(T(S_UNDO_COVERS), num(us.recorded).s);
         flash(b.z()); }
     return any;
 }
@@ -1701,7 +1925,7 @@ static uint8_t structure_fill(CostList* list, void* ctx, void* state, void* pdat
         .str(") counts=").i(pl.count[0]).c('x').i(pl.count[1]).c('x').i(pl.count[2]).str(" total=").i(pl.total)
         .str(ok ? "" : " REFUSED (over MaxShapes or invalid)"));
     if (!ok) {
-        Buf b; b.str("Too big: ").i(pl.total).str(" shapes (max ").i(g_cfg.maxShapes).c(')');
+        Buf b; b.fmt(T(S_TOO_BIG), num(pl.total).s, num(g_cfg.maxShapes).s);
         flash(b.z()); beep(MB_ICONHAND);
         return 0;
     }
@@ -1819,7 +2043,7 @@ static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdat
         .str(" volume ").f(mine > 0 ? g_remVols[mine] : 0.f));
     if (!target) {
         bool own = mine > 0 && g_remVols[mine] > 0.f;
-        flash(own ? "Connected replace: that is already your material" : "Connected replace: nothing to replace there");
+        flash(T(own ? S_CREPLACE_OWN : S_CREPLACE_NOTHING));
         beep(MB_ICONHAND); return 0;
     }
     const int limit = g_cfg.fillLimit;
@@ -1848,8 +2072,8 @@ static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdat
     if (priced) refund_build(list, ctx);
     LOG(.str("connected replace: priced ").i(priced).str(" of ").i(tail).str(" cost entries=").u(list->count)
         .str(" refund entries=").i(g_refundN));
-    if (capped) { Buf b; b.str("Connected replace: only the first ").i(limit).str(" shapes (FillLimit)"); flash(b.z()); }
-    if (!priced) { g_pend.n = 0; flash("Nothing to replace there"); return 0; }
+    if (capped) { Buf b; b.fmt(T(S_CREPLACE_CAPPED), num(limit).s); flash(b.z()); }
+    if (!priced) { g_pend.n = 0; flash(T(S_NOTHING_TO_REPLACE)); return 0; }
     g_pend.tick = GetTickCount();       // pricing thousands of shapes takes a while
     g_actList = list; g_actShapes = g_pend.n;
     return g_pend.n > 0 ? 1 : 0;
@@ -2018,7 +2242,7 @@ static uint8_t connected_remove(CostList* list, void* ctx, void* state, Aabb* bx
     g_rpend.ctx = ctx; g_rpend.tid = GetCurrentThreadId(); g_rpend.tick = GetTickCount(); g_rpend.n = 0;
     g_rpend.suppress = true; g_rpend.only = 0;
     if (!g_removeTableOk || step[0] <= 0 || step[1] <= 0 || step[2] <= 0) {
-        flash("Connected delete: not available in this game version"); beep(MB_ICONHAND); return 0;
+        flash(T(S_CDELETE_UNAVAILABLE)); beep(MB_ICONHAND); return 0;
     }
     auto cell = [&](int i, int j, int k, IntXf* ix, Aabb* b2) {
         *ix = *xf; *b2 = *bx;
@@ -2040,7 +2264,7 @@ static uint8_t connected_remove(CostList* list, void* ctx, void* state, Aabb* bx
     int target = 0; float best = 0.f;
     for (int m = 1; m < 0x100; m++) if (g_remVols[m] > best) { best = g_remVols[m]; target = m; }
     LOG(.str("connected delete: clicked material ").x(target).str(" volume ").f(best));
-    if (!target) { flash("Connected delete: nothing to remove there"); beep(MB_ICONHAND); return 0; }
+    if (!target) { flash(T(S_CDELETE_NOTHING)); beep(MB_ICONHAND); return 0; }
     only_remove(target);
     const int limit = g_cfg.fillLimit;
     const bool diag = is_roof(ctx, target);
@@ -2066,7 +2290,7 @@ static uint8_t connected_remove(CostList* list, void* ctx, void* state, Aabb* bx
     g_rpend.only = target;
     g_rpend.tick = GetTickCount();      // probing thousands of cells takes a while
     LOG(.str("connected delete: priced ").i(g_rpend.n).str(" cells, refund entries ").u(list->count));
-    if (capped) { Buf b; b.str("Connected delete: only the first ").i(limit).str(" shapes (FillLimit)"); flash(b.z()); }
+    if (capped) { Buf b; b.fmt(T(S_CDELETE_CAPPED), num(limit).s); flash(b.z()); }
     return any;
 }
 
@@ -2102,7 +2326,7 @@ static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* 
     if (n < g_cfg.corners - 1) {
         g_sc = n + 1; g_corners = g_sc;
         g_rpend.suppress = true;                       // the dismantle would still commit
-        Buf b; b.str("Remove corner ").i(n + 1).str(" of ").i(g_cfg.corners).str(" set");
+        Buf b; b.fmt(T(S_REMOVE_CORNER), num(n + 1).s, num(g_cfg.corners).s);
         flash(b.z()); beep(MB_OK);
         LeaveCriticalSection(&g_stateLock);
         return 0;
@@ -2119,7 +2343,7 @@ static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* 
         .i(pl.count[0]).c('x').i(pl.count[1]).c('x').i(pl.count[2]).str(" total=").i(pl.total).str(ok ? "" : " REFUSED"));
     if (!ok) {
         g_rpend.suppress = true;
-        Buf b; b.str("Too big: ").i(pl.total).str(" shapes (max ").i(g_cfg.maxShapes).c(')');
+        Buf b; b.fmt(T(S_TOO_BIG), num(pl.total).s, num(g_cfg.maxShapes).s);
         flash(b.z()); beep(MB_ICONHAND);
         LeaveCriticalSection(&g_stateLock);
         return 0;
@@ -2172,8 +2396,8 @@ static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     only_remove(0);
     undo_end(us);
     LOG(.str("remove commit: ").i(rp.n).str(" shapes, removed ").i(done).str(rp.only ? " (connected delete)" : ""));
-    Buf b; b.str("Removed ").i(done).str(" shapes");
-    if (us.recorded < rp.n) b.str("  |  undo covers ").i(us.recorded);
+    Buf b; b.fmt(T(S_REMOVED), num(done).s);
+    if (us.recorded < rp.n) b.str("  |  ").fmt(T(S_UNDO_COVERS), num(us.recorded).s);
     flash(b.z());
     return any;
 }
@@ -2225,7 +2449,7 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
     if (replace) {
         if (!haveAim) {
             LOG(.str("  no live aim for this click; nothing done"));
-            flash("Replace: could not read the aimed block, try again"); beep(MB_ICONHAND);
+            flash(T(S_REPLACE_READ_FAIL)); beep(MB_ICONHAND);
             LeaveCriticalSection(&g_stateLock);
             return 0;
         }
@@ -2247,7 +2471,7 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
           LOG(.str("  pricing blit: voxels ").u(g_caveHits[0]).str(" solid ").u(g_caveHits[1]).str(" terrain ").u(g_caveHits[2])
               .str(" removable volume ").f(g_removedVolume).str(" materials allowed ").i(na)); }
         if (r) refund_build(list, ctx);
-        if (!r) { flash("Nothing to replace there"); g_pend.n = 0; }
+        if (!r) { flash(T(S_NOTHING_TO_REPLACE)); g_pend.n = 0; }
         LOG(.str("  replace priced=").i(r).str(" refund entries=").i(g_refundN));
         LeaveCriticalSection(&g_stateLock);
         return r;
@@ -2269,7 +2493,7 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
     }
     if (n < g_cfg.corners - 1) {
         g_sc = n + 1; g_corners = g_sc;
-        Buf b; b.str(replace ? "Replace" : "Build").str(" corner ").i(n + 1).str(" of ").i(g_cfg.corners).str(" set");
+        Buf b; b.fmt(T(replace ? S_REPLACE_CORNER : S_BUILD_CORNER), num(n + 1).s, num(g_cfg.corners).s);
         flash(b.z()); beep(MB_OK);
         LOG(.str("  corner ").i(n + 1).str(" set"));
         LeaveCriticalSection(&g_stateLock);
@@ -2285,7 +2509,7 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
 
 // ------------------------------------------------------------------- overlay
 static HWND g_overlay;
-static char g_overlayText[320];
+static char g_overlayText[1024];
 static volatile LONG g_fontPx = 24;      // panel font height, scaled to the window
 // The panel font, recreated only when its size changes (overlay thread only).
 static HFONT panel_font(int px) {
@@ -2296,6 +2520,14 @@ static HFONT panel_font(int px) {
         fontPx = px;
     }
     return font;
+}
+
+// The panel texts are UTF-8 (translations): drawn as UTF-16, Windows font linking
+// supplies the CJK and Thai glyphs Segoe UI lacks.
+static void draw_text(HDC dc, const char* t, RECT* r, UINT flags) {
+    static wchar_t w[1024];
+    if (!MultiByteToWideChar(CP_UTF8, 0, t, -1, w, 1024)) w[0] = 0;
+    DrawTextW(dc, w, -1, r, flags);
 }
 
 static HWND find_game_window() {
@@ -2341,7 +2573,7 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
         HGDIOBJ of = SelectObject(dc, panel_font(px));
         SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(232, 226, 210));
         RECT tr = { r.left + px / 2, r.top + px / 4, r.right - px / 2, r.bottom - px / 4 };
-        DrawTextA(dc, g_overlayText, -1, &tr, DT_CENTER | DT_TOP | DT_NOPREFIX);
+        draw_text(dc, g_overlayText, &tr, DT_CENTER | DT_TOP | DT_NOPREFIX);
         SelectObject(dc, of);
         EndPaint(h, &ps);
         return 0;
@@ -2377,8 +2609,8 @@ static void live_size(Buf& b) {
     core::Plan pl; float step[3]; bool ok = false;
     if (!area_plan_live(&pl, step, &ok)) return;
     long n = ok ? core::fill_count(pl, g_fill) : 0;
-    if (!ok || n > g_cfg.maxShapes) { b.str("  |  TOO BIG (max ").i(g_cfg.maxShapes).c(')'); return; }
-    b.str("  |  ").i(pl.count[0]).str("x").i(pl.count[2]).str(" h").i(pl.count[1]).str(" = ").i(n);
+    if (!ok || n > g_cfg.maxShapes) { b.str("  |  ").fmt(T(S_BAR_TOO_BIG), num(g_cfg.maxShapes).s); return; }
+    b.str("  |  ").fmt(T(S_BAR_SIZE), num(pl.count[0]).s, num(pl.count[2]).s, num(pl.count[1]).s, num(n).s);
 }
 
 // ---- in-game area preview
@@ -2493,7 +2725,6 @@ static void preview_diag() {
 
 static volatile DWORD g_floatTick = 0;              // last time the floating info text was drawn
 static volatile DWORD g_hudRowsTick = 0;        // last time the HUD rows were drawn (the info bar then hides its own)
-static volatile LONG g_keysVersion = 0;          // bumped when a key is rebound in the menu
 // A key setting: virtual-key code in the low byte, plus modifiers that must be held.
 enum { KEY_SHIFT = 0x1000, KEY_CTRL = 0x2000, KEY_ALT = 0x4000, KEY_MODS = 0x7000 };
 static int held_mods() {
@@ -2515,20 +2746,24 @@ static bool key_down(int code) {
 }
 static void vk_name(int code, char* out) {
     Buf b;
-    if (code & KEY_CTRL) b.str("Ctrl+");
-    if (code & KEY_SHIFT) b.str("Shift+");
-    if (code & KEY_ALT) b.str("Alt+");
+    if (code & KEY_CTRL) b.str(T(S_KEY_CTRL)).c('+');
+    if (code & KEY_SHIFT) b.str(T(S_KEY_SHIFT)).c('+');
+    if (code & KEY_ALT) b.str(T(S_KEY_ALT)).c('+');
     int vk = code & 0xff;
-    char n[24];
+    char n[64];
+    wchar_t w[32];
     if (vk >= VK_F1 && vk <= VK_F24) { Buf f; f.c('F').i(vk - VK_F1 + 1); lstrcpynA(n, f.z(), 24); }
     else {
         UINT sc = MapVirtualKeyA((UINT)vk, MAPVK_VK_TO_VSC);
         if (vk == VK_PRIOR || vk == VK_NEXT || vk == VK_HOME || vk == VK_END || vk == VK_INSERT || vk == VK_DELETE ||
             (vk >= VK_LEFT && vk <= VK_DOWN)) sc |= 0x100;          // extended keys (not the numpad ones)
-        if (!sc || !GetKeyNameTextA((LONG)(sc << 16), n, 24)) { Buf f; f.str("key ").i(vk); lstrcpynA(n, f.z(), 24); }
+        // the name in the Windows language, as UTF-8 like every other text
+        if (!sc || !GetKeyNameTextW((LONG)(sc << 16), w, 32) || !WideCharToMultiByte(CP_UTF8, 0, w, -1, n, sizeof n, nullptr, nullptr)) {
+            Buf f; f.fmt(T(S_KEY_NUMBER), num(vk).s); copy_text(n, f.z(), sizeof n);
+        }
     }
     b.str(n);
-    lstrcpynA(out, b.z(), 32);
+    copy_text(out, b.z(), 32);
 }
 
 // Info panel text, one item per line (shown bottom centre).
@@ -2539,23 +2774,23 @@ static void compose_overlay(char* out, int cap) {
     bool hudRows = GetTickCount() - g_hudRowsTick < 400;     // the game's building box shows the state and keys
     if (GetTickCount() - g_floatTick < 400) { out[0] = 0; return; }   // the floating text shows them
     if (hudRows && !flashing && g_mode == MODE_AREA && g_corners > 0) {   // the bar keeps the area size
-        b.str("Area ").i(g_corners).c('/').i(g_cfg.corners);
+        b.fmt(T(S_BAR_AREA), num(g_corners).s, num(g_cfg.corners).s);
         live_size(b);
-        lstrcpynA(out, b.z(), cap); return;
+        copy_text(out, b.z(), cap); return;
     }
-    if (vanilla || hudRows) { if (flashing) b.str(g_flash); lstrcpynA(out, b.z(), cap); return; }
+    if (vanilla || hudRows) { if (flashing) b.str(g_flash); copy_text(out, b.z(), cap); return; }
     // line 1: state (or the latest message)
     if (flashing) b.str(g_flash);
     else {
         if (g_mode == MODE_AREA) {
-            static const char* fills[3] = { "", " hollow", " walls" };
-            b.str("Area").str(fills[g_fill % 3]).c(' ').str(g_scOp == OP_REMOVE ? "remove" : (g_replace ? "replace" : "build"))
-             .str("  ").i(g_corners).c('/').i(g_cfg.corners);
+            b.fmt(T(g_scOp == OP_REMOVE ? S_BAR_AREA_REMOVE : g_replace ? S_BAR_AREA_REPLACE : S_BAR_AREA_BUILD),
+                  num(g_corners).s, num(g_cfg.corners).s);
+            if (g_fill % 3) b.str("  |  ").str(T(g_fill % 3 == 1 ? S_BAR_HOLLOW : S_BAR_WALLS));
             live_size(b);
-        } else b.str(g_replace ? "Prefab replace" : "Prefab");
-        if (g_replace) b.str(g_replaceStyle == STYLE_FULL ? "  |  full shape" : g_replaceStyle == STYLE_CONNECTED ? "  |  connected" : "  |  overlap");
-        if (g_hover) { int t = (int)(g_hoverDist * 10.f + 0.5f); b.str("  |  free ").i(t / 10).c('.').i(t % 10).str(" m"); }
-        if (creative_on()) b.str("  |  creative");
+        } else b.str(T(g_replace ? S_BAR_PREFAB_REPLACE : S_BAR_PREFAB));
+        if (g_replace) b.str("  |  ").str(T(g_replaceStyle == STYLE_FULL ? S_BAR_FULL : g_replaceStyle == STYLE_CONNECTED ? S_BAR_CONNECTED : S_BAR_OVERLAP));
+        if (g_hover) b.str("  |  ").fmt(T(S_BAR_FREE), tenths((int)(g_hoverDist * 10.f + 0.5f)).s);
+        if (creative_on()) b.str("  |  ").str(T(S_BAR_CREATIVE));
     }
     // line 2: keys (named again after a rebinding in the menu)
     if (g_cfg.panelKeys) {
@@ -2567,12 +2802,13 @@ static void compose_overlay(char* out, int cap) {
             if (g_cfg.wheelKey > 0) vk_name(g_cfg.wheelKey, k[7]);
             named = g_keysVersion;
         }
-        b.str("\n").str(k[0]).str(" area  ").str(k[1]).str(" replace  ").str(k[2]).str(" clear  ")
-         .str(k[3]).str(" style  ").str(k[4]).str(" free  ").str(k[5]).str(" fill");
-        if (g_hover && g_cfg.wheelKey > 0) b.str("  ").str(k[7]).str("+wheel dist");
-        if (g_cfg.keyOff > 0) b.str("  ").str(k[6]).str(" off");
+        b.str("\n").str(k[0]).c(' ').str(T(S_BAR_KEY_AREA)).str("  ").str(k[1]).c(' ').str(T(S_BAR_KEY_REPLACE))
+         .str("  ").str(k[2]).c(' ').str(T(S_BAR_KEY_CLEAR)).str("  ").str(k[3]).c(' ').str(T(S_BAR_KEY_STYLE))
+         .str("  ").str(k[4]).c(' ').str(T(S_BAR_KEY_FREE)).str("  ").str(k[5]).c(' ').str(T(S_BAR_KEY_FILL));
+        if (g_hover && g_cfg.wheelKey > 0) b.str("  ").str(k[7]).str(T(S_BAR_KEY_WHEEL));
+        if (g_cfg.keyOff > 0) b.str("  ").str(k[6]).c(' ').str(T(S_BAR_KEY_OFF));
     }
-    lstrcpynA(out, b.z(), cap);
+    copy_text(out, b.z(), cap);
 }
 
 static DWORD WINAPI overlay_thread(void*) {
@@ -2585,7 +2821,7 @@ static DWORD WINAPI overlay_thread(void*) {
     SetLayeredWindowAttributes(g_overlay, 0, 205, LWA_ALPHA);
 
     bool shown = false;
-    char last[320] = "", changed[320] = "";
+    static char last[1024] = "", changed[1024] = "";
     DWORD changedAt = GetTickCount();
     for (;;) {
         MSG msg;
@@ -2612,7 +2848,7 @@ static DWORD WINAPI overlay_thread(void*) {
             if (px != g_fontPx) { g_fontPx = px; last[0] = 0; }
             HGDIOBJ of = SelectObject(dc, panel_font(px));
             RECT tr = { 0, 0, 4000, 0 };
-            DrawTextA(dc, g_overlayText, -1, &tr, DT_CALCRECT | DT_NOPREFIX);
+            draw_text(dc, g_overlayText, &tr, DT_CALCRECT | DT_NOPREFIX);
             SelectObject(dc, of); ReleaseDC(g_overlay, dc);
             int w = (tr.right - tr.left) + px * 2, h = (tr.bottom - tr.top) + px / 2 + 3;
             int x = r.left + ((r.right - r.left) - w) / 2, y = r.bottom - (int)(g_cfg.panelBottom * sc) - h;
@@ -2636,8 +2872,7 @@ static void hover_step(float d) {
     float v = g_hoverDist + d;
     if (v < 1.f) v = 1.f; if (v > 20.f) v = 20.f;
     g_hoverDist = v;
-    int t = (int)(v * 10.f + 0.5f);
-    Buf b; b.str("Free placement distance ").i(t / 10).c('.').i(t % 10).str(" m"); flash(b.z());
+    Buf b; b.fmt(T(S_FREE_DISTANCE), tenths((int)(v * 10.f + 0.5f)).s); flash(b.z());
 }
 static LRESULT CALLBACK wheel_proc(int code, WPARAM w, LPARAM l) {
     if (code == HC_ACTION && w == WM_MOUSEWHEEL && g_active && g_hover && game_focused() &&
@@ -2836,35 +3071,48 @@ static bool ui_button(const char* text, bool enabled = true) {
 
 // Options page: the hotkey settings as rows of the game's options. Changes apply at once.
 static void draw_tool_settings() {
-    static const char* const offOn[] = { "Off", "On" };
-    static const char* const modes[] = { "Prefab (vanilla)", "Area" };
-    static const char* const styles[] = { "Full shape", "Overlap only", "Connected (fill bucket)" };
+    const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
+    const char* const modes[] = { T(S_OPT_MODE_PREFAB), T(S_OPT_MODE_AREA) };
+    const char* const styles[] = { T(S_OPT_STYLE_FULL), T(S_OPT_STYLE_OVERLAP), T(S_OPT_STYLE_CONNECTED) };
     static const LONG styleIds[] = { STYLE_FULL, STYLE_OVERLAP, STYLE_CONNECTED };
-    static const char* const fills[] = { "Solid", "Hollow room", "Walls only" };
+    const char* const fills[] = { T(S_OPT_FILL_SOLID), T(S_OPT_FILL_HOLLOW), T(S_OPT_FILL_WALLS) };
     LONG v;
-    if (ui_option("Mode", modes, 2, g_mode, &v)) set_mode(v);
-    if (ui_option("Replace", offOn, 2, g_replace ? 1 : 0, &v)) set_replace(v);
+    if (ui_option(T(S_OPT_MODE), modes, 2, g_mode, &v)) set_mode(v);
+    if (ui_option(T(S_OPT_REPLACE), offOn, 2, g_replace ? 1 : 0, &v)) set_replace(v);
     int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
-    if (ui_option("Replace style", styles, 3, st, &v)) set_replace_style(styleIds[v]);
-    if (ui_option("Area fill", fills, core::FILL_COUNT, g_fill, &v)) set_fill(v);
-    if (ui_option("Free placement", offOn, 2, g_hover ? 1 : 0, &v)) set_hover(v);
+    if (ui_option(T(S_OPT_STYLE), styles, 3, st, &v)) set_replace_style(styleIds[v]);
+    if (ui_option(T(S_OPT_FILL), fills, core::FILL_COUNT, g_fill, &v)) set_fill(v);
+    if (ui_option(T(S_OPT_FREE), offOn, 2, g_hover ? 1 : 0, &v)) set_hover(v);
+    // language: as the game, or one by hand (saved as Language= in the ini)
+    const char* langs[1 + kLanguageCount];
+    langs[0] = T(S_OPT_LANGUAGE_GAME);
+    for (int k = 0; k < kLanguageCount; k++) langs[1 + k] = kLanguages[k].name;
+    int cur = same_ascii(g_cfg.language, "auto") ? 0 : lang_by_code(g_cfg.language) + 1;
+    if (cur < 0) cur = 0;
+    if (ui_option(T(S_OPT_LANGUAGE), langs, 1 + kLanguageCount, cur, &v) && v != cur) {
+        lstrcpynA(g_cfg.language, v == 0 ? "auto" : kLanguages[v - 1].code, sizeof g_cfg.language);
+        write_full_ini(g_cfg);
+        LOG(.str("menu: language -> ").str(g_cfg.language));
+        lang_update();
+        flash(T(S_LANGUAGE_SET));
+    }
 }
 
 // Keys page: one row per action, the button shows its key; click it, then press the
 // new key (the input thread catches it). Esc cancels, Delete or Backspace clears.
-struct KeyAction { const char* label; int* key; };
+struct KeyAction { Str label; int* key; };
 static KeyAction g_keyActions[] = {
-    { "Building Tools menu", &g_cfg.keyMenu },
-    { "Area mode on / off", &g_cfg.keyStructure },
-    { "Replace on / off", &g_cfg.keyReplace },
-    { "Replace style", &g_cfg.keyStyle },
-    { "Area fill", &g_cfg.keyFill },
-    { "Clear area corners", &g_cfg.keyCancel },
-    { "Free placement on / off", &g_cfg.keyHover },
-    { "Free placement farther", &g_cfg.keyFarther },
-    { "Free placement closer", &g_cfg.keyCloser },
-    { "Distance (hold + mouse wheel)", &g_cfg.wheelKey },
-    { "Whole mod off / on", &g_cfg.keyOff },
+    { S_ACT_MENU, &g_cfg.keyMenu },
+    { S_ACT_AREA, &g_cfg.keyStructure },
+    { S_ACT_REPLACE, &g_cfg.keyReplace },
+    { S_ACT_STYLE, &g_cfg.keyStyle },
+    { S_ACT_FILL, &g_cfg.keyFill },
+    { S_ACT_CLEAR, &g_cfg.keyCancel },
+    { S_ACT_FREE, &g_cfg.keyHover },
+    { S_ACT_FARTHER, &g_cfg.keyFarther },
+    { S_ACT_CLOSER, &g_cfg.keyCloser },
+    { S_ACT_WHEEL, &g_cfg.wheelKey },
+    { S_ACT_OFF, &g_cfg.keyOff },
 };
 static const int kKeyActions = sizeof g_keyActions / sizeof g_keyActions[0];
 
@@ -2878,13 +3126,13 @@ static void draw_key_row(int k) {
         ui.setLayout(ui_node(row), &midLeft);
         ui.beginBox(label, 0);
         ui.setWidth(ui_node(label), 380);
-        ui_text(g_keyActions[k].label, STYLE_BODY);
+        ui_text(T(g_keyActions[k].label), STYLE_BODY);
         ui.endBox(label);
         char name[40];
-        if (g_bindWaiting == k) lstrcpynA(name, "Press a key...", 40);
+        if (g_bindWaiting == k) copy_text(name, T(S_MENU_PRESS_KEY), 40);
         else if (*g_keyActions[k].key > 0) vk_name(*g_keyActions[k].key, name);
-        else lstrcpynA(name, "None", 40);
-        if (ui_button(name) && g_bindWaiting < 0) { g_bindWaiting = k; LOG(.str("menu: rebinding ").str(g_keyActions[k].label)); }
+        else copy_text(name, T(S_MENU_NO_KEY), 40);
+        if (ui_button(name) && g_bindWaiting < 0) { g_bindWaiting = k; LOG(.str("menu: rebinding ").str(kStrEn[g_keyActions[k].label])); }
         ui.endBox(row);
     }
 }
@@ -2907,8 +3155,7 @@ static void draw_keys() {
         ui.endBox(col[c]);
     }
     ui.endBox(cols);
-    ui_text(g_bindWaiting >= 0 ? "Press the new key, also with Shift, Ctrl or Alt. Esc cancels, Delete clears it."
-                               : "Click a key to change it. Saved to BuildingTools.ini.", STYLE_BODY);
+    ui_text(T(g_bindWaiting >= 0 ? S_MENU_KEYS_WAITING : S_MENU_KEYS_HELP), STYLE_BODY);
 }
 
 // Called by the input thread with the key pressed while an action waits for one.
@@ -2926,7 +3173,7 @@ static void bind_key(int vk) {
     InterlockedIncrement(&g_keysVersion);
     g_bindWaiting = -1;
     char n[32] = "none"; if (vk > 0) vk_name(vk, n);
-    LOG(.str("menu: ").str(g_keyActions[k].label).str(" -> ").str(n));
+    LOG(.str("menu: ").str(kStrEn[g_keyActions[k].label]).str(" -> ").str(n));
 }
 
 // Bottom-right key hints like the game's menus. A hint shows the key of a UiActionId
@@ -2941,7 +3188,7 @@ static void draw_hint_bar() {
         h[0x1b] = 1;
         *(UiTextString*)(h + 0x20) = ui_str(label);
     };
-    add(UI_ACTION_BACK, g_bindWaiting >= 0 ? "Cancel" : "Close");
+    add(UI_ACTION_BACK, T(g_bindWaiting >= 0 ? S_MENU_CANCEL : S_MENU_CLOSE));
     struct { void* p; uint64_t n; } list{ hints, (uint64_t)n };
     const float pad[4] = { 40, 40, 40, 40 };               // clear of the screen corner, as the system menu
     ui.drawHints(&list, 0x303, pad, 0, 0);
@@ -2950,7 +3197,7 @@ static void draw_hint_bar() {
 // Full-screen like the game's own menus: blurred, darkened world, the menu on the left.
 static volatile LONG g_menuPage = 0;                 // 0 = keys, 1 = options
 static const int kMenuPages = 2;
-static const char* const g_pageNames[kMenuPages] = { "Keys", "Options" };
+static const Str g_pageNames[kMenuPages] = { S_MENU_KEYS, S_MENU_OPTIONS };
 static bool g_modTabs = false;                       // the tab bar being drawn is the mod's
 
 // Tab list of the game's tab bar: the mod's pages while it draws its bar. A tab is 0x40
@@ -2967,7 +3214,7 @@ static void* mod_tab_list(uint8_t menu, void* list, void* state) {
         uint8_t* t = v[0] + n * 0x40;
         memset(t, 0, 0x40);
         t[1] = 0x8b;
-        *(UiTextString*)(t + 0x18) = ui_str(g_pageNames[k]);
+        *(UiTextString*)(t + 0x18) = ui_str(T(g_pageNames[k]));
         t[0x30] = g_menuPage == k;
         t[0x31] = 1; t[0x32] = 1;
         *(float*)(t + 0x34) = 1.0f;
@@ -2984,7 +3231,7 @@ static bool mod_tab_draw(void* tab, void* out) {
     if (hot && g_menuClick && !((uint8_t*)tab)[0x30]) {
         uint64_t h = *(uint64_t*)((uint8_t*)tab + 0x28);
         for (int k = 0; k < kMenuPages; k++)
-            if (ui_str(g_pageNames[k]).hash == h && g_menuPage != k) { g_menuPage = k; g_bindWaiting = -1; LOG(.str("menu: page ").str(g_pageNames[k])); }
+            if (ui_str(T(g_pageNames[k])).hash == h && g_menuPage != k) { g_menuPage = k; g_bindWaiting = -1; LOG(.str("menu: page ").str(kStrEn[g_pageNames[k]])); }
     }
     return false;
 }
@@ -3019,19 +3266,20 @@ static void draw_mod_menu() {
     ui.setWidth(n, 1000);
     ui.setStretch(n, UiVec2{ 0, 1 });                       // full height: the hints sit at the bottom
 
-    ui_text("Building Tools", STYLE_TITLE);
+    ui_text(T(S_MENU_TITLE), STYLE_TITLE);
     if (!g_tabsHooked) {                                  // fallback: plain buttons
         ui.beginBox(tabs, 0);
         UiVec2 tgap{ 16, 0 };
         ui.setSpacingX(ui_node(tabs), &tgap, 0);
         for (int k = 0; k < kMenuPages; k++)
-            if (ui_button(g_pageNames[k], g_menuPage != k)) { g_menuPage = k; g_bindWaiting = -1; }
+            if (ui_button(T(g_pageNames[k]), g_menuPage != k)) { g_menuPage = k; g_bindWaiting = -1; }
         ui.endBox(tabs);
     }
-    UiTextString h = ui_str(g_pageNames[g_menuPage]);
+    UiTextString h = ui_str(T(g_pageNames[g_menuPage]));
     ui.settingHeader(&h, 0);
     if (g_menuPage == 0) draw_keys(); else draw_tool_settings();
-    ui_text("Version " MOD_VERSION ". Esc or the menu key closes the menu.", STYLE_BODY);
+    { Buf f; f.fmt(T(S_MENU_FOOTER), MOD_VERSION); ui_text(f.z(), STYLE_BODY); }
+    if (*T(S_MENU_TRANSLATION_NOTE)) ui_text(T(S_MENU_TRANSLATION_NOTE), STYLE_BODY);   // "may contain mistakes, corrections welcome"
 
     ui.endBox(panel);
     draw_hint_bar();
@@ -3129,11 +3377,11 @@ static void hud_key_row(int key, const char* label, int state = -1) {
     alignas(16) uint8_t bind[0xd0];
     alignas(16) uint8_t prm[0x80];
     alignas(16) uint8_t row[0x40] = {};
-    char text[160];
+    char text[256];
     memcpy(prm, g_hudRowTpl, 0x78);
     if (!make_binding(key, bind)) {             // no icon for this key: its name goes into the label
         char k[32]; vk_name(key, k);
-        Buf b; b.c('[').str(k).str("] ").str(label); lstrcpynA(text, b.z(), sizeof text);
+        Buf b; b.c('[').str(k).str("] ").str(label); copy_text(text, b.z(), sizeof text);
         label = text;
         prm[0x2c] = 1;                          // draw the row without a binding
     }
@@ -3159,25 +3407,24 @@ static void hud_key_row(int key, const char* label, int state = -1) {
 static void draw_hud_rows() {
     if (!g_cfg.hudRows || !g_hudRowTplOk || g_modOff || !g_active) return;
     if (GetTickCount() - g_buildTick > 500) return;            // only while the hammer is building
-    static const char* const styles[] = { "Style: full", "Style: overlap", "Style: connected" };
-    static const char* const fills[] = { "Fill: solid", "Fill: hollow", "Fill: walls" };
+    static const Str styles[] = { S_HUD_STYLE_FULL, S_HUD_STYLE_OVERLAP, S_HUD_STYLE_CONNECTED };
+    static const Str fills[] = { S_HUD_FILL_SOLID, S_HUD_FILL_HOLLOW, S_HUD_FILL_WALLS };
     bool sw = ui.hudSwitch || ui.imageCtx;
-    hud_key_row(g_cfg.keyStructure, sw ? "Area mode" : (g_mode == MODE_AREA ? "Area mode: on" : "Area mode: off"), g_mode == MODE_AREA);
+    hud_key_row(g_cfg.keyStructure, T(sw ? S_HUD_AREA : g_mode == MODE_AREA ? S_HUD_AREA_ON : S_HUD_AREA_OFF), g_mode == MODE_AREA);
     if (g_mode == MODE_AREA) {
-        hud_key_row(g_cfg.keyFill, fills[g_fill % 3]);
-        if (g_corners > 0) hud_key_row(g_cfg.keyCancel, "Clear corners");
+        hud_key_row(g_cfg.keyFill, T(fills[g_fill % 3]));
+        if (g_corners > 0) hud_key_row(g_cfg.keyCancel, T(S_HUD_CLEAR));
     }
-    hud_key_row(g_cfg.keyReplace, sw ? "Replace" : (g_replace ? "Replace: on" : "Replace: off"), g_replace != 0);
+    hud_key_row(g_cfg.keyReplace, T(sw ? S_HUD_REPLACE : g_replace ? S_HUD_REPLACE_ON : S_HUD_REPLACE_OFF), g_replace != 0);
     if (g_replace) {
         int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
-        hud_key_row(g_cfg.keyStyle, styles[st]);
+        hud_key_row(g_cfg.keyStyle, T(styles[st]));
     }
-    hud_key_row(g_cfg.keyHover, sw ? "Free placement" : (g_hover ? "Free placement: on" : "Free placement: off"), g_hover != 0);
+    hud_key_row(g_cfg.keyHover, T(sw ? S_HUD_FREE : g_hover ? S_HUD_FREE_ON : S_HUD_FREE_OFF), g_hover != 0);
     if (g_hover && g_cfg.wheelKey > 0) {
-        int t = (int)(g_hoverDist * 10.f + 0.5f);
-        Buf h; h.str("+ wheel: ").i(t / 10).c('.').i(t % 10).str(" m"); hud_key_row(g_cfg.wheelKey, h.z());
+        Buf h; h.fmt(T(S_HUD_WHEEL), tenths((int)(g_hoverDist * 10.f + 0.5f)).s); hud_key_row(g_cfg.wheelKey, h.z());
     }
-    hud_key_row(g_cfg.keyMenu, "Tools menu");
+    hud_key_row(g_cfg.keyMenu, T(S_HUD_MENU));
     g_hudRowsTick = GetTickCount();
 }
 
@@ -3188,15 +3435,16 @@ static bool hud_info(char* out, int cap) {
     bool building = !g_modOff && GetTickCount() - g_buildTick < 500;
     if (GetTickCount() < g_flashUntil) b.str(g_flash);
     else if (building && g_mode == MODE_AREA) {
-        b.str("Area ").str(g_scOp == OP_REMOVE ? "remove" : (g_replace ? "replace" : "build")).c(' ').i(g_corners).c('/').i(g_cfg.corners);
+        b.fmt(T(g_scOp == OP_REMOVE ? S_BAR_AREA_REMOVE : g_replace ? S_BAR_AREA_REPLACE : S_BAR_AREA_BUILD),
+              num(g_corners).s, num(g_cfg.corners).s);
         core::Plan pl; float step[3]; bool ok = false;
         if (g_corners > 0 && area_plan_live(&pl, step, &ok)) {
             long n = ok ? core::fill_count(pl, g_fill) : 0;
-            if (!ok || n > g_cfg.maxShapes) b.str(": too big");
-            else b.str(": ").i(pl.count[0]).str(" x ").i(pl.count[2]).str(", h ").i(pl.count[1]).str(" = ").i(n);
+            if (!ok || n > g_cfg.maxShapes) b.str(": ").str(T(S_FLOAT_TOO_BIG));
+            else b.str(": ").fmt(T(S_FLOAT_SIZE), num(pl.count[0]).s, num(pl.count[2]).s, num(pl.count[1]).s, num(n).s);
         }
     } else return false;
-    lstrcpynA(out, b.z(), cap);
+    copy_text(out, b.z(), cap);
     return true;
 }
 // Mod messages and the area size as floating text below the screen centre, drawn like
@@ -3222,7 +3470,7 @@ static void soft_backdrop(const float* node) {
 }
 
 static void draw_float_info() {
-    static char text[160];
+    static char text[512];
     uint8_t* scr = hud_screen_byte();
     if (!scr || !(*scr == SCREEN_INGAME || (*scr >= 29 && *scr <= 37)) || !hud_info(text, sizeof text)) return;
     alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, box[0x40] = {};
@@ -3367,7 +3615,7 @@ static DWORD WINAPI input_thread(void*) {
                 }
                 g_modOff = off;
                 char k[32]; vk_name(g_cfg.keyOff, k);
-                Buf b; b.str(off ? "Building Tools OFF (vanilla game)  |  " : "Building Tools ON  |  ").str(k).str(off ? " turns it on" : " turns it off");
+                Buf b; b.fmt(T(off ? S_MOD_OFF : S_MOD_ON), k);
                 flash(b.z());
                 LOG(.str("key: mod -> ").str(off ? "off" : "on"));
                 beep(MB_ICONQUESTION);
@@ -3396,7 +3644,10 @@ static DWORD WINAPI input_thread(void*) {
                 for (bool& p : prev) p = true;
                 continue;
             }
-            if (down && !prevMenu) { g_menuReq = g_menuOpen ? 2 : 1; LOG(.str("key: menu")); }
+            if (down && !prevMenu) {
+                if (!g_menuOpen) lang_update();          // the game's language may have changed since
+                g_menuReq = g_menuOpen ? 2 : 1; LOG(.str("key: menu"));
+            }
             prevMenu = down;
             bool esc = focus && g_menuOpen && (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
             if (esc && !prevEsc) { g_menuReq = 2; LOG(.str("key: esc in menu")); }
@@ -3419,26 +3670,25 @@ static DWORD WINAPI input_thread(void*) {
                 if (k == 0) {
                     LONG m = g_mode == MODE_PREFAB ? MODE_AREA : MODE_PREFAB;
                     set_mode(m);
-                    flash(m == MODE_AREA ? "Area mode" : "Prefab mode (vanilla)");
+                    flash(T(m == MODE_AREA ? S_MODE_AREA : S_MODE_PREFAB));
                 } else if (k == 1) {
                     LONG r = !g_replace; set_replace(r);
-                    flash(r ? "Replace ON" : "Replace OFF");
+                    flash(T(r ? S_REPLACE_ON : S_REPLACE_OFF));
                 } else if (k == 3) {
                     LONG st = g_replaceStyle == STYLE_FULL ? STYLE_OVERLAP : g_replaceStyle == STYLE_OVERLAP ? STYLE_CONNECTED : STYLE_FULL;
                     set_replace_style(st);
-                    flash(st == STYLE_FULL ? "Replace style: full shape" : st == STYLE_OVERLAP ? "Replace style: overlap only"
-                          : "Replace style: connected (fill bucket, Prefab mode; right click deletes)");
+                    flash(T(st == STYLE_FULL ? S_STYLE_FULL : st == STYLE_OVERLAP ? S_STYLE_OVERLAP : S_STYLE_CONNECTED));
                 } else if (k == 7) {
                     LONG f = (g_fill + 1) % core::FILL_COUNT; set_fill(f);
-                    flash(f == core::FILL_SOLID ? "Area fill: solid" : f == core::FILL_HOLLOW ? "Area fill: hollow room (walls, floor, ceiling)" : "Area fill: walls only");
+                    flash(T(f == core::FILL_SOLID ? S_FILL_SOLID : f == core::FILL_HOLLOW ? S_FILL_HOLLOW : S_FILL_WALLS));
                 } else if (k == 5 || k == 6) {
                     hover_step(k == 5 ? 0.5f : -0.5f);
                 } else if (k == 4) {
                     LONG h = !g_hover; set_hover(h);
-                    flash(h ? "Free placement ON (no surface snapping)" : "Free placement OFF");
+                    flash(T(h ? S_FREE_ON : S_FREE_OFF));
                 } else {
                     g_cancelReq = 1; g_corners = 0;
-                    flash("Corners cleared");
+                    flash(T(S_CORNERS_CLEARED));
                     LOG(.str("key: corners cleared"));
                 }
                 if (k < 5 || k >= 7) beep(MB_ICONQUESTION);
@@ -3527,6 +3777,7 @@ static DWORD WINAPI init_thread(void*) {
     if (g_hoverDist < 1.f) g_hoverDist = 1.f; if (g_hoverDist > 20.f) g_hoverDist = 20.f;
     LOG(.str(MOD_NAME " " MOD_VERSION " starting, image base ").x((uint64_t)g_base)
         .str(" .text size ").x(g_textSize));
+    lang_update();
     uint8_t* place  = find_hookable("PlaceShape", SIG_PLACE, 10);
     uint8_t* remove = find_hookable("RemoveShape", SIG_REMOVE, 10);
     uint8_t* bounds = find_unique("ShapeBounds", SIG_BOUNDS);
@@ -3562,7 +3813,7 @@ static DWORD WINAPI init_thread(void*) {
         LOG(.str("required code not found; mod disabled (game version not supported, or another mod changed this code). place=").i(place != nullptr)
             .str(" bounds=").i(bounds != nullptr).str(" remove=").i(remove != nullptr).str(" pay=").i(pay != nullptr)
             .str(" layout=").i(g_worldLayoutOk));
-        flash("Building Tools: game version not supported");
+        flash(T(S_UNSUPPORTED));
         return 0;
     }
     {
@@ -3727,7 +3978,7 @@ static DWORD WINAPI init_thread(void*) {
     g_active = 1;
     LOG(.str("ready. keys: area=").i(g_cfg.keyStructure).str(" replace=").i(g_cfg.keyReplace).str(" style=").i(g_cfg.keyStyle)
         .str(" cancel=").i(g_cfg.keyCancel).str(" maxShapes=").i(g_cfg.maxShapes));
-    flash(g_cfg.creative ? "Building Tools " MOD_VERSION " ready (creative building)" : "Building Tools " MOD_VERSION " ready");
+    { Buf b; b.fmt(T(g_cfg.creative ? S_READY_CREATIVE : S_READY), MOD_VERSION); flash(b.z()); }
     return 0;
 }
 

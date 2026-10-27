@@ -1,6 +1,7 @@
 // Linux unit tests: run the mod's signature scanner against the real game
 // executable (mapped at its virtual layout) and exercise the fill planner.
 #include "../src/core.h"
+#include "../src/strings.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -9,6 +10,7 @@
 #include <regex>
 #include <string>
 #include <map>
+#include <algorithm>
 
 static int fails = 0;
 #define CHECK(c, msg) do { if (c) printf("  ok   %s\n", msg); else { printf("  FAIL %s\n", msg); fails++; } } while (0)
@@ -100,9 +102,69 @@ static void binary_checks(const char* exe) {
 
 }
 
+// Translation files (lang/<code>.txt): one per language of the game's menu, only keys
+// of src/strings.h, each once, every text with the same {n} placeholders as English,
+// and lang/en.txt equal to the built-in English.
+static const char* const kKeys[S_COUNT] = {
+#define K(id, key, en) key,
+    BT_STRINGS(K)
+#undef K
+};
+static const char* const kEn[S_COUNT] = {
+#define E(id, key, en) en,
+    BT_STRINGS(E)
+#undef E
+};
+static std::string placeholders(const std::string& t) {
+    std::string out;
+    for (size_t i = 0; i + 2 < t.size(); i++)
+        if (t[i] == '{' && t[i + 1] >= '0' && t[i + 1] <= '3' && t[i + 2] == '}') { out += t[i + 1]; }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+static void translation_checks() {
+    std::map<std::string, int> index;
+    for (int k = 0; k < S_COUNT; k++) {
+        CHECK(index.count(kKeys[k]) == 0 || !printf("    duplicate key %s\n", kKeys[k]), kKeys[k]);
+        index[kKeys[k]] = k;
+    }
+    for (int l = 0; l < kLanguageCount; l++) {
+        std::string code = kLanguages[l].code, path = std::string(SRC_DIR) + "/../lang/" + code + ".txt";
+        std::ifstream f(path);
+        std::string head = "lang/" + code + ".txt";
+        if (!f) { CHECK(false, (head + " exists").c_str()); continue; }
+        std::vector<int> seen(S_COUNT, 0);
+        std::string line; int bad = 0, n = 0;
+        while (std::getline(f, line)) {
+            n++;
+            if (n == 1 && line.size() >= 3 && (uint8_t)line[0] == 0xef) line = line.substr(3);
+            while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+            size_t a = line.find_first_not_of(" \t");
+            if (a == std::string::npos || line[a] == '#' || line[a] == ';') continue;
+            size_t eq = line.find('=');
+            if (eq == std::string::npos) { printf("    %s:%d no '='\n", head.c_str(), n); bad++; continue; }
+            std::string key = line.substr(a, eq - a), val = line.substr(eq + 1);
+            while (!key.empty() && (key.back() == ' ' || key.back() == '\t')) key.pop_back();
+            val.erase(0, val.find_first_not_of(" \t") == std::string::npos ? val.size() : val.find_first_not_of(" \t"));
+            auto it = index.find(key);
+            if (it == index.end()) { printf("    %s:%d unknown key %s\n", head.c_str(), n, key.c_str()); bad++; continue; }
+            int k = it->second;
+            if (seen[k]++) { printf("    %s:%d duplicate %s\n", head.c_str(), n, key.c_str()); bad++; }
+            std::string v; for (size_t i = 0; i < val.size(); i++) { if (val[i] == '\\' && i + 1 < val.size() && val[i + 1] == 'n') { v += '\n'; i++; } else v += val[i]; }
+            if (placeholders(v) != placeholders(kEn[k])) { printf("    %s:%d %s placeholders differ from English\n", head.c_str(), n, key.c_str()); bad++; }
+            if (code == "en" && v != kEn[k]) { printf("    %s:%d %s differs from src/strings.h\n", head.c_str(), n, key.c_str()); bad++; }
+            if (code != "en" && v.empty() && k != S_MENU_TRANSLATION_NOTE) { printf("    %s:%d %s is empty\n", head.c_str(), n, key.c_str()); bad++; }
+        }
+        int missing = 0;
+        for (int k = 0; k < S_COUNT; k++) if (!seen[k]) { printf("    %s: missing %s\n", head.c_str(), kKeys[k]); missing++; }
+        CHECK(bad == 0 && missing == 0, (head + ": every key once, placeholders as English").c_str());
+    }
+}
+
 int main(int argc, char** argv) {
     const char* exe = argc > 1 ? argv[1] : (getenv("ENSHROUDED_EXE") ? getenv("ENSHROUDED_EXE") : "enshrouded.exe");
     binary_checks(exe);
+    translation_checks();
     // ---------------------------------------------------------------- planner
     const int64_t M = (int64_t)1 << 32;
     float step2[3] = {2.f, 2.f, 2.f};

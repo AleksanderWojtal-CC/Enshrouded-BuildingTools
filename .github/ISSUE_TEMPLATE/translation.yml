@@ -1,0 +1,44 @@
+name: Translation correction
+description: A wrong or clumsy word in the mod's texts, or a whole translation
+title: "[Translation] "
+labels: ["translation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping! The translation files are in the `BuildingTools-Languages`
+        folder in the game folder (and in `lang/` here). See TRANSLATING.md for the rules.
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language
+      options:
+        - Deutsch
+        - Français
+        - Italiano
+        - 日本語
+        - 한국어
+        - Polski
+        - Português (Brasil)
+        - Русский
+        - Español
+        - ไทย
+        - Türkçe
+        - Українська
+        - 简体中文
+        - 繁體中文
+        - English
+    validations:
+      required: true
+  - type: textarea
+    id: lines
+    attributes:
+      label: Corrected lines
+      description: The lines as they should be, for example `menu.keys = Klawisze`. You can also attach the whole file.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: credit
+    attributes:
+      label: Name for the credits (optional)

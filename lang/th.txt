@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: Thai texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = .
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} พร้อมใช้งาน
+msg.ready_creative = Building Tools {0} พร้อมใช้งาน (สร้างแบบครีเอทีฟ)
+msg.unsupported = Building Tools: ไม่รองรับเกมเวอร์ชันนี้
+msg.mod_off = Building Tools ปิด (เกมไม่มีม็อด)  |  กด {0} เพื่อเปิด
+msg.mod_on = Building Tools เปิด  |  กด {0} เพื่อปิด
+msg.mode_area = โหมดพื้นที่
+msg.mode_prefab = โหมดปกติ (แบบในเกม)
+msg.replace_on = แทนที่ เปิด
+msg.replace_off = แทนที่ ปิด
+msg.style_full = รูปแบบการแทนที่: ทั้งรูปทรง
+msg.style_overlap = รูปแบบการแทนที่: เฉพาะส่วนที่ซ้อนกัน
+msg.style_connected = รูปแบบการแทนที่: ที่เชื่อมกัน (ถังสี, โหมดปกติ; คลิกขวาเพื่อลบ)
+msg.fill_solid = การเติมพื้นที่: ทึบ
+msg.fill_hollow = การเติมพื้นที่: ห้องกลวง (ผนัง พื้น เพดาน)
+msg.fill_walls = การเติมพื้นที่: เฉพาะผนัง
+msg.free_on = วางอิสระ เปิด (ไม่ยึดกับพื้นผิว)
+msg.free_off = วางอิสระ ปิด
+msg.free_distance = ระยะวางอิสระ: {0} ม.
+msg.corners_cleared = ล้างมุมแล้ว
+msg.build_corner = สร้าง: ตั้งมุม {0}/{1} แล้ว
+msg.replace_corner = แทนที่: ตั้งมุม {0}/{1} แล้ว
+msg.remove_corner = ลบ: ตั้งมุม {0}/{1} แล้ว
+msg.too_big = ใหญ่เกินไป: {0} ชิ้น (สูงสุด {1})
+msg.placed = วางแล้ว {0} ชิ้น
+msg.placed_partial = วางแล้ว {0} จาก {1} ชิ้น (วัสดุไม่พอ)
+msg.removed = ลบแล้ว {0} ชิ้น
+msg.undo_covers = ย้อนกลับได้ {0} ชิ้น
+msg.not_enough = วัสดุไม่พอสำหรับ {0} ชิ้น (ต้องใช้ {1} ไอเทม)
+msg.undo_needs = การย้อนกลับต้องมีวัสดุที่ถูกแทนที่กลับอยู่ในกระเป๋า
+msg.nothing_to_replace = ไม่มีอะไรให้แทนที่ตรงนี้
+msg.replace_read_fail = แทนที่: อ่านบล็อกที่เล็งไม่ได้ ลองอีกครั้ง
+msg.creplace_own = แทนที่แบบเชื่อม: นี่เป็นวัสดุของคุณอยู่แล้ว
+msg.creplace_nothing = แทนที่แบบเชื่อม: ไม่มีอะไรให้แทนที่ตรงนี้
+msg.creplace_capped = แทนที่แบบเชื่อม: เฉพาะ {0} ชิ้นแรก (FillLimit)
+msg.cdelete_unavailable = ลบแบบเชื่อม: ใช้ไม่ได้ในเกมเวอร์ชันนี้
+msg.cdelete_nothing = ลบแบบเชื่อม: ไม่มีอะไรให้ลบตรงนี้
+msg.cdelete_capped = ลบแบบเชื่อม: เฉพาะ {0} ชิ้นแรก (FillLimit)
+msg.language_set = ภาษาของ Building Tools: ไทย
+
+# Info bar at the bottom of the screen (short words)
+bar.area = พื้นที่ {0}/{1}
+bar.area_build = พื้นที่ สร้าง {0}/{1}
+bar.area_replace = พื้นที่ แทนที่ {0}/{1}
+bar.area_remove = พื้นที่ ลบ {0}/{1}
+bar.hollow = กลวง
+bar.walls = ผนัง
+bar.prefab = ปกติ
+bar.prefab_replace = ปกติ แทนที่
+bar.full = ทั้งรูปทรง
+bar.overlap = ซ้อนกัน
+bar.connected = เชื่อมกัน
+bar.free = อิสระ {0} ม.
+bar.creative = ครีเอทีฟ
+bar.size = {0}x{1} สูง{2} = {3}
+bar.too_big = ใหญ่เกินไป (สูงสุด {0})
+bar.key_area = พื้นที่
+bar.key_replace = แทนที่
+bar.key_clear = ล้าง
+bar.key_style = รูปแบบ
+bar.key_free = อิสระ
+bar.key_fill = เติม
+bar.key_wheel = +ล้อเมาส์ ระยะ
+bar.key_off = ปิด
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = โหมดพื้นที่
+hud.area_on = โหมดพื้นที่: เปิด
+hud.area_off = โหมดพื้นที่: ปิด
+hud.fill_solid = เติม: ทึบ
+hud.fill_hollow = เติม: กลวง
+hud.fill_walls = เติม: ผนัง
+hud.clear = ล้างมุม
+hud.replace = แทนที่
+hud.replace_on = แทนที่: เปิด
+hud.replace_off = แทนที่: ปิด
+hud.style_full = รูปแบบ: ทั้งหมด
+hud.style_overlap = รูปแบบ: ซ้อนกัน
+hud.style_connected = รูปแบบ: เชื่อมกัน
+hud.free = วางอิสระ
+hud.free_on = วางอิสระ: เปิด
+hud.free_off = วางอิสระ: ปิด
+hud.wheel = + ล้อเมาส์: {0} ม.
+hud.menu = เมนูเครื่องมือ
+
+# Floating text under the crosshair
+float.too_big = ใหญ่เกินไป
+float.size = {0} x {1}, สูง {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Shift
+key.alt = Alt
+key.number = ปุ่ม {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = ปุ่ม
+menu.options = ตัวเลือก
+menu.footer = เวอร์ชัน {0} กด Esc หรือปุ่มเมนูเพื่อปิดเมนู
+menu.close = ปิด
+menu.cancel = ยกเลิก
+menu.press_key = กดปุ่ม...
+menu.no_key = ไม่มี
+menu.keys_help = คลิกที่ปุ่มเพื่อเปลี่ยน บันทึกไว้ใน BuildingTools.ini
+menu.keys_waiting = กดปุ่มใหม่ ใช้ร่วมกับ Shift, Ctrl หรือ Alt ได้ Esc ยกเลิก Delete ล้างปุ่ม
+menu.translation_note = คำแปลนี้อาจมีข้อผิดพลาด ขออภัย! ยินดีรับการแก้ไข (Nexus หรือ GitHub)
+menu.key_menu = เมนู Building Tools
+menu.key_area = โหมดพื้นที่ เปิด / ปิด
+menu.key_replace = แทนที่ เปิด / ปิด
+menu.key_style = รูปแบบการแทนที่
+menu.key_fill = การเติมพื้นที่
+menu.key_clear = ล้างมุมพื้นที่
+menu.key_free = วางอิสระ เปิด / ปิด
+menu.key_farther = วางอิสระ ไกลขึ้น
+menu.key_closer = วางอิสระ ใกล้ขึ้น
+menu.key_wheel = ระยะ (กดค้าง + ล้อเมาส์)
+menu.key_off = ม็อดทั้งหมด ปิด / เปิด
+
+# Options tab
+option.off = ปิด
+option.on = เปิด
+option.mode = โหมด
+option.mode_prefab = ปกติ (แบบในเกม)
+option.mode_area = พื้นที่
+option.replace = แทนที่
+option.style = รูปแบบการแทนที่
+option.style_full = ทั้งรูปทรง
+option.style_overlap = เฉพาะส่วนที่ซ้อนกัน
+option.style_connected = ที่เชื่อมกัน (ถังสี)
+option.fill = การเติมพื้นที่
+option.fill_solid = ทึบ
+option.fill_hollow = ห้องกลวง
+option.fill_walls = เฉพาะผนัง
+option.free = วางอิสระ
+option.language = ภาษา
+option.language_game = เหมือนในเกม

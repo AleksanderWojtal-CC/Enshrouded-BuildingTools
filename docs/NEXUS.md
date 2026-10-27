@@ -63,6 +63,13 @@ A full-screen menu that looks like the game's: Keys tab (click a key, press the 
 Shift/Ctrl/Alt combinations work) and Options tab. While you build, the mod's keys sit in
 the game's building box with the game's key icons and on/off switches.
 
+[b]In your language[/b]
+The mod's texts follow the game's language: English, Deutsch, Français, Italiano, 日本語,
+한국어, Polski, Português (Brasil), Русский, Español, ไทย, Türkçe, Українська, 简体中文 and 繁體中文.
+Translations other than English are drafts and may contain mistakes, sorry! Please
+help: corrections are very welcome in the comments or on GitHub
+([url=https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools/blob/main/TRANSLATING.md]how to translate[/url]).
+
 [b]Details[/b]
 [list]
 [*]Costs, refunds and undo go through the game's own building code.
@@ -74,8 +81,9 @@ of a large area; use an area remove for the rest.
 [/list]
 
 [b]Install[/b]
-Extract the zip into the game folder (next to enshrouded.exe).
-Uninstall: delete dinput8.dll.
+Extract the zip into the game folder (next to enshrouded.exe), with the
+BuildingTools-Languages folder.
+Uninstall: delete dinput8.dll and BuildingTools-Languages.
 
 [b]Compatibility[/b]
 Built for the 1.0 client (2026-10-20). After a game update the mod disables itself

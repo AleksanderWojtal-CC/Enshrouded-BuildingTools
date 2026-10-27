@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: Japanese texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = .
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} 準備完了
+msg.ready_creative = Building Tools {0} 準備完了（クリエイティブ建築）
+msg.unsupported = Building Tools：このゲームバージョンには対応していません
+msg.mod_off = Building Tools オフ（MODなしのゲーム）  |  {0} でオン
+msg.mod_on = Building Tools オン  |  {0} でオフ
+msg.mode_area = 範囲モード
+msg.mode_prefab = 通常モード（ゲーム標準）
+msg.replace_on = 置き換え オン
+msg.replace_off = 置き換え オフ
+msg.style_full = 置き換え方式：形全体
+msg.style_overlap = 置き換え方式：重なりのみ
+msg.style_connected = 置き換え方式：つながり（塗りつぶし、通常モード、右クリックで削除）
+msg.fill_solid = 範囲の埋め方：中まで埋める
+msg.fill_hollow = 範囲の埋め方：空洞の部屋（壁・床・天井）
+msg.fill_walls = 範囲の埋め方：壁のみ
+msg.free_on = 自由配置 オン（面に吸着しない）
+msg.free_off = 自由配置 オフ
+msg.free_distance = 自由配置の距離：{0} m
+msg.corners_cleared = 角をクリアしました
+msg.build_corner = 建築：角 {0}/{1} を設定
+msg.replace_corner = 置き換え：角 {0}/{1} を設定
+msg.remove_corner = 撤去：角 {0}/{1} を設定
+msg.too_big = 大きすぎます：{0} 個（最大 {1}）
+msg.placed = {0} 個を配置しました
+msg.placed_partial = {1} 個中 {0} 個を配置しました（素材不足）
+msg.removed = {0} 個を撤去しました
+msg.undo_covers = 元に戻せるのは {0} 個
+msg.not_enough = {0} 個分の素材が足りません（アイテム {1} 個が必要）
+msg.undo_needs = 元に戻すには、置き換えた素材がインベントリに戻っている必要があります
+msg.nothing_to_replace = ここには置き換えるものがありません
+msg.replace_read_fail = 置き換え：狙ったブロックを読み取れませんでした。もう一度お試しください
+msg.creplace_own = つながり置き換え：すでに同じ素材です
+msg.creplace_nothing = つながり置き換え：ここには置き換えるものがありません
+msg.creplace_capped = つながり置き換え：最初の {0} 個のみ（FillLimit）
+msg.cdelete_unavailable = つながり削除：このゲームバージョンでは使えません
+msg.cdelete_nothing = つながり削除：ここには撤去するものがありません
+msg.cdelete_capped = つながり削除：最初の {0} 個のみ（FillLimit）
+msg.language_set = Building Tools の言語：日本語
+
+# Info bar at the bottom of the screen (short words)
+bar.area = 範囲 {0}/{1}
+bar.area_build = 範囲 建築 {0}/{1}
+bar.area_replace = 範囲 置き換え {0}/{1}
+bar.area_remove = 範囲 撤去 {0}/{1}
+bar.hollow = 空洞
+bar.walls = 壁
+bar.prefab = 通常
+bar.prefab_replace = 通常 置き換え
+bar.full = 形全体
+bar.overlap = 重なり
+bar.connected = つながり
+bar.free = 自由 {0} m
+bar.creative = クリエイティブ
+bar.size = {0}x{1} 高さ{2} = {3}
+bar.too_big = 大きすぎ（最大 {0}）
+bar.key_area = 範囲
+bar.key_replace = 置き換え
+bar.key_clear = クリア
+bar.key_style = 方式
+bar.key_free = 自由
+bar.key_fill = 埋め方
+bar.key_wheel = +ホイール 距離
+bar.key_off = オフ
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = 範囲モード
+hud.area_on = 範囲モード：オン
+hud.area_off = 範囲モード：オフ
+hud.fill_solid = 埋め方：中まで
+hud.fill_hollow = 埋め方：空洞
+hud.fill_walls = 埋め方：壁
+hud.clear = 角をクリア
+hud.replace = 置き換え
+hud.replace_on = 置き換え：オン
+hud.replace_off = 置き換え：オフ
+hud.style_full = 方式：全体
+hud.style_overlap = 方式：重なり
+hud.style_connected = 方式：つながり
+hud.free = 自由配置
+hud.free_on = 自由配置：オン
+hud.free_off = 自由配置：オフ
+hud.wheel = + ホイール：{0} m
+hud.menu = ツールメニュー
+
+# Floating text under the crosshair
+float.too_big = 大きすぎ
+float.size = {0} x {1}、高さ {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Shift
+key.alt = Alt
+key.number = キー {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = キー
+menu.options = オプション
+menu.footer = バージョン {0}。Esc またはメニューキーで閉じます。
+menu.close = 閉じる
+menu.cancel = キャンセル
+menu.press_key = キーを押してください...
+menu.no_key = なし
+menu.keys_help = キーをクリックすると変更できます。BuildingTools.ini に保存されます。
+menu.keys_waiting = 新しいキーを押してください（Shift、Ctrl、Alt との組み合わせも可）。Esc でキャンセル、Delete で解除。
+menu.translation_note = この翻訳には誤りがあるかもしれません。申し訳ありません！修正のご提案を歓迎します（Nexus または GitHub）。
+menu.key_menu = Building Tools メニュー
+menu.key_area = 範囲モード オン / オフ
+menu.key_replace = 置き換え オン / オフ
+menu.key_style = 置き換え方式
+menu.key_fill = 範囲の埋め方
+menu.key_clear = 範囲の角をクリア
+menu.key_free = 自由配置 オン / オフ
+menu.key_farther = 自由配置 遠くへ
+menu.key_closer = 自由配置 近くへ
+menu.key_wheel = 距離（押しながらマウスホイール）
+menu.key_off = MOD 全体 オフ / オン
+
+# Options tab
+option.off = オフ
+option.on = オン
+option.mode = モード
+option.mode_prefab = 通常（ゲーム標準）
+option.mode_area = 範囲
+option.replace = 置き換え
+option.style = 置き換え方式
+option.style_full = 形全体
+option.style_overlap = 重なりのみ
+option.style_connected = つながり（塗りつぶし）
+option.fill = 範囲の埋め方
+option.fill_solid = 中まで埋める
+option.fill_hollow = 空洞の部屋
+option.fill_walls = 壁のみ
+option.free = 自由配置
+option.language = 言語
+option.language_game = ゲームと同じ

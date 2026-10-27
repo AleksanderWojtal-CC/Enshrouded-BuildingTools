@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: Turkish texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = ,
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} hazır
+msg.ready_creative = Building Tools {0} hazır (yaratıcı inşa)
+msg.unsupported = Building Tools: bu oyun sürümü desteklenmiyor
+msg.mod_off = Building Tools KAPALI (modsuz oyun)  |  {0} açar
+msg.mod_on = Building Tools AÇIK  |  {0} kapatır
+msg.mode_area = Alan modu
+msg.mode_prefab = Normal mod (oyundaki gibi)
+msg.replace_on = Değiştirme AÇIK
+msg.replace_off = Değiştirme KAPALI
+msg.style_full = Değiştirme stili: tüm şekil
+msg.style_overlap = Değiştirme stili: yalnızca kesişim
+msg.style_connected = Değiştirme stili: bağlantılı (boya kovası, normal mod; sağ tık siler)
+msg.fill_solid = Alan dolgusu: dolu
+msg.fill_hollow = Alan dolgusu: boş oda (duvarlar, zemin, tavan)
+msg.fill_walls = Alan dolgusu: yalnızca duvarlar
+msg.free_on = Serbest yerleştirme AÇIK (yüzeye yapışma yok)
+msg.free_off = Serbest yerleştirme KAPALI
+msg.free_distance = Serbest yerleştirme mesafesi: {0} m
+msg.corners_cleared = Köşeler temizlendi
+msg.build_corner = İnşa: köşe {0}/{1} ayarlandı
+msg.replace_corner = Değiştirme: köşe {0}/{1} ayarlandı
+msg.remove_corner = Kaldırma: köşe {0}/{1} ayarlandı
+msg.too_big = Çok büyük: {0} şekil (en fazla {1})
+msg.placed = Yerleştirilen şekil: {0}
+msg.placed_partial = Yerleştirilen şekil: {0}/{1} (yeterli malzeme yok)
+msg.removed = Kaldırılan şekil: {0}
+msg.undo_covers = geri alma kapsamı: {0}
+msg.not_enough = {0} şekil için yeterli malzeme yok ({1} eşya gerekli)
+msg.undo_needs = Geri almak için değiştirilen malzemenin envantere geri dönmesi gerekir
+msg.nothing_to_replace = Burada değiştirilecek bir şey yok
+msg.replace_read_fail = Değiştirme: hedeflenen blok okunamadı, tekrar dene
+msg.creplace_own = Bağlantılı değiştirme: bu zaten senin malzemen
+msg.creplace_nothing = Bağlantılı değiştirme: burada değiştirilecek bir şey yok
+msg.creplace_capped = Bağlantılı değiştirme: yalnızca ilk {0} şekil (FillLimit)
+msg.cdelete_unavailable = Bağlantılı silme: bu oyun sürümünde kullanılamıyor
+msg.cdelete_nothing = Bağlantılı silme: burada kaldırılacak bir şey yok
+msg.cdelete_capped = Bağlantılı silme: yalnızca ilk {0} şekil (FillLimit)
+msg.language_set = Building Tools dili: Türkçe
+
+# Info bar at the bottom of the screen (short words)
+bar.area = Alan {0}/{1}
+bar.area_build = Alan inşa {0}/{1}
+bar.area_replace = Alan değiştir {0}/{1}
+bar.area_remove = Alan kaldır {0}/{1}
+bar.hollow = boş
+bar.walls = duvarlar
+bar.prefab = Normal
+bar.prefab_replace = Normal değiştir
+bar.full = tüm şekil
+bar.overlap = kesişim
+bar.connected = bağlantılı
+bar.free = serbest {0} m
+bar.creative = yaratıcı
+bar.size = {0}x{1} y{2} = {3}
+bar.too_big = ÇOK BÜYÜK (en fazla {0})
+bar.key_area = alan
+bar.key_replace = değiştir
+bar.key_clear = temizle
+bar.key_style = stil
+bar.key_free = serbest
+bar.key_fill = dolgu
+bar.key_wheel = +tekerlek mesafe
+bar.key_off = kapat
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = Alan modu
+hud.area_on = Alan modu: açık
+hud.area_off = Alan modu: kapalı
+hud.fill_solid = Dolgu: dolu
+hud.fill_hollow = Dolgu: boş
+hud.fill_walls = Dolgu: duvarlar
+hud.clear = Köşeleri temizle
+hud.replace = Değiştirme
+hud.replace_on = Değiştirme: açık
+hud.replace_off = Değiştirme: kapalı
+hud.style_full = Stil: tüm
+hud.style_overlap = Stil: kesişim
+hud.style_connected = Stil: bağlantılı
+hud.free = Serbest yerleştirme
+hud.free_on = Serbest yerleştirme: açık
+hud.free_off = Serbest yerleştirme: kapalı
+hud.wheel = + tekerlek: {0} m
+hud.menu = Araçlar menüsü
+
+# Floating text under the crosshair
+float.too_big = çok büyük
+float.size = {0} x {1}, y {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Shift
+key.alt = Alt
+key.number = tuş {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = Tuşlar
+menu.options = Seçenekler
+menu.footer = Sürüm {0}. Esc veya menü tuşu menüyü kapatır.
+menu.close = Kapat
+menu.cancel = İptal
+menu.press_key = Bir tuşa bas...
+menu.no_key = Yok
+menu.keys_help = Değiştirmek için bir tuşa tıkla. BuildingTools.ini dosyasına kaydedilir.
+menu.keys_waiting = Yeni tuşa bas, Shift, Ctrl veya Alt ile de olur. Esc iptal eder, Delete temizler.
+menu.translation_note = Bu çeviri hatalar içerebilir, özür dileriz! Düzeltmeler memnuniyetle karşılanır (Nexus veya GitHub).
+menu.key_menu = Building Tools menüsü
+menu.key_area = Alan modu açık / kapalı
+menu.key_replace = Değiştirme açık / kapalı
+menu.key_style = Değiştirme stili
+menu.key_fill = Alan dolgusu
+menu.key_clear = Alan köşelerini temizle
+menu.key_free = Serbest yerleştirme açık / kapalı
+menu.key_farther = Serbest yerleştirme daha uzak
+menu.key_closer = Serbest yerleştirme daha yakın
+menu.key_wheel = Mesafe (basılı tut + fare tekerleği)
+menu.key_off = Tüm mod kapalı / açık
+
+# Options tab
+option.off = Kapalı
+option.on = Açık
+option.mode = Mod
+option.mode_prefab = Normal (oyundaki gibi)
+option.mode_area = Alan
+option.replace = Değiştirme
+option.style = Değiştirme stili
+option.style_full = Tüm şekil
+option.style_overlap = Yalnızca kesişim
+option.style_connected = Bağlantılı (boya kovası)
+option.fill = Alan dolgusu
+option.fill_solid = Dolu
+option.fill_hollow = Boş oda
+option.fill_walls = Yalnızca duvarlar
+option.free = Serbest yerleştirme
+option.language = Dil
+option.language_game = Oyunla aynı

@@ -1,0 +1,151 @@
+# Enshrouded Building Tools: English texts.
+# English is built into the mod; this file is the template for translations.
+# Copy it to <code>.txt (for example pl.txt), translate the text after "=",
+# keep {0} {1} ... (the mod fills in numbers and key names) and keep the keys.
+# How to test and send a translation: see TRANSLATING.md in the GitHub repository
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools
+
+# Numbers
+# decimal mark in distances like 4.0 m
+num.decimal = .
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} ready
+msg.ready_creative = Building Tools {0} ready (creative building)
+msg.unsupported = Building Tools: game version not supported
+msg.mod_off = Building Tools OFF (vanilla game)  |  {0} turns it on
+msg.mod_on = Building Tools ON  |  {0} turns it off
+msg.mode_area = Area mode
+msg.mode_prefab = Prefab mode (vanilla)
+msg.replace_on = Replace ON
+msg.replace_off = Replace OFF
+msg.style_full = Replace style: full shape
+msg.style_overlap = Replace style: overlap only
+msg.style_connected = Replace style: connected (fill bucket, Prefab mode; right click deletes)
+msg.fill_solid = Area fill: solid
+msg.fill_hollow = Area fill: hollow room (walls, floor, ceiling)
+msg.fill_walls = Area fill: walls only
+msg.free_on = Free placement ON (no surface snapping)
+msg.free_off = Free placement OFF
+msg.free_distance = Free placement distance {0} m
+msg.corners_cleared = Corners cleared
+msg.build_corner = Build corner {0} of {1} set
+msg.replace_corner = Replace corner {0} of {1} set
+msg.remove_corner = Remove corner {0} of {1} set
+msg.too_big = Too big: {0} shapes (max {1})
+# numbers can be 1 or 2000: write it so any number reads well (e.g. "Shapes placed: {0}")
+msg.placed = Placed {0} shapes
+msg.placed_partial = Placed {0} of {1} shapes (not enough material)
+msg.removed = Removed {0} shapes
+msg.undo_covers = undo covers {0}
+msg.not_enough = Not enough material for {0} shapes (needs {1} items)
+msg.undo_needs = Undo needs the replaced material back in your inventory
+msg.nothing_to_replace = Nothing to replace there
+msg.replace_read_fail = Replace: could not read the aimed block, try again
+msg.creplace_own = Connected replace: that is already your material
+msg.creplace_nothing = Connected replace: nothing to replace there
+msg.creplace_capped = Connected replace: only the first {0} shapes (FillLimit)
+msg.cdelete_unavailable = Connected delete: not available in this game version
+msg.cdelete_nothing = Connected delete: nothing to remove there
+msg.cdelete_capped = Connected delete: only the first {0} shapes (FillLimit)
+msg.language_set = Building Tools language: English
+
+# Info bar at the bottom of the screen (short words)
+bar.area = Area {0}/{1}
+bar.area_build = Area build {0}/{1}
+bar.area_replace = Area replace {0}/{1}
+bar.area_remove = Area remove {0}/{1}
+bar.hollow = hollow
+bar.walls = walls
+bar.prefab = Prefab
+bar.prefab_replace = Prefab replace
+bar.full = full shape
+bar.overlap = overlap
+bar.connected = connected
+bar.free = free {0} m
+bar.creative = creative
+# area size: width x depth, h = height, = number of shapes
+bar.size = {0}x{1} h{2} = {3}
+bar.too_big = TOO BIG (max {0})
+bar.key_area = area
+bar.key_replace = replace
+bar.key_clear = clear
+bar.key_style = style
+bar.key_free = free
+bar.key_fill = fill
+bar.key_wheel = +wheel dist
+bar.key_off = off
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = Area mode
+hud.area_on = Area mode: on
+hud.area_off = Area mode: off
+hud.fill_solid = Fill: solid
+hud.fill_hollow = Fill: hollow
+hud.fill_walls = Fill: walls
+hud.clear = Clear corners
+hud.replace = Replace
+hud.replace_on = Replace: on
+hud.replace_off = Replace: off
+hud.style_full = Style: full
+hud.style_overlap = Style: overlap
+hud.style_connected = Style: connected
+hud.free = Free placement
+hud.free_on = Free placement: on
+hud.free_off = Free placement: off
+hud.wheel = + wheel: {0} m
+hud.menu = Tools menu
+
+# Floating text under the crosshair
+float.too_big = too big
+float.size = {0} x {1}, h {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Shift
+key.alt = Alt
+key.number = key {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = Keys
+menu.options = Options
+menu.footer = Version {0}. Esc or the menu key closes the menu.
+menu.close = Close
+menu.cancel = Cancel
+menu.press_key = Press a key...
+menu.no_key = None
+menu.keys_help = Click a key to change it. Saved to BuildingTools.ini.
+menu.keys_waiting = Press the new key, also with Shift, Ctrl or Alt. Esc cancels, Delete clears it.
+# shown at the bottom of the menu while a translation is unreviewed; empty = not shown
+menu.translation_note = 
+menu.key_menu = Building Tools menu
+menu.key_area = Area mode on / off
+menu.key_replace = Replace on / off
+menu.key_style = Replace style
+menu.key_fill = Area fill
+menu.key_clear = Clear area corners
+menu.key_free = Free placement on / off
+menu.key_farther = Free placement farther
+menu.key_closer = Free placement closer
+menu.key_wheel = Distance (hold + mouse wheel)
+menu.key_off = Whole mod off / on
+
+# Options tab
+option.off = Off
+option.on = On
+option.mode = Mode
+option.mode_prefab = Prefab (vanilla)
+option.mode_area = Area
+option.replace = Replace
+option.style = Replace style
+option.style_full = Full shape
+option.style_overlap = Overlap only
+option.style_connected = Connected (fill bucket)
+option.fill = Area fill
+option.fill_solid = Solid
+option.fill_hollow = Hollow room
+option.fill_walls = Walls only
+option.free = Free placement
+option.language = Language
+option.language_game = Same as the game

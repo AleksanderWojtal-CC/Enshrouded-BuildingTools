@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: Spanish texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = ,
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} listo
+msg.ready_creative = Building Tools {0} listo (construcción creativa)
+msg.unsupported = Building Tools: esta versión del juego no es compatible
+msg.mod_off = Building Tools DESACTIVADO (juego sin mod)  |  {0} lo activa
+msg.mod_on = Building Tools ACTIVADO  |  {0} lo desactiva
+msg.mode_area = Modo área
+msg.mode_prefab = Modo normal (como el juego)
+msg.replace_on = Reemplazar ACTIVADO
+msg.replace_off = Reemplazar DESACTIVADO
+msg.style_full = Estilo de reemplazo: forma completa
+msg.style_overlap = Estilo de reemplazo: solo superposición
+msg.style_connected = Estilo de reemplazo: conectado (cubo de pintura, modo normal; clic derecho borra)
+msg.fill_solid = Relleno del área: sólido
+msg.fill_hollow = Relleno del área: habitación hueca (paredes, suelo, techo)
+msg.fill_walls = Relleno del área: solo paredes
+msg.free_on = Colocación libre ACTIVADA (sin ajuste a superficies)
+msg.free_off = Colocación libre DESACTIVADA
+msg.free_distance = Distancia de colocación libre: {0} m
+msg.corners_cleared = Esquinas borradas
+msg.build_corner = Construir: esquina {0} de {1} fijada
+msg.replace_corner = Reemplazar: esquina {0} de {1} fijada
+msg.remove_corner = Quitar: esquina {0} de {1} fijada
+msg.too_big = Demasiado grande: {0} formas (máx. {1})
+msg.placed = Formas colocadas: {0}
+msg.placed_partial = Formas colocadas: {0} de {1} (no hay material suficiente)
+msg.removed = Formas quitadas: {0}
+msg.undo_covers = deshacer cubre {0}
+msg.not_enough = No hay material suficiente para {0} formas (se necesitan {1} objetos)
+msg.undo_needs = Para deshacer, el material reemplazado debe volver a estar en el inventario
+msg.nothing_to_replace = No hay nada que reemplazar aquí
+msg.replace_read_fail = Reemplazar: no se pudo leer el bloque apuntado, inténtalo de nuevo
+msg.creplace_own = Reemplazo conectado: ese ya es tu material
+msg.creplace_nothing = Reemplazo conectado: no hay nada que reemplazar aquí
+msg.creplace_capped = Reemplazo conectado: solo las primeras {0} formas (FillLimit)
+msg.cdelete_unavailable = Borrado conectado: no disponible en esta versión del juego
+msg.cdelete_nothing = Borrado conectado: no hay nada que quitar aquí
+msg.cdelete_capped = Borrado conectado: solo las primeras {0} formas (FillLimit)
+msg.language_set = Idioma de Building Tools: español
+
+# Info bar at the bottom of the screen (short words)
+bar.area = Área {0}/{1}
+bar.area_build = Área construir {0}/{1}
+bar.area_replace = Área reemplazar {0}/{1}
+bar.area_remove = Área quitar {0}/{1}
+bar.hollow = hueco
+bar.walls = paredes
+bar.prefab = Normal
+bar.prefab_replace = Normal reemplazar
+bar.full = forma completa
+bar.overlap = superposición
+bar.connected = conectado
+bar.free = libre {0} m
+bar.creative = creativo
+bar.size = {0}x{1} a{2} = {3}
+bar.too_big = DEMASIADO GRANDE (máx. {0})
+bar.key_area = área
+bar.key_replace = reemplazar
+bar.key_clear = borrar
+bar.key_style = estilo
+bar.key_free = libre
+bar.key_fill = relleno
+bar.key_wheel = +rueda distancia
+bar.key_off = desactivar
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = Modo área
+hud.area_on = Modo área: sí
+hud.area_off = Modo área: no
+hud.fill_solid = Relleno: sólido
+hud.fill_hollow = Relleno: hueco
+hud.fill_walls = Relleno: paredes
+hud.clear = Borrar esquinas
+hud.replace = Reemplazar
+hud.replace_on = Reemplazar: sí
+hud.replace_off = Reemplazar: no
+hud.style_full = Estilo: completo
+hud.style_overlap = Estilo: superposición
+hud.style_connected = Estilo: conectado
+hud.free = Colocación libre
+hud.free_on = Colocación libre: sí
+hud.free_off = Colocación libre: no
+hud.wheel = + rueda: {0} m
+hud.menu = Menú de herramientas
+
+# Floating text under the crosshair
+float.too_big = demasiado grande
+float.size = {0} x {1}, a {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Mayús
+key.alt = Alt
+key.number = tecla {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = Teclas
+menu.options = Opciones
+menu.footer = Versión {0}. Esc o la tecla del menú cierra el menú.
+menu.close = Cerrar
+menu.cancel = Cancelar
+menu.press_key = Pulsa una tecla...
+menu.no_key = Ninguna
+menu.keys_help = Haz clic en una tecla para cambiarla. Se guarda en BuildingTools.ini.
+menu.keys_waiting = Pulsa la nueva tecla, también con Mayús, Ctrl o Alt. Esc cancela, Supr la borra.
+menu.translation_note = Esta traducción puede contener errores, ¡lo sentimos! Las correcciones son bienvenidas (Nexus o GitHub).
+menu.key_menu = Menú de Building Tools
+menu.key_area = Modo área sí / no
+menu.key_replace = Reemplazar sí / no
+menu.key_style = Estilo de reemplazo
+menu.key_fill = Relleno del área
+menu.key_clear = Borrar esquinas del área
+menu.key_free = Colocación libre sí / no
+menu.key_farther = Colocación libre más lejos
+menu.key_closer = Colocación libre más cerca
+menu.key_wheel = Distancia (mantener + rueda del ratón)
+menu.key_off = Todo el mod no / sí
+
+# Options tab
+option.off = No
+option.on = Sí
+option.mode = Modo
+option.mode_prefab = Normal (como el juego)
+option.mode_area = Área
+option.replace = Reemplazar
+option.style = Estilo de reemplazo
+option.style_full = Forma completa
+option.style_overlap = Solo superposición
+option.style_connected = Conectado (cubo de pintura)
+option.fill = Relleno del área
+option.fill_solid = Sólido
+option.fill_hollow = Habitación hueca
+option.fill_walls = Solo paredes
+option.free = Colocación libre
+option.language = Idioma
+option.language_game = Como el juego
