@@ -500,3 +500,10 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   switches the game's screen). Tab 0x40 bytes: shortcut @+1 (0x8b none), label
   TextString @+0x18, active @+0x30, hover @+0x31, interactive @+0x32, opacity @+0x34.
   dev7 hooks both calls while it draws its own bar (menu 3) to show its pages.
+- Test (dev7): tab bar looks and works like the game's; combos and columns work.
+- Hint bar: HudMenu collects hints for the frame in a list at [ui ctx+0xd0]+0x32e18
+  (16 x 0x48, count u8 @+0x480) and draws them with drawHints (`c2a9b0`)({list, count},
+  0x303, padding {0,10,0,0}, 0, 0). makeHint (`b14b00`)(hint, UiActionId, enabled);
+  custom label flag @+0x1b, label TextString @+0x20. UiActionId (types.txt
+  keen::input_mapping::runtime::UiActionId): 0 Confirm, 1 Back, 10 NextTab,
+  11 PreviousTab, 24 BindingReset, 25 BindingClear. dev8 draws a Back hint ("Close").
