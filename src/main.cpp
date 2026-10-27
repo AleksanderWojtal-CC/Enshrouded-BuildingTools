@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.17.4"
+#define MOD_VERSION "0.18.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -100,6 +100,7 @@ struct Config {
     int keyCloser    = VK_NEXT;    // Page Down
     int wheelKey     = 'Q';        // hold + mouse wheel = free placement distance
     int keyFill      = VK_F11;     // area fill: solid / hollow / walls
+    int keyMenu      = VK_INSERT;  // in-game menu (native game UI, experimental)
     int refundPopup  = 1;          // show the game's item pop-up for refunds
     int preview      = 1;          // show the area with the game's ghost highlight
     int hoverDist10  = 40;         // free placement distance in tenths of a metre
@@ -146,6 +147,7 @@ static void write_full_ini(const Config& c) {
      .t("; Free placement distance: hold this key + mouse wheel (81 = Q), or the two keys below\r\nFreePlacementWheelKey=").i(c.wheelKey).t("\r\n")
      .t("FreePlacementFarther=").i(c.keyFarther).t("\r\n")
      .t("FreePlacementCloser=").i(c.keyCloser).t("\r\n")
+     .t("; Building Tools menu in the game's own UI (experimental)\r\nMenu=").i(c.keyMenu).t("\r\n")
      .t("\r\n[Creative]\r\n")
      .t("; 1 = creative building: blocks cost nothing, removing or undoing gives nothing back,\r\n")
      .t(";     so your inventory is never touched (props, crafting and chests stay normal)\r\n")
@@ -192,6 +194,7 @@ static void load_config() {
     g_cfg.keyCloser    = ini_int(L"Keys", L"FreePlacementCloser", VK_NEXT);
     g_cfg.wheelKey     = ini_int(L"Keys", L"FreePlacementWheelKey", 'Q');
     g_cfg.keyFill      = ini_int(L"Keys", L"CycleAreaFill", VK_F11);
+    g_cfg.keyMenu      = ini_int(L"Keys", L"Menu", VK_INSERT);
     g_cfg.refundPopup  = ini_int(L"Interface", L"RefundPopup", 1);
     g_cfg.preview      = ini_int(L"Area", L"Preview", 1);
     g_cfg.hoverDist10  = ini_int(L"Area", L"FreePlacementDistance", 40);
@@ -213,7 +216,7 @@ static void load_config() {
     if (ini_int(L"Keys", L"CycleAreaFill", -1) == -1 || ini_int(L"Interface", L"RefundPopup", -1) == -1 ||
         ini_int(L"Area", L"Preview", -1) == -1 || ini_int(L"Creative", L"CreativeBuilding", -1) == -1 ||
         ini_int(L"Keys", L"ToggleMod", -1) == -1 || ini_int(L"Limits", L"FillLimit", -1) == -1 ||
-        ini_int(L"Chests", L"GlobalMagicChests", -1) == -1)
+        ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -249,6 +252,17 @@ static const int kBlitPatchOff = 0x29, kBlitPatchLen = 35, kBlitSkipOff = 0x104;
 // Drop the oldest undo step.
 static const char* SIG_POP_UNDO = "48 89 5C 24 10 48 89 6C 24 18 57 41 56 41 57 48 83 EC 30 48 8B B9 08 0A 00 00";
 // HUD building update (plays the build sounds); hooked to play the mod's sounds.
+// The play-state UI ("doPlayStateUi()"), built every frame. Checks the offsets the menu
+// uses: hud = [[[ui ctx]+0xd0]]+0x38, current HudScreenType byte at hud+0x1cd8.
+static const char* SIG_PLAY_UI =
+    "4C 8B DC 55 49 8D AB E8 FD FF FF 48 81 EC 10 03 00 00 48 8B 05 ?? ?? ?? ?? 48 8B 88 D0 00 00 00 48 8B 01 "
+    "48 85 C0 0F 84 ?? ?? ?? ?? 4D 89 73 C8 4C 8B 70 38 4C 89 B5 30 02 00 00 4D 85 F6 0F 84 ?? ?? ?? ?? "
+    "4D 89 63 D8 4D 8D A6 D8 1C 00 00 41 0F B6 04 24";
+// Its only caller: E8 <play ui>, then three more UI calls.
+static const char* SIG_PLAY_UI_CALL = "EB 05 E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 4C 24 60 E8";
+// Screen dispatch inside it: screen 52 (TechGallery, a developer test screen) calls
+// the function at the je target, screen 53 (YcPlayground) the next one.
+static const char* SIG_SCREEN_DISPATCH = "48 8B 45 80 0F B6 08 83 E9 34 0F 84 ?? ?? ?? ?? 83 F9 01 0F 84";
 static const char* SIG_HUD_UPDATE = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 88 FE FF FF 48 81 EC 78 02 00 00";
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
 static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 88 B3 D9 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 88 2B 01 00 0F 29 44 24 20 E8";
@@ -2397,8 +2411,73 @@ static DWORD WINAPI wheel_thread(void*) {
 }
 
 // ------------------------------------------------------------------ hotkeys
+// ---- in-game menu (native game UI), stage 1 experiment
+// The play-state UI runs every frame on the UI thread and draws the screen named by
+// the HudScreenType byte at hud+0x1cd8 (1 = InGame). Screen 52 (TechGallery) is a
+// developer test screen that no game path opens; the mod opens it by writing that
+// byte from inside the play-state UI and will draw its own menu in that slot.
+// Screen 53 is left alone (Creative Mode uses it).
+enum { SCREEN_INGAME = 1, SCREEN_MOD = 52 };
+typedef void (*PlayUiFn)(void*, void*, void*, void*);
+static PlayUiFn g_playUiOrig = nullptr, g_modScreenOrig = nullptr;
+static uint8_t** g_uiCtxGlobal = nullptr;          // the UI context pointer (rip global)
+static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
+static volatile LONG g_menuOpen = 0;
+
+// Same chain and null checks as the play-state UI itself, which reads it right after.
+static uint8_t* hud_screen_byte() {
+    uint8_t* ctx = *g_uiCtxGlobal;
+    if (!ctx) return nullptr;
+    uint8_t** a = *(uint8_t***)(ctx + 0xd0);
+    if (!*a) return nullptr;
+    uint8_t* hud = *(uint8_t**)(*a + 0x38);
+    return hud ? hud + 0x1cd8 : nullptr;
+}
+
+static void play_ui_hook(void* a, void* b, void* c, void* d) {
+    uint8_t* scr = hud_screen_byte();
+    if (scr) {
+        static int last = -1;
+        LONG req = InterlockedExchange(&g_menuReq, 0);
+        if (req == 1 && *scr == SCREEN_INGAME) { *scr = SCREEN_MOD; LOG(.str("menu: open")); }
+        else if (req == 1) LOG(.str("menu: not opened, screen ").i(*scr).str(" is up"));
+        else if (req == 2 && *scr == SCREEN_MOD) { *scr = SCREEN_INGAME; LOG(.str("menu: close")); }
+        if (*scr != last) { LOG(.str("hud screen ").i(last).str(" -> ").i(*scr)); last = *scr; }
+        g_menuOpen = *scr == SCREEN_MOD;
+    }
+    g_playUiOrig(a, b, c, d);
+}
+
+// Screen 52. Stage 1 still runs the game's own test screen to prove the slot works.
+static void mod_screen_hook(void* a, void* b, void* c, void* d) {
+    static LONG logged = 0;
+    if (!InterlockedExchange(&logged, 1)) LOG(.str("menu: screen drawn"));
+    g_modScreenOrig(a, b, c, d);
+}
+
+static void install_menu() {
+    uint8_t* pu = find_unique("PlayUi", SIG_PLAY_UI);
+    uint8_t* call = find_unique("PlayUiCall", SIG_PLAY_UI_CALL);
+    uint8_t* disp = find_unique("ScreenDispatch", SIG_SCREEN_DISPATCH);
+    if (!pu || !call || !disp) { LOG(.str("menu: not available (UI code not found)")); return; }
+    uint8_t* site = call + 2;
+    uint8_t* je = disp + 10;                                     // 0F 84 rel32 -> E8 <screen 52>
+    uint8_t* s52 = je + 6 + *(int32_t*)(je + 2);
+    if (site + 5 + *(int32_t*)(site + 1) != pu || s52[0] != 0xE8 || !readable(s52, 5)) {
+        LOG(.str("menu: not available (UI layout changed)")); return;
+    }
+    g_uiCtxGlobal = (uint8_t**)(pu + 0x12 + 7 + *(int32_t*)(pu + 0x12 + 3));
+    g_modScreenOrig = (PlayUiFn)(s52 + 5 + *(int32_t*)(s52 + 1));
+    g_playUiOrig = (PlayUiFn)pu;
+    if (hook_calls((uint8_t*)g_modScreenOrig, (void*)&mod_screen_hook, &s52, 1) != 1 ||
+        hook_calls(pu, (void*)&play_ui_hook, &site, 1) != 1) {
+        LOG(.str("menu: not available (hook failed)")); g_playUiOrig = nullptr; return;
+    }
+    LOG(.str("menu: available (screen 52)"));
+}
+
 static DWORD WINAPI input_thread(void*) {
-    bool prev[8] = {}, prevOff = false;
+    bool prev[8] = {}, prevOff = false, prevMenu = false;
     for (;;) {
         Sleep(15);
         if (!g_active) continue;
@@ -2419,6 +2498,11 @@ static DWORD WINAPI input_thread(void*) {
             }
             prevOff = down;
             if (g_modOff) { for (bool& p : prev) p = false; continue; }
+        }
+        {   // in-game menu
+            bool down = focus && g_playUiOrig && g_cfg.keyMenu > 0 && (GetAsyncKeyState(g_cfg.keyMenu) & 0x8000);
+            if (down && !prevMenu) { g_menuReq = g_menuOpen ? 2 : 1; LOG(.str("key: menu")); }
+            prevMenu = down;
         }
         int keys[8] = { g_cfg.keyStructure, g_cfg.keyReplace, g_cfg.keyCancel, g_cfg.keyStyle, g_cfg.keyHover,
                         g_hover ? g_cfg.keyFarther : 0, g_hover ? g_cfg.keyCloser : 0, g_cfg.keyFill };
@@ -2716,6 +2800,7 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
+    install_menu();
     LOG(.str("partial area actions: ").str(g_stockFinalOrig ? "available" : "not available (picker counts not found)"));
     g_placeCommitOrig = (CommitFn)hook(pcommit, 5, (void*)&place_commit_hook);
     if (!g_placeCommitOrig) { LOG(.str("commit hook failed; mod disabled")); return 0; }
