@@ -5,6 +5,7 @@
 //                    replaced or removed with the selected shape (solid, hollow, walls).
 //   Replace        - repaints existing blocks with the current material: full shape,
 //                    overlap only, or connected (fill bucket). Refunds the old material.
+//                    Connected also deletes: right click removes the touching material.
 //   Free placement - the ghost hovers in front of the camera on the 0.5 m grid.
 //   Options        - creative building, magic chests of all bases, off switch (F5).
 // How it works: docs/HOW-IT-WORKS.md. Addresses and research: docs/reverse-engineering-notes.md.
@@ -20,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0"
+#define MOD_VERSION "0.19.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -245,6 +246,10 @@ static const char* SIG_PAY = "40 55 56 48 83 EC 78 48 8B F2 48 8B E9 0F B6 11 85
 // (they price an action); after payment the game commits it with these.
 static const char* SIG_PLACE_COMMIT  = "48 8B C4 55 53 56 57 41 54 41 56 41 57 48 8D A8 88 FD FF FF 48 81 EC 40 03 00 00";
 static const char* SIG_REMOVE_COMMIT = "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 55 41 56 41 57 48 8D AC 24 E0 E5 FF FF";
+// The "may remove" material table (48f1c0) as RemoveShape and RemoveCommit build it
+// (connected delete narrows it to the clicked material).
+static const char* SIG_REMOVE_TABLE_DRY = "E8 ?? ?? ?? ?? 48 8B 85 D0 00 00 00 4C 8D 4C 24 50 4C 8B 46 30 33 D2 48 8B 8E 30 01 00 00";
+static const char* SIG_REMOVE_TABLE_COMMIT = "E8 ?? ?? ?? ?? 66 0F 6F 05 ?? ?? ?? ?? 48 8D 85 90 00 00 00 4C 8B 47 30 4C 8D 4C 24 50";
 // Turns per-material removed volumes into refund entries (called by RemoveShape).
 static const char* SIG_REFUND_BUILD = "4C 8B DC 55 53 56 57 41 55 41 57 49 8D 6B A1 48 81 EC E8 00 00 00 49 8B 58 08";
 // Density check inside the voxel blit callback; patched to run src/cave.S.
@@ -1724,6 +1729,45 @@ static uint8_t structure_fill(CostList* list, void* ctx, void* state, void* pdat
     return g_pend.n > 0 ? 1 : 0;
 }
 
+// ---- connected cells (fill bucket)
+// Breadth-first walk over a grid of shape-sized cells from cell (0,0,0) along the six
+// world axes; a cell joins when `probe(i, j, k)` says it holds the clicked material.
+// Found cells go to g_floodQ (the start first); returns their number, at most `limit`.
+static int32_t g_floodQ[kMaxPending][3];
+template <class Probe>
+static int flood_cells(int limit, Probe probe, bool* capped) {
+    // Every found cell probes up to 6 neighbours, so up to 6 * FillLimit + 1 cells are
+    // visited: the table holds 2^18 (FillLimit is at most 20000), always under half full.
+    static const uint32_t kSeen = 1u << 18;
+    static uint64_t seen[kSeen];                        // open addressing, 0 = empty
+    memset(seen, 0, sizeof(seen));
+    auto key = [](int i, int j, int k) -> uint64_t {
+        return ((uint64_t)(uint32_t)(i + 0x100000) << 42) | ((uint64_t)(uint32_t)(j + 0x100000) << 21) | (uint64_t)(uint32_t)(k + 0x100000) | (1ull << 63);
+    };
+    auto visit = [&](int i, int j, int k) -> bool {     // false if seen before (or table full)
+        uint64_t kk = key(i, j, k); uint32_t h = (uint32_t)((kk * 0x9E3779B97F4A7C15ull) >> 46);
+        for (uint32_t n = 0; n < kSeen; n++, h = (h + 1) & (kSeen - 1)) {
+            if (seen[h] == kk) return false;
+            if (!seen[h]) { seen[h] = kk; return true; }
+        }
+        return false;
+    };
+    int head = 0, tail = 0;
+    *capped = false;
+    visit(0, 0, 0); g_floodQ[tail][0] = 0; g_floodQ[tail][1] = 0; g_floodQ[tail][2] = 0; tail++;
+    static const int dirs[6][3] = { {1,0,0}, {-1,0,0}, {0,1,0}, {0,-1,0}, {0,0,1}, {0,0,-1} };
+    while (head < tail) {
+        const int32_t* c = g_floodQ[head++];
+        for (const auto& d : dirs) {
+            int i = c[0] + d[0], j = c[1] + d[1], k = c[2] + d[2];
+            if (!visit(i, j, k)) continue;
+            if (tail >= limit || tail >= kMaxPending) { *capped = true; continue; }
+            if (probe(i, j, k)) { g_floodQ[tail][0] = i; g_floodQ[tail][1] = j; g_floodQ[tail][2] = k; tail++; }
+        }
+    }
+    return tail;
+}
+
 // ---- connected replace (fill bucket, server)
 // Starting at the aimed shape, walks the grid of shape-sized cells (6 neighbours,
 // world axes) through every cell that contains the clicked material, up to
@@ -1755,41 +1799,14 @@ static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdat
         flash(own ? "Connected replace: that is already your material" : "Connected replace: no building block there");
         beep(MB_ICONHAND); return 0;
     }
-    // breadth-first over cells (i,j,k relative to the start)
     const int limit = g_cfg.fillLimit;
-    // Every found cell probes up to 6 neighbours, so up to 6 * FillLimit + 1 cells are
-    // visited: the table holds 2^18 (FillLimit is at most 20000), always under half full.
-    static int32_t q[kMaxPending][3];
-    static const uint32_t kSeen = 1u << 18;
-    static uint64_t seen[kSeen];                        // open addressing, 0 = empty
-    memset(seen, 0, sizeof(seen));
-    auto key = [](int i, int j, int k) -> uint64_t {
-        return ((uint64_t)(uint32_t)(i + 0x100000) << 42) | ((uint64_t)(uint32_t)(j + 0x100000) << 21) | (uint64_t)(uint32_t)(k + 0x100000) | (1ull << 63);
-    };
-    auto visit = [&](int i, int j, int k) -> bool {     // false if seen before (or table full)
-        uint64_t kk = key(i, j, k); uint32_t h = (uint32_t)((kk * 0x9E3779B97F4A7C15ull) >> 46);
-        for (uint32_t n = 0; n < kSeen; n++, h = (h + 1) & (kSeen - 1)) {
-            if (seen[h] == kk) return false;
-            if (!seen[h]) { seen[h] = kk; return true; }
-        }
-        return false;
-    };
-    int head = 0, tail = 0, probes = 0;
-    bool capped = false;
-    visit(0, 0, 0); q[tail][0] = 0; q[tail][1] = 0; q[tail][2] = 0; tail++;
-    static const int dirs[6][3] = { {1,0,0}, {-1,0,0}, {0,1,0}, {0,-1,0}, {0,0,1}, {0,0,-1} };
-    while (head < tail) {
-        int32_t* c = q[head++];
-        for (const auto& d : dirs) {
-            int i = c[0] + d[0], j = c[1] + d[1], k = c[2] + d[2];
-            if (!visit(i, j, k)) continue;
-            if (tail >= limit || tail >= kMaxPending) { capped = true; continue; }
-            xf.pos[0] = start.pos[0] + i * step[0]; xf.pos[1] = start.pos[1] + j * step[1]; xf.pos[2] = start.pos[2] + k * step[2];
-            memset(g_remVols, 0, sizeof(g_remVols));
-            price_removal(list, ctx, state, &xf); probes++;
-            if (g_remVols[target] > 0.f) { q[tail][0] = i; q[tail][1] = j; q[tail][2] = k; tail++; }
-        }
-    }
+    int probes = 0; bool capped = false;
+    const int tail = flood_cells(limit, [&](int i, int j, int k) {
+        xf.pos[0] = start.pos[0] + i * step[0]; xf.pos[1] = start.pos[1] + j * step[1]; xf.pos[2] = start.pos[2] + k * step[2];
+        memset(g_remVols, 0, sizeof(g_remVols));
+        price_removal(list, ctx, state, &xf); probes++;
+        return g_remVols[target] > 0.f;
+    }, &capped);
     LOG(.str("connected replace: ").i(tail).str(" cells, ").i(probes).str(" probes").str(capped ? ", stopped at FillLimit" : ""));
     // price and queue every found cell (overlap style, only the clicked material)
     pend_begin(ctx, start, true, state ? *(uint32_t*)state : 0);
@@ -1798,7 +1815,8 @@ static uint8_t connected_fill(CostList* list, void* ctx, void* state, void* pdat
     g_onlyMaterial = target;
     long priced = 0;
     for (int n = 0; n < tail; n++) {
-        xf.pos[0] = start.pos[0] + q[n][0] * step[0]; xf.pos[1] = start.pos[1] + q[n][1] * step[1]; xf.pos[2] = start.pos[2] + q[n][2] * step[2];
+        const int32_t* c = g_floodQ[n];
+        xf.pos[0] = start.pos[0] + c[0] * step[0]; xf.pos[1] = start.pos[1] + c[1] * step[1]; xf.pos[2] = start.pos[2] + c[2] * step[2];
         if (price_shape(list, ctx, state, pdata, &xf, true)) priced++;
     }
     g_onlyMaterial = 0;
@@ -1935,22 +1953,116 @@ static uint8_t* cursor_get_hook(uint8_t* out, uint8_t* player, uint8_t* cc) {
 // dry run becomes a corner click (and the commit is suppressed) or, on the third
 // corner, dry runs for every shape of the area plus one RemoveCommit per shape.
 static CommitFn g_removeCommitOrig = nullptr;     // trampoline
-struct RemovePending { void* ctx; DWORD tid, tick; int n; int64_t click[3]; bool suppress; CostList* list; };
+struct RemovePending { void* ctx; DWORD tid, tick; int n; int64_t click[3]; bool suppress; CostList* list; int only; };
 static uint32_t g_rpendCost[kMaxPending + 1];
 static RemovePending g_rpend;
 static int64_t g_rpendPos[kMaxPending][3];
 
 static bool is_server_ctx(void* ctx) { return ctx && *(void**)((uint8_t*)ctx + 0xf0) != nullptr; }
 
+// ---- connected removal (fill bucket, right click)
+// Removal builds a 256-entry "may remove" table per material (48f1c0) in both the dry
+// run (RemoveShape) and the real removal (RemoveCommit); the removal blit leaves every
+// voxel whose material is 0 there. Both calls are redirected: while the mod removes
+// connected cells on this thread, every material but the clicked one is cleared from
+// the table, so other materials in the same cells stay.
+typedef void* (*RemoveTableFn)(uint8_t* out, void* ctx, void* state);
+static RemoveTableFn g_removeTableOrig = nullptr;
+static bool g_removeTableOk = false;          // both calls redirected
+static volatile LONG g_onlyRemove = 0;
+static volatile DWORD g_onlyRemoveTid = 0;
+static void* remove_table_hook(uint8_t* out, void* ctx, void* state) {
+    void* r = g_removeTableOrig(out, ctx, state);
+    const int only = g_onlyRemove;
+    if (only && out && g_onlyRemoveTid == GetCurrentThreadId())
+        for (int m = 1; m < 0x100; m++) if (m != only) out[m] = 0;
+    return r;
+}
+static void only_remove(int material) { g_onlyRemoveTid = material ? GetCurrentThreadId() : 0; g_onlyRemove = material; }
+
+// Starting at the aimed shape, walks the shape-sized cells holding the clicked material
+// (the material with the most removable volume there, building or terrain, by the
+// game's own rules for the selected material) and queues a removal of only that
+// material in every found cell. The dismantle system then pays the refunds and
+// remove_commit_hook removes the cells.
+static uint8_t connected_remove(CostList* list, void* ctx, void* state, Aabb* bx, IntXf* xf, void* filter, uint8_t check) {
+    int64_t step[3];
+    for (int a = 0; a < 3; a++) {          // shape size, snapped to 1/16 m against float noise
+        double sz = (double)(bx->mx[a] - bx->mn[a]);
+        step[a] = (int64_t)((double)(int64_t)(sz * 16.0 + 0.5) * (core::kFix / 16.0));
+    }
+    g_rpend.ctx = ctx; g_rpend.tid = GetCurrentThreadId(); g_rpend.tick = GetTickCount(); g_rpend.n = 0;
+    g_rpend.suppress = true; g_rpend.only = 0;
+    if (!g_removeTableOk || step[0] <= 0 || step[1] <= 0 || step[2] <= 0) {
+        flash("Connected delete: not available in this game version"); beep(MB_ICONHAND); return 0;
+    }
+    auto cell = [&](int i, int j, int k, IntXf* ix, Aabb* b2) {
+        *ix = *xf; *b2 = *bx;
+        const int64_t d[3] = { i * step[0], j * step[1], k * step[2] };
+        for (int a = 0; a < 3; a++) {
+            ix->pos[a] += d[a];
+            float df = (float)d[a] * kInv; b2->mn[a] += df; b2->mx[a] += df;
+        }
+    };
+    // dry run with refunds noted, not added (refund_build_hook)
+    auto probe = [&](int i, int j, int k) {
+        IntXf ix; Aabb b2; cell(i, j, k, &ix, &b2);
+        memset(g_remVols, 0, sizeof(g_remVols));
+        g_ownRemoveTid = GetCurrentThreadId();
+        g_remove(list, ctx, state, &b2, &ix, filter, check);
+        g_ownRemoveTid = 0;
+    };
+    probe(0, 0, 0);
+    int target = 0; float best = 0.f;
+    for (int m = 1; m < 0x100; m++) if (g_remVols[m] > best) { best = g_remVols[m]; target = m; }
+    LOG(.str("connected delete: clicked material ").x(target).str(" volume ").f(best));
+    if (!target) { flash("Connected delete: nothing to remove there"); beep(MB_ICONHAND); return 0; }
+    only_remove(target);
+    const int limit = g_cfg.fillLimit;
+    int probes = 0; bool capped = false;
+    const int tail = flood_cells(limit, [&](int i, int j, int k) {
+        probe(i, j, k); probes++;
+        return g_remVols[target] > 0.f;
+    }, &capped);
+    LOG(.str("connected delete: ").i(tail).str(" cells, ").i(probes).str(" probes").str(capped ? ", stopped at FillLimit" : ""));
+    // the real dry runs: refund entries for the clicked material go to the game's list
+    uint8_t any = 0;
+    for (int n = 0; n < tail; n++) {
+        IntXf ix; Aabb b2; cell(g_floodQ[n][0], g_floodQ[n][1], g_floodQ[n][2], &ix, &b2);
+        g_rpendCost[g_rpend.n] = (uint32_t)list->count;
+        if (g_remove(list, ctx, state, &b2, &ix, filter, check)) any = 1;
+        memcpy(g_rpendPos[g_rpend.n], ix.pos, 24); g_rpend.n++;
+    }
+    only_remove(0);
+    g_rpendCost[g_rpend.n] = (uint32_t)list->count;
+    g_rpend.list = list;
+    memcpy(g_rpend.click, xf->pos, sizeof(g_rpend.click));
+    g_rpend.suppress = !any;
+    g_rpend.only = target;
+    g_rpend.tick = GetTickCount();      // probing thousands of cells takes a while
+    LOG(.str("connected delete: priced ").i(g_rpend.n).str(" cells, refund entries ").u(list->count));
+    if (capped) { Buf b; b.str("Connected delete: only the first ").i(limit).str(" shapes (FillLimit)"); flash(b.z()); }
+    return any;
+}
+
 static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* xfp, void* filter, uint8_t check) {
-    if (g_ownRemoveTid == GetCurrentThreadId() || g_mode != MODE_AREA || !is_server_ctx(ctx) || !box || !xfp)
+    if (g_ownRemoveTid == GetCurrentThreadId() || !is_server_ctx(ctx) || !box || !xfp)
+        return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
+    if (g_mode == MODE_PREFAB && g_replace && g_replaceStyle == STYLE_CONNECTED && list) {
+        EnterCriticalSection(&g_stateLock);
+        uint8_t r = connected_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
+        LeaveCriticalSection(&g_stateLock);
+        if (r) beep(MB_ICONASTERISK);
+        return r;
+    }
+    if (g_mode != MODE_AREA)
         return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
     IntXf* xf = (IntXf*)xfp;
     Aabb* bx = (Aabb*)box;
     EnterCriticalSection(&g_stateLock);
     if (InterlockedExchange(&g_cancelReq, 0)) reset_corners();
     if (g_scOp != OP_REMOVE) { reset_corners(); g_scOp = OP_REMOVE; }
-    g_rpend.ctx = ctx; g_rpend.tid = GetCurrentThreadId(); g_rpend.tick = GetTickCount(); g_rpend.n = 0;
+    g_rpend.ctx = ctx; g_rpend.tid = GetCurrentThreadId(); g_rpend.tick = GetTickCount(); g_rpend.n = 0; g_rpend.only = 0;
     LONG n = g_sc;
     if (n < 0 || n > g_cfg.corners - 1) n = 0;
     g_scPos[n] = I3{ xf->pos[0], xf->pos[1], xf->pos[2] };      // removal transforms are shape centres
@@ -2024,6 +2136,7 @@ static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     if (rp.suppress) { LOG(.str("  corner click: dismantle commit skipped")); return 0; }
     uint8_t any = 0; int done = 0;
     UndoSplit us; undo_begin(us, ctx, rp.list, g_rpendCost, rp.n);
+    only_remove(rp.only);                   // connected delete: only the clicked material
     for (int i = 0; i < rp.n; i++) {
         undo_before(us, i);
         Commit rc = *c;
@@ -2031,8 +2144,9 @@ static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
         if (g_removeCommitOrig(ctx, &rc, shape)) { any = 1; done++; }
         undo_after(us);
     }
+    only_remove(0);
     undo_end(us);
-    LOG(.str("remove commit: ").i(rp.n).str(" shapes, removed ").i(done));
+    LOG(.str("remove commit: ").i(rp.n).str(" shapes, removed ").i(done).str(rp.only ? " (connected delete)" : ""));
     Buf b; b.str("Removed ").i(done).str(" shapes");
     if (us.recorded < rp.n) b.str("  |  undo covers ").i(us.recorded);
     flash(b.z());
@@ -3288,7 +3402,7 @@ static DWORD WINAPI input_thread(void*) {
                     LONG st = g_replaceStyle == STYLE_FULL ? STYLE_OVERLAP : g_replaceStyle == STYLE_OVERLAP ? STYLE_CONNECTED : STYLE_FULL;
                     set_replace_style(st);
                     flash(st == STYLE_FULL ? "Replace style: full shape" : st == STYLE_OVERLAP ? "Replace style: overlap only"
-                          : "Replace style: connected (fill bucket, Prefab mode)");
+                          : "Replace style: connected (fill bucket, Prefab mode; right click deletes)");
                 } else if (k == 7) {
                     LONG f = (g_fill + 1) % core::FILL_COUNT; set_fill(f);
                     flash(f == core::FILL_SOLID ? "Area fill: solid" : f == core::FILL_HOLLOW ? "Area fill: hollow room (walls, floor, ceiling)" : "Area fill: walls only");
@@ -3520,6 +3634,16 @@ static DWORD WINAPI init_thread(void*) {
     if (!g_remove) { LOG(.str("remove hook failed; mod disabled")); return 0; }
     g_removeCommitOrig = (CommitFn)hook(rcommit, 5, (void*)&remove_commit_hook);
     if (!g_removeCommitOrig) { LOG(.str("remove commit hook failed; mod disabled")); return 0; }
+    {
+        uint8_t* sites[2] = { find_unique("RemoveTableDry", SIG_REMOVE_TABLE_DRY), find_unique("RemoveTableCommit", SIG_REMOVE_TABLE_COMMIT) };
+        auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
+        uint8_t* fn = rel(sites[0]);
+        if (fn && rel(sites[1]) == fn) {
+            g_removeTableOrig = (RemoveTableFn)fn;      // set first: a redirected call needs it
+            g_removeTableOk = hook_calls(fn, (void*)&remove_table_hook, sites, 2) == 2;
+        }
+        LOG(.str("connected delete: ").str(g_removeTableOk ? "available" : "not available"));
+    }
     g_refundBuildOrig = (RefundBuildFn)hook(refundBuild, 5, (void*)&refund_build_hook);
     if (!g_refundBuildOrig) { LOG(.str("refund hook failed; mod disabled")); return 0; }
     if (!install_cave(blit)) { LOG(.str("blit patch failed; mod disabled")); return 0; }
