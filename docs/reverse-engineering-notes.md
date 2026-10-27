@@ -492,3 +492,11 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   +0x50 5.0, +0x54 1.0 (scale), +0x58 enabled, +0x78 TextString. Returns true on click.
 - dev6: full-screen menu (blur, dark tint, menu at the left), Keys and Options tabs,
   key rebinding saved to the ini; opens from InGame and multi-tool screens 29-37.
+- Test (dev6): rebinding and options work, Home works from the hammer (screen 29).
+- menuTabBar (`bdaf40`)(menu, flag): the top tab bar of the full-screen menus (Q/E).
+  Menus 3, 25, 27 always take the tab path. It fills a vector {data, count, capacity,
+  grow fn} (inline room for 10) with menuTabList (`d11e90`, called at `bdb2a4`) and
+  draws each tab with `cd0100` (called at `bdb719`; true = clicked, then `d67dd0`
+  switches the game's screen). Tab 0x40 bytes: shortcut @+1 (0x8b none), label
+  TextString @+0x18, active @+0x30, hover @+0x31, interactive @+0x32, opacity @+0x34.
+  dev7 hooks both calls while it draws its own bar (menu 3) to show its pages.
