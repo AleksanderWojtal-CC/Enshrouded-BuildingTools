@@ -507,3 +507,18 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   custom label flag @+0x1b, label TextString @+0x20. UiActionId (types.txt
   keen::input_mapping::runtime::UiActionId): 0 Confirm, 1 Back, 10 NextTab,
   11 PreviousTab, 24 BindingReset, 25 BindingClear. dev8 draws a Back hint ("Close").
+
+### Building HUD box rows (0.18.0-dev9)
+- Building HUD box `b5d4e0` (named box at rbp+0x20). Key rows via `bc4e20`(u8 UiActionId, params 0x78)
+  at b5dc6a and b5ddf2 ("Undo Build Action"); box finished by E8 at b5de4b (`11b3cf0`, rcx = &box),
+  right after Creative Mode's hud.buildingAreaRows site (b5ddf7). bc4e20 looks the binding up
+  (`e74570`(out 0xc4, inputMap = [[ui]+0xd0]+0x33cd0, action), 0x118 per action) and calls
+  bindingHint `b2f8b0`(binding, params).
+- Binding 0xc4: keyboard combos @0 and @0x30, bytes @0x60/0x61 (0x60 == 2: hold, progress), gamepad
+  combos @0x62 / @0x92, bytes @0xc2/0xc3. Combo 0x30 = input (12 bytes) + up to 3 modifier inputs.
+  Input: device u8 @0 (1 keyboard, 2 mouse, 6..8 gamepad), key u16 @2 = USB HID usage (SDL scancode:
+  PageUp 0x4b, LeftControl 0xe0, LeftShift 0xe1, LeftAlt 0xe2; name parser `e83cd0`), mouse button
+  u8 @4 (1 L, 2 R, 3 M, 4, 5). bindingHint skips the row if combo device is 0 and params+0x2c == 0.
+- Row params 0x78: +0 combo index, +6 custom align flag (+4 u16), +0x28 flag, +0x2f = fill label from
+  the action's name (bc4e20), +0x30 flag, +0x3c 1.0, +0x44 500.0, +0x48 hold progress (+0x4c set),
+  +0x54 24.0, label TextString @0x58, colour {ARGB, intensity} @0x70.
