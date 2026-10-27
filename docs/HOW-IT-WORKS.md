@@ -213,6 +213,29 @@ With `CreativeBuilding=1`:
   selected entry and sends it as the new choice, but refuses an entry with count 0
   (406020). The mod accepts it, so a type with nothing in the inventory gets a material.
 
+## Menu and HUD (game UI)
+
+The game's UI is immediate mode: every frame the HUD code calls widget functions
+(beginWindow, beginBox, text, buttons...) and the engine lays them out. The mod calls the
+same functions, found by signatures, so everything looks like the game.
+
+- **Menu.** The HUD has a screen byte (HudScreenType at hud+0x1cd8); 52 is unused in 1.0. A
+  hook on the play UI (the function the game calls for the HUD each frame) opens and closes
+  it with the game's toggleHudScreen, and the screen dispatcher's call for 52 is redirected
+  to the mod's menu. The window is fullscreen and modal (input stays in the menu), with the
+  game's blur, tab bar (menuTabBar with the tab list and tab widget redirected while the
+  mod's menu draws it), setting rows (settingOption), buttons and hint bar. Key rebinding is
+  captured by the input thread; the ini is rewritten at once.
+- **Building box rows.** The building HUD box function draws its key rows with a row
+  function (action + binding + label). The mod redirects the two row calls to copy their
+  parameters and the call that finishes the box to add its own rows first, drawn with the
+  game's bindingHint. Bindings are built from the mod's keys (USB HID codes, modifiers as
+  extra inputs), so the game shows its own key icons. On/off rows are built like the
+  game's "first person view" row: key row, stretcher, the game's switch.
+- **Floating text.** After the play UI, the mod opens a fullscreen window that takes no
+  input and draws a centred box below the crosshair like the game's snapping hint: blur
+  behind, the soft nine-slice frame, body text.
+
 ## Sounds and info bar
 
 UI sounds come from the game's UI bundle (`FbUiBundle.sounds`). They are played through
@@ -220,7 +243,9 @@ the game's UI sound function (a429f0) from a hook on the HUD building update (b2
 because that function is not thread safe.
 
 The info bar is a transparent, click-through, top-most window over the game's client
-area. It scales with the window height and hides after a few seconds without changes.
+area. It scales with the window height and hides after a few seconds without changes. It
+stays hidden while the floating text is shown (HudRows=1), so it is mainly the fallback
+when the game UI hooks are off or not found.
 
 ## Files written
 

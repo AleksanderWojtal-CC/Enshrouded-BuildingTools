@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev15"
+#define MOD_VERSION "0.18.0"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
