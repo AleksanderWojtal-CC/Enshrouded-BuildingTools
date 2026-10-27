@@ -535,3 +535,8 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
 - Box title: the game uses it for messages like "Area protected by flame"; dev12 fills it only when empty.
 - Tab widget cd0100 returns active || hovered (a41390 = point in node), not clicked: page switch needs our
   own click edge.
+- Snapping cursor hint `cab2a0` (loca cursorHintSnappingActive/Ready/Off, bundle+0x4210/0x4220/0x4230):
+  centred box (selfAlignment 0x202), offset (0, 60) (setOffset = node+0x70), blurBehind on the node rect,
+  body text. dev13 draws the mod's floating text the same way in its own input-less window (layer 1),
+  offset (0, 130). Box title override dropped (the game uses it for "Area protected by flame").
+- Hint bars in game menus: drawHints pad {0,10,0,0} inside padded panels, {30,30,30,30} standalone.
