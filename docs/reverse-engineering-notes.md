@@ -592,3 +592,10 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   call, so pieces take the block path (hammer shape, RemoveCommit); the flag is put back
   at the next RemoveShape or dismantle run. Fallback without it: RemoveShape with a
   non-null filter in those modes runs vanilla (one piece) with a banner.
+- The dependency copy (deps_hook) did not give the state on the dismantle's thread, so
+  the redirect goes through a thunk passing the caller's rbp ([rbp+0x1f8]) and rsi (the
+  selected ItemInfo, from e7d430 at 2d3e5a).
+- Selected item kind (ItemInfo, EquipmentSetup at +0x104): +0x440 voxelData.isBuildingVoxel,
+  +0x458 voxelObject, +0x468 terrainVoxelObject. Piece = voxelObject && !isBuildingVoxel.
+  The dismantle's block path needs terrain or (voxelObject && isBuildingVoxel). The shape
+  state passed to PlaceShape / RemoveShape / ShapeBounds is this ItemInfo.

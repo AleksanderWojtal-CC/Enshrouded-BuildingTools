@@ -40,6 +40,9 @@ Prefab mode
                    Right click deletes instead: every touching block of the
                    clicked material is removed and refunded, other materials
                    in the same spots stay.
+                   The fill bucket works with the small shapes (first row of
+                   the shape picker); with a bigger shape it replaces or
+                   deletes one whole shape.
   Any material can be the new one, also a terrain material (the blocks then
   become that terrain). The ground is repainted (and with connected, deleted)
   only while a terrain material is selected, the same rule the hammer uses
@@ -66,7 +69,8 @@ Area mode (2 corners)
   Remove refunds like normal removal.
   Building pieces (foundations, stairs and other placed pieces) are removed
   as blocks too, in Area mode and with connected delete. In Prefab mode a
-  right click removes the whole piece, as in the game.
+  right click removes the whole piece, as in the game. With a building piece
+  in the hammer, Replace and the fill bucket are off (vanilla game).
   Fill (F11): solid fills the whole box; hollow room builds only the outer
   shell (walls, floor and ceiling, one shape thick); walls only leaves out the
   floor and ceiling. Floors, walls and lines come out complete in every mode.

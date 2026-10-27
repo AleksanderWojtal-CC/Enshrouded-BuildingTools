@@ -8,7 +8,9 @@ A client-side mod for **Enshrouded 1.0 (single player)** that extends the Constr
   Undo restores everything, including taking the refund back. With a terrain material
   selected it repaints the ground too (for example dirt into stone).
 - **Connected delete**: with the fill bucket style, a right click removes every touching
-  block (or terrain) of the clicked material and leaves other materials alone.
+  block (or terrain) of the clicked material and leaves other materials alone. The fill
+  bucket uses the small shapes (first row); bigger shapes replace or delete one whole
+  shape, and building pieces in the hammer work as in the game.
 - **Area mode**: click two opposite corners and the selected shape is repeated over a
   line, floor, wall or box. You can build, replace or remove the area in one action.
   Area remove and connected delete cut building pieces (foundations...) like blocks.
