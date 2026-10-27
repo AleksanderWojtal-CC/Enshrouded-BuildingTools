@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev13"
+#define MOD_VERSION "0.18.0-dev14"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -327,6 +327,18 @@ static const char* SIG_UI_SMALL_TOGGLE = "48 81 C3 D4 FE 00 00 C7 85 B0 00 00 00
 // The building box's toggle row (ccff30, "first person view"): after the key row a
 // stretcher (b1af90(box, {1,1}), E8 at +0xf) and the switch (ccfd00(bool on), E8 at +0x18).
 static const char* SIG_HUD_TOGGLE_ROW = "0F 28 C7 48 8D 4D B0 0F 14 C7 66 48 0F 7E C2 E8 ?? ?? ?? ?? 40 0F B6 CE E8 ?? ?? ?? ?? 48 8D 4D B0 E8";
+// The snapping hint's soft backdrop (cab59c): draw pass check, blend mode, then a nine-slice
+// (118bc50(list, rect {x,y,w,h}, image, borders, corner radii, colour)) of the texture at
+// bundle+0xd3b0 with borders bundle+0xd3c0. E8s: pass getter +0x7, pass id +0xf (4 = draw),
+// draw list +0x28, blend +0x32, nine-slice +0xf4.
+static const char* SIG_UI_SOFT_BACKDROP =
+    "48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B C8 E8 ?? ?? ?? ?? 83 F8 04 75 1E 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? "
+    "?? 48 8B C8 E8 ?? ?? ?? ?? B2 03 48 8B C8 E8 ?? ?? ?? ?? F3 0F 10 45 98 F3 0F 5D 45 9C 48 8B 0D ?? ?? ?? ?? "
+    "C7 85 28 02 00 00 FF FF FF FF C7 85 2C 02 00 00 00 00 80 3F 48 8B 81 C8 00 00 00 F3 0F 59 C6 0F C6 C0 00 0F "
+    "11 44 24 40 0F 10 88 B0 D3 00 00 0F 10 90 C0 D3 00 00 0F 29 4C 24 60 0F 29 54 24 70 66 0F 7F 44 24 40 E8 ?? "
+    "?? ?? ?? 48 8B C8 E8 ?? ?? ?? ?? 83 F8 04 75 59 E8 ?? ?? ?? ?? 4C 8D 44 24 60 48 8B C8 48 8D 95 20 02 00 00 "
+    "E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 8B 18 E8 ?? ?? ?? ?? 48 8B C8 E8 ?? ?? ?? ?? 48 8B 8D 28 02 00 00 4C 8D "
+    "4C 24 70 48 89 4C 24 28 48 8D 55 90 48 8D 4C 24 40 44 8B C3 48 89 4C 24 20 48 8B C8 E8";
 static const char* SIG_UI_SIZE = "48 89 54 24 08 0F 57 C0 F3 0F 10 54 24 08 33 C0";
 static const char* SIG_HUD_ROW_CALL1 = "0F 29 85 B0 00 00 00 F2 0F 11 8D C0 00 00 00 E8 ?? ?? ?? ?? 48 8B 3D ?? ?? ?? ?? E9";
 static const char* SIG_HUD_ROW_CALL2 = "F2 0F 11 8D C0 00 00 00 0F 29 85 B0 00 00 00 E8 ?? ?? ?? ?? 80 7D 36 00";
@@ -2623,6 +2635,11 @@ static struct {
     uint32_t* (*resolveImage)(void* ctx, uint32_t* handle, const void* texture);
     void (*drawImage)(void* box, const uint32_t* handle, const void* color);
     void (*setSize)(void*, UiVec2);
+    void* (*passObj)(void* uiCtx);                           // optional: soft backdrop
+    int (*passId)(void* pass);
+    void* (*drawList)(void* pass);
+    void (*blend)(void* list, uint8_t mode);
+    void (*nineSlice)(void* list, const float* rect, uint32_t image, const float* borders, const float* radii, uint64_t color);
     void* (*stretcher)(void* box, UiVec2);                  // optional: the HUD toggle row
     void (*hudSwitch)(uint8_t on);
 } ui;
@@ -3045,6 +3062,25 @@ static bool hud_info(char* out, int cap) {
 }
 // Mod messages and the area size as floating text below the screen centre, drawn like
 // the game's snapping hint (cab2a0): centred box, offset down, blurred backdrop, body text.
+// The game's soft rounded backdrop, as behind the snapping hint, a bit more transparent.
+static void soft_backdrop(const float* node) {
+    void* ctx = *g_uiCtxGlobal;
+    uint8_t* bundle = *(uint8_t**)((uint8_t*)ctx + 0xc8);
+    const float rect[4] = { node[0] - 8, node[1] - 4, node[2] + 16, node[3] + 8 };
+    float c = (rect[2] < rect[3] ? rect[2] : rect[3]) * 0.5f;
+    alignas(16) const float radii[4] = { c, c, c, c };
+    alignas(16) uint8_t tex[16]; memcpy(tex, bundle + 0xd3b0, 16);
+    alignas(16) float borders[4]; memcpy(borders, bundle + 0xd3c0, 16);
+    bool draw = ui.passId(ui.passObj(ctx)) == 4;
+    if (draw) ui.blend(ui.drawList(ui.passObj(ctx)), 3);
+    uint32_t h = 0;
+    uint32_t image = *ui.resolveImage(ui.imageCtx(), &h, tex);
+    if (draw) {
+        ui.nineSlice(ui.drawList(ui.passObj(ctx)), rect, image, borders, radii, 0x3f800000a0ffffffull);   // 63% opaque
+        ui.blend(ui.drawList(ui.passObj(ctx)), 0);
+    }
+}
+
 static void draw_float_info() {
     static char text[160];
     uint8_t* scr = hud_screen_byte();
@@ -3061,9 +3097,9 @@ static void draw_float_info() {
     *(UiVec2*)(n + 0x70) = UiVec2{ 0, 130 };               // offset (the snapping hint sits at +60)
     const float pad[4] = { 16, 6, 16, 6 };
     ui.setPadding(n, pad);
-    const float* r = (const float*)(n + 0x114);            // node rect (last layout)
-    ui.blurBehind(*g_uiCtxGlobal, r, 0x3f800000ffffffffull);
-    ui.fillRect(r, 0x3f80000080000000ull);
+    const float* r = (const float*)(n + 0x114);            // node rect {x, y, w, h} (last layout)
+    if (ui.nineSlice && ui.imageCtx) soft_backdrop(r);
+    else { ui.blurBehind(*g_uiCtxGlobal, r, 0x3f800000ffffffffull); ui.fillRect(r, 0x3f80000080000000ull); }
     ui_text(text, STYLE_BODY);
     ui.endBox(box);
     ui.endBox(root);
@@ -3132,6 +3168,14 @@ static void install_menu() {
         ui.settingOption = (bool (*)(void*, uint8_t*))(oc + 12 + *(int32_t*)(oc + 8));
     all &= ui.settingOption != nullptr;
     if (!all) { LOG(.str("menu: not available (UI functions not found)")); g_playUiOrig = nullptr; return; }
+    if (uint8_t* sb = find_unique("UiSoftBackdrop", SIG_UI_SOFT_BACKDROP)) {
+        auto at = [&](int o) { return (void*)(sb + o + 5 + *(int32_t*)(sb + o + 1)); };
+        ui.passObj = (void* (*)(void*))at(0x7);
+        ui.passId = (int (*)(void*))at(0xf);
+        ui.drawList = (void* (*)(void*))at(0x28);
+        ui.blend = (void (*)(void*, uint8_t))at(0x32);
+        ui.nineSlice = (void (*)(void*, const float*, uint32_t, const float*, const float*, uint64_t))at(0xf4);
+    }
     if (uint8_t* tr = find_unique("HudToggleRow", SIG_HUD_TOGGLE_ROW)) {   // the HUD rows' on/off switch (optional)
         ui.stretcher = (void* (*)(void*, UiVec2))(tr + 0x14 + *(int32_t*)(tr + 0x10));
         ui.hudSwitch = (void (*)(uint8_t))(tr + 0x1d + *(int32_t*)(tr + 0x19));

@@ -540,3 +540,7 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   body text. dev13 draws the mod's floating text the same way in its own input-less window (layer 1),
   offset (0, 130). Box title override dropped (the game uses it for "Area protected by flame").
 - Hint bars in game menus: drawHints pad {0,10,0,0} inside padded panels, {30,30,30,30} standalone.
+- Soft rounded backdrop (snapping hint, cab59c): node rect at node+0x114 is {x, y, w, h}; rect expanded
+  {x-8, y-4, w+16, h+8}; pass a3f2e0(uiCtx) / 119b2b0(pass) == 4 means draw; list 119b380(pass);
+  blend 11ae450(list, 3) .. (list, 0); nine-slice 118bc50(list, rect, image u32, borders, radii[4]
+  = min(w,h)/2, colour u64) with texture bundle+0xd3b0, borders bundle+0xd3c0. Used by dev14 at 63% alpha.
