@@ -523,4 +523,9 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   the action's name (bc4e20), +0x30 flag, +0x3c 1.0, +0x44 500.0, +0x48 hold progress (+0x4c set),
   +0x54 24.0, label TextString @0x58, colour {ARGB, intensity} @0x70.
 - On/off switch `cf05d0`(bool* value, u8, u8) -> bool clicked; draws FbUiMenu.toggle textures
-  (bundle +0xe860 menu, +0x1044 toggleOn/toggleOff). Used in dev10 for HUD rows and the Options page.
+  (bundle +0xe860 menu, +0x1044 toggleOn/toggleOff). Not used: Aleksander prefers the bottom-left HUD mark and text On/Off options.
+- Small on/off mark of the bottom-left HUD slots (c28190 @c284bb): box 21x21 (setSize 11b32e0), image ctx
+  a3ddf0(), resolveImage a3eef0(ctx, &handle, texture), drawImage a3aab0(box, handle*, colour*);
+  fancyToggleSmallOn bundle+0xfed4 (white), Off bundle+0xfec4 (colour qword bundle+0xd4d8).
+- Building box title (b5d9a6 beginText): loca hud.building.buildTooltipAreaActions (bundle+0x41f0), empty
+  in the game; dev11 replaces its string with mod messages and the area size.
