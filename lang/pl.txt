@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: Polish texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = ,
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} gotowe
+msg.ready_creative = Building Tools {0} gotowe (budowanie kreatywne)
+msg.unsupported = Building Tools: ta wersja gry nie jest obsługiwana
+msg.mod_off = Building Tools WYŁ. (gra bez moda)  |  {0} włącza
+msg.mod_on = Building Tools WŁ.  |  {0} wyłącza
+msg.mode_area = Tryb obszaru
+msg.mode_prefab = Tryb zwykły (jak w grze)
+msg.replace_on = Zamiana WŁ.
+msg.replace_off = Zamiana WYŁ.
+msg.style_full = Styl zamiany: cały kształt
+msg.style_overlap = Styl zamiany: tylko część wspólna
+msg.style_connected = Styl zamiany: połączone (wiadro z farbą, tryb zwykły; prawy przycisk usuwa)
+msg.fill_solid = Wypełnienie obszaru: pełne
+msg.fill_hollow = Wypełnienie obszaru: pusty pokój (ściany, podłoga, sufit)
+msg.fill_walls = Wypełnienie obszaru: tylko ściany
+msg.free_on = Swobodne stawianie WŁ. (bez przyciągania do powierzchni)
+msg.free_off = Swobodne stawianie WYŁ.
+msg.free_distance = Odległość swobodnego stawiania: {0} m
+msg.corners_cleared = Narożniki wyczyszczone
+msg.build_corner = Budowa: narożnik {0} z {1} ustawiony
+msg.replace_corner = Zamiana: narożnik {0} z {1} ustawiony
+msg.remove_corner = Usuwanie: narożnik {0} z {1} ustawiony
+msg.too_big = Za duże (kształty: {0}, maks. {1})
+msg.placed = Postawione kształty: {0}
+msg.placed_partial = Postawione kształty: {0} z {1} (za mało materiału)
+msg.removed = Usunięte kształty: {0}
+msg.undo_covers = cofanie obejmuje: {0}
+msg.not_enough = Za mało materiału (kształty: {0}, potrzebne przedmioty: {1})
+msg.undo_needs = Do cofnięcia potrzebny jest zamieniony materiał z powrotem w ekwipunku
+msg.nothing_to_replace = Nie ma tu czego zamienić
+msg.replace_read_fail = Zamiana: nie udało się odczytać wskazanego bloku, spróbuj ponownie
+msg.creplace_own = Zamiana połączona: to już jest twój materiał
+msg.creplace_nothing = Zamiana połączona: nie ma tu czego zamienić
+msg.creplace_capped = Zamiana połączona: tylko pierwsze kształty, limit {0} (FillLimit)
+msg.cdelete_unavailable = Usuwanie połączone: niedostępne w tej wersji gry
+msg.cdelete_nothing = Usuwanie połączone: nie ma tu czego usunąć
+msg.cdelete_capped = Usuwanie połączone: tylko pierwsze kształty, limit {0} (FillLimit)
+msg.language_set = Język Building Tools: polski
+
+# Info bar at the bottom of the screen (short words)
+bar.area = Obszar {0}/{1}
+bar.area_build = Obszar: budowa {0}/{1}
+bar.area_replace = Obszar: zamiana {0}/{1}
+bar.area_remove = Obszar: usuwanie {0}/{1}
+bar.hollow = pusty
+bar.walls = ściany
+bar.prefab = Zwykły
+bar.prefab_replace = Zwykły, zamiana
+bar.full = cały kształt
+bar.overlap = część wspólna
+bar.connected = połączone
+bar.free = swobodnie {0} m
+bar.creative = kreatywny
+bar.size = {0}x{1} w{2} = {3}
+bar.too_big = ZA DUŻE (maks. {0})
+bar.key_area = obszar
+bar.key_replace = zamiana
+bar.key_clear = wyczyść
+bar.key_style = styl
+bar.key_free = swobodnie
+bar.key_fill = wypełnienie
+bar.key_wheel = +kółko odległość
+bar.key_off = wył.
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = Tryb obszaru
+hud.area_on = Tryb obszaru: wł.
+hud.area_off = Tryb obszaru: wył.
+hud.fill_solid = Wypełnienie: pełne
+hud.fill_hollow = Wypełnienie: puste
+hud.fill_walls = Wypełnienie: ściany
+hud.clear = Wyczyść narożniki
+hud.replace = Zamiana
+hud.replace_on = Zamiana: wł.
+hud.replace_off = Zamiana: wył.
+hud.style_full = Styl: cały
+hud.style_overlap = Styl: część wspólna
+hud.style_connected = Styl: połączone
+hud.free = Swobodne stawianie
+hud.free_on = Swobodne stawianie: wł.
+hud.free_off = Swobodne stawianie: wył.
+hud.wheel = + kółko: {0} m
+hud.menu = Menu narzędzi
+
+# Floating text under the crosshair
+float.too_big = za duże
+float.size = {0} x {1}, w {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Shift
+key.alt = Alt
+key.number = klawisz {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = Klawisze
+menu.options = Opcje
+menu.footer = Wersja {0}. Esc lub klawisz menu zamyka menu.
+menu.close = Zamknij
+menu.cancel = Anuluj
+menu.press_key = Naciśnij klawisz...
+menu.no_key = Brak
+menu.keys_help = Kliknij klawisz, aby go zmienić. Zapisywane w BuildingTools.ini.
+menu.keys_waiting = Naciśnij nowy klawisz, także z Shift, Ctrl lub Alt. Esc anuluje, Delete czyści.
+menu.translation_note = To tłumaczenie może zawierać błędy, przepraszamy! Poprawki mile widziane (Nexus lub GitHub).
+menu.key_menu = Menu Building Tools
+menu.key_area = Tryb obszaru wł. / wył.
+menu.key_replace = Zamiana wł. / wył.
+menu.key_style = Styl zamiany
+menu.key_fill = Wypełnienie obszaru
+menu.key_clear = Wyczyść narożniki obszaru
+menu.key_free = Swobodne stawianie wł. / wył.
+menu.key_farther = Swobodne stawianie dalej
+menu.key_closer = Swobodne stawianie bliżej
+menu.key_wheel = Odległość (przytrzymaj + kółko myszy)
+menu.key_off = Cały mod wył. / wł.
+
+# Options tab
+option.off = Wył.
+option.on = Wł.
+option.mode = Tryb
+option.mode_prefab = Zwykły (jak w grze)
+option.mode_area = Obszar
+option.replace = Zamiana
+option.style = Styl zamiany
+option.style_full = Cały kształt
+option.style_overlap = Tylko część wspólna
+option.style_connected = Połączone (wiadro z farbą)
+option.fill = Wypełnienie obszaru
+option.fill_solid = Pełne
+option.fill_hollow = Pusty pokój
+option.fill_walls = Tylko ściany
+option.free = Swobodne stawianie
+option.language = Język
+option.language_game = Jak w grze

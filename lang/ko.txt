@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: Korean texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = .
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} 준비 완료
+msg.ready_creative = Building Tools {0} 준비 완료 (창작 건축)
+msg.unsupported = Building Tools: 지원하지 않는 게임 버전입니다
+msg.mod_off = Building Tools 꺼짐 (모드 없는 게임)  |  {0} 키로 켜기
+msg.mod_on = Building Tools 켜짐  |  {0} 키로 끄기
+msg.mode_area = 영역 모드
+msg.mode_prefab = 일반 모드 (게임 기본)
+msg.replace_on = 교체 켜짐
+msg.replace_off = 교체 꺼짐
+msg.style_full = 교체 방식: 모양 전체
+msg.style_overlap = 교체 방식: 겹치는 부분만
+msg.style_connected = 교체 방식: 연결 (페인트 통, 일반 모드, 우클릭으로 삭제)
+msg.fill_solid = 영역 채우기: 꽉 채움
+msg.fill_hollow = 영역 채우기: 빈 방 (벽, 바닥, 천장)
+msg.fill_walls = 영역 채우기: 벽만
+msg.free_on = 자유 배치 켜짐 (표면에 붙지 않음)
+msg.free_off = 자유 배치 꺼짐
+msg.free_distance = 자유 배치 거리: {0} m
+msg.corners_cleared = 모서리 지움
+msg.build_corner = 건축: 모서리 {0}/{1} 설정
+msg.replace_corner = 교체: 모서리 {0}/{1} 설정
+msg.remove_corner = 제거: 모서리 {0}/{1} 설정
+msg.too_big = 너무 큽니다: {0}개 (최대 {1})
+msg.placed = {0}개 배치함
+msg.placed_partial = {1}개 중 {0}개 배치함 (재료 부족)
+msg.removed = {0}개 제거함
+msg.undo_covers = 되돌리기 범위 {0}개
+msg.not_enough = {0}개에 필요한 재료가 부족합니다 (아이템 {1}개 필요)
+msg.undo_needs = 되돌리려면 교체된 재료가 다시 인벤토리에 있어야 합니다
+msg.nothing_to_replace = 여기에는 교체할 것이 없습니다
+msg.replace_read_fail = 교체: 조준한 블록을 읽지 못했습니다. 다시 시도하세요
+msg.creplace_own = 연결 교체: 이미 같은 재료입니다
+msg.creplace_nothing = 연결 교체: 여기에는 교체할 것이 없습니다
+msg.creplace_capped = 연결 교체: 처음 {0}개만 (FillLimit)
+msg.cdelete_unavailable = 연결 삭제: 이 게임 버전에서는 사용할 수 없습니다
+msg.cdelete_nothing = 연결 삭제: 여기에는 제거할 것이 없습니다
+msg.cdelete_capped = 연결 삭제: 처음 {0}개만 (FillLimit)
+msg.language_set = Building Tools 언어: 한국어
+
+# Info bar at the bottom of the screen (short words)
+bar.area = 영역 {0}/{1}
+bar.area_build = 영역 건축 {0}/{1}
+bar.area_replace = 영역 교체 {0}/{1}
+bar.area_remove = 영역 제거 {0}/{1}
+bar.hollow = 빈 방
+bar.walls = 벽
+bar.prefab = 일반
+bar.prefab_replace = 일반 교체
+bar.full = 모양 전체
+bar.overlap = 겹침
+bar.connected = 연결
+bar.free = 자유 {0} m
+bar.creative = 창작
+bar.size = {0}x{1} 높이{2} = {3}
+bar.too_big = 너무 큼 (최대 {0})
+bar.key_area = 영역
+bar.key_replace = 교체
+bar.key_clear = 지우기
+bar.key_style = 방식
+bar.key_free = 자유
+bar.key_fill = 채우기
+bar.key_wheel = +휠 거리
+bar.key_off = 끄기
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = 영역 모드
+hud.area_on = 영역 모드: 켜짐
+hud.area_off = 영역 모드: 꺼짐
+hud.fill_solid = 채우기: 꽉 채움
+hud.fill_hollow = 채우기: 빈 방
+hud.fill_walls = 채우기: 벽
+hud.clear = 모서리 지우기
+hud.replace = 교체
+hud.replace_on = 교체: 켜짐
+hud.replace_off = 교체: 꺼짐
+hud.style_full = 방식: 전체
+hud.style_overlap = 방식: 겹침
+hud.style_connected = 방식: 연결
+hud.free = 자유 배치
+hud.free_on = 자유 배치: 켜짐
+hud.free_off = 자유 배치: 꺼짐
+hud.wheel = + 휠: {0} m
+hud.menu = 도구 메뉴
+
+# Floating text under the crosshair
+float.too_big = 너무 큼
+float.size = {0} x {1}, 높이 {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Shift
+key.alt = Alt
+key.number = 키 {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = 키
+menu.options = 옵션
+menu.footer = 버전 {0}. Esc 또는 메뉴 키로 메뉴를 닫습니다.
+menu.close = 닫기
+menu.cancel = 취소
+menu.press_key = 키를 누르세요...
+menu.no_key = 없음
+menu.keys_help = 키를 클릭하면 바꿀 수 있습니다. BuildingTools.ini에 저장됩니다.
+menu.keys_waiting = 새 키를 누르세요. Shift, Ctrl, Alt 조합도 됩니다. Esc는 취소, Delete는 지우기.
+menu.translation_note = 이 번역에는 오류가 있을 수 있습니다. 죄송합니다! 수정 제안을 환영합니다 (Nexus 또는 GitHub).
+menu.key_menu = Building Tools 메뉴
+menu.key_area = 영역 모드 켜기 / 끄기
+menu.key_replace = 교체 켜기 / 끄기
+menu.key_style = 교체 방식
+menu.key_fill = 영역 채우기
+menu.key_clear = 영역 모서리 지우기
+menu.key_free = 자유 배치 켜기 / 끄기
+menu.key_farther = 자유 배치 멀리
+menu.key_closer = 자유 배치 가까이
+menu.key_wheel = 거리 (누른 채 마우스 휠)
+menu.key_off = 모드 전체 끄기 / 켜기
+
+# Options tab
+option.off = 끔
+option.on = 켬
+option.mode = 모드
+option.mode_prefab = 일반 (게임 기본)
+option.mode_area = 영역
+option.replace = 교체
+option.style = 교체 방식
+option.style_full = 모양 전체
+option.style_overlap = 겹치는 부분만
+option.style_connected = 연결 (페인트 통)
+option.fill = 영역 채우기
+option.fill_solid = 꽉 채움
+option.fill_hollow = 빈 방
+option.fill_walls = 벽만
+option.free = 자유 배치
+option.language = 언어
+option.language_game = 게임과 같게

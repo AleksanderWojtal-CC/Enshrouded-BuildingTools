@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: Ukrainian texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = ,
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} готовий
+msg.ready_creative = Building Tools {0} готовий (творче будівництво)
+msg.unsupported = Building Tools: ця версія гри не підтримується
+msg.mod_off = Building Tools ВИМК. (гра без мода)  |  {0} вмикає
+msg.mod_on = Building Tools УВІМК.  |  {0} вимикає
+msg.mode_area = Режим області
+msg.mode_prefab = Звичайний режим (як у грі)
+msg.replace_on = Заміна УВІМК.
+msg.replace_off = Заміна ВИМК.
+msg.style_full = Стиль заміни: уся форма
+msg.style_overlap = Стиль заміни: лише перетин
+msg.style_connected = Стиль заміни: зв'язаний (заливка, звичайний режим; права кнопка видаляє)
+msg.fill_solid = Заповнення області: суцільне
+msg.fill_hollow = Заповнення області: порожня кімната (стіни, підлога, стеля)
+msg.fill_walls = Заповнення області: лише стіни
+msg.free_on = Вільне розміщення УВІМК. (без прив'язки до поверхні)
+msg.free_off = Вільне розміщення ВИМК.
+msg.free_distance = Відстань вільного розміщення: {0} м
+msg.corners_cleared = Кути скинуто
+msg.build_corner = Будівництво: кут {0} з {1} задано
+msg.replace_corner = Заміна: кут {0} з {1} задано
+msg.remove_corner = Видалення: кут {0} з {1} задано
+msg.too_big = Завелика область (форм: {0}, макс. {1})
+msg.placed = Поставлено форм: {0}
+msg.placed_partial = Поставлено форм: {0} з {1} (бракує матеріалу)
+msg.removed = Видалено форм: {0}
+msg.undo_covers = скасування охоплює: {0}
+msg.not_enough = Бракує матеріалу (форм: {0}, потрібно предметів: {1})
+msg.undo_needs = Для скасування замінений матеріал має знову бути в інвентарі
+msg.nothing_to_replace = Тут нічого замінювати
+msg.replace_read_fail = Заміна: не вдалося прочитати блок під прицілом, спробуйте ще раз
+msg.creplace_own = Зв'язана заміна: це вже ваш матеріал
+msg.creplace_nothing = Зв'язана заміна: тут нічого замінювати
+msg.creplace_capped = Зв'язана заміна: лише перші форми, ліміт {0} (FillLimit)
+msg.cdelete_unavailable = Зв'язане видалення: недоступне в цій версії гри
+msg.cdelete_nothing = Зв'язане видалення: тут нічого видаляти
+msg.cdelete_capped = Зв'язане видалення: лише перші форми, ліміт {0} (FillLimit)
+msg.language_set = Мова Building Tools: українська
+
+# Info bar at the bottom of the screen (short words)
+bar.area = Область {0}/{1}
+bar.area_build = Область: будівництво {0}/{1}
+bar.area_replace = Область: заміна {0}/{1}
+bar.area_remove = Область: видалення {0}/{1}
+bar.hollow = порожня
+bar.walls = стіни
+bar.prefab = Звичайний
+bar.prefab_replace = Звичайний, заміна
+bar.full = уся форма
+bar.overlap = перетин
+bar.connected = зв'язаний
+bar.free = вільно {0} м
+bar.creative = творчий
+bar.size = {0}x{1} в{2} = {3}
+bar.too_big = ЗАБАГАТО (макс. {0})
+bar.key_area = область
+bar.key_replace = заміна
+bar.key_clear = скинути
+bar.key_style = стиль
+bar.key_free = вільно
+bar.key_fill = заповнення
+bar.key_wheel = +коліщатко відст.
+bar.key_off = вимк.
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = Режим області
+hud.area_on = Режим області: увімк.
+hud.area_off = Режим області: вимк.
+hud.fill_solid = Заповнення: суцільне
+hud.fill_hollow = Заповнення: порожнє
+hud.fill_walls = Заповнення: стіни
+hud.clear = Скинути кути
+hud.replace = Заміна
+hud.replace_on = Заміна: увімк.
+hud.replace_off = Заміна: вимк.
+hud.style_full = Стиль: уся
+hud.style_overlap = Стиль: перетин
+hud.style_connected = Стиль: зв'язаний
+hud.free = Вільне розміщення
+hud.free_on = Вільне розміщення: увімк.
+hud.free_off = Вільне розміщення: вимк.
+hud.wheel = + коліщатко: {0} м
+hud.menu = Меню інструментів
+
+# Floating text under the crosshair
+float.too_big = забагато
+float.size = {0} x {1}, в {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Shift
+key.alt = Alt
+key.number = клавіша {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = Клавіші
+menu.options = Налаштування
+menu.footer = Версія {0}. Esc або клавіша меню закриває меню.
+menu.close = Закрити
+menu.cancel = Скасувати
+menu.press_key = Натисніть клавішу...
+menu.no_key = Немає
+menu.keys_help = Клацніть на клавішу, щоб змінити її. Зберігається в BuildingTools.ini.
+menu.keys_waiting = Натисніть нову клавішу, можна з Shift, Ctrl або Alt. Esc скасовує, Delete очищає.
+menu.translation_note = У цьому перекладі можуть бути помилки, вибачте! Виправлення вітаються (Nexus або GitHub).
+menu.key_menu = Меню Building Tools
+menu.key_area = Режим області увімк. / вимк.
+menu.key_replace = Заміна увімк. / вимк.
+menu.key_style = Стиль заміни
+menu.key_fill = Заповнення області
+menu.key_clear = Скинути кути області
+menu.key_free = Вільне розміщення увімк. / вимк.
+menu.key_farther = Вільне розміщення далі
+menu.key_closer = Вільне розміщення ближче
+menu.key_wheel = Відстань (утримувати + коліщатко миші)
+menu.key_off = Увесь мод вимк. / увімк.
+
+# Options tab
+option.off = Вимк.
+option.on = Увімк.
+option.mode = Режим
+option.mode_prefab = Звичайний (як у грі)
+option.mode_area = Область
+option.replace = Заміна
+option.style = Стиль заміни
+option.style_full = Уся форма
+option.style_overlap = Лише перетин
+option.style_connected = Зв'язаний (заливка)
+option.fill = Заповнення області
+option.fill_solid = Суцільне
+option.fill_hollow = Порожня кімната
+option.fill_walls = Лише стіни
+option.free = Вільне розміщення
+option.language = Мова
+option.language_game = Як у грі

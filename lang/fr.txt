@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: French texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = ,
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} prêt
+msg.ready_creative = Building Tools {0} prêt (construction créative)
+msg.unsupported = Building Tools : cette version du jeu n'est pas prise en charge
+msg.mod_off = Building Tools DÉSACTIVÉ (jeu sans mod)  |  {0} pour l'activer
+msg.mod_on = Building Tools ACTIVÉ  |  {0} pour le désactiver
+msg.mode_area = Mode zone
+msg.mode_prefab = Mode normal (comme le jeu)
+msg.replace_on = Remplacement ACTIVÉ
+msg.replace_off = Remplacement DÉSACTIVÉ
+msg.style_full = Style de remplacement : forme entière
+msg.style_overlap = Style de remplacement : chevauchement seulement
+msg.style_connected = Style de remplacement : connecté (pot de peinture, mode normal ; clic droit supprime)
+msg.fill_solid = Remplissage de zone : plein
+msg.fill_hollow = Remplissage de zone : pièce creuse (murs, sol, plafond)
+msg.fill_walls = Remplissage de zone : murs seulement
+msg.free_on = Placement libre ACTIVÉ (sans aimantation aux surfaces)
+msg.free_off = Placement libre DÉSACTIVÉ
+msg.free_distance = Distance du placement libre : {0} m
+msg.corners_cleared = Coins effacés
+msg.build_corner = Construire : coin {0} sur {1} placé
+msg.replace_corner = Remplacer : coin {0} sur {1} placé
+msg.remove_corner = Retirer : coin {0} sur {1} placé
+msg.too_big = Trop grand : {0} formes (max {1})
+msg.placed = Formes placées : {0}
+msg.placed_partial = Formes placées : {0} sur {1} (pas assez de matériau)
+msg.removed = Formes retirées : {0}
+msg.undo_covers = l'annulation couvre {0}
+msg.not_enough = Pas assez de matériau pour {0} formes (il faut {1} objets)
+msg.undo_needs = Pour annuler, le matériau remplacé doit être de retour dans l'inventaire
+msg.nothing_to_replace = Rien à remplacer ici
+msg.replace_read_fail = Remplacer : impossible de lire le bloc visé, réessayez
+msg.creplace_own = Remplacement connecté : c'est déjà votre matériau
+msg.creplace_nothing = Remplacement connecté : rien à remplacer ici
+msg.creplace_capped = Remplacement connecté : seulement les {0} premières formes (FillLimit)
+msg.cdelete_unavailable = Suppression connectée : indisponible dans cette version du jeu
+msg.cdelete_nothing = Suppression connectée : rien à retirer ici
+msg.cdelete_capped = Suppression connectée : seulement les {0} premières formes (FillLimit)
+msg.language_set = Langue de Building Tools : français
+
+# Info bar at the bottom of the screen (short words)
+bar.area = Zone {0}/{1}
+bar.area_build = Zone construire {0}/{1}
+bar.area_replace = Zone remplacer {0}/{1}
+bar.area_remove = Zone retirer {0}/{1}
+bar.hollow = creux
+bar.walls = murs
+bar.prefab = Normal
+bar.prefab_replace = Normal remplacer
+bar.full = forme entière
+bar.overlap = chevauchement
+bar.connected = connecté
+bar.free = libre {0} m
+bar.creative = créatif
+bar.size = {0}x{1} h{2} = {3}
+bar.too_big = TROP GRAND (max {0})
+bar.key_area = zone
+bar.key_replace = remplacer
+bar.key_clear = effacer
+bar.key_style = style
+bar.key_free = libre
+bar.key_fill = remplissage
+bar.key_wheel = +molette distance
+bar.key_off = désactiver
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = Mode zone
+hud.area_on = Mode zone : oui
+hud.area_off = Mode zone : non
+hud.fill_solid = Remplissage : plein
+hud.fill_hollow = Remplissage : creux
+hud.fill_walls = Remplissage : murs
+hud.clear = Effacer les coins
+hud.replace = Remplacer
+hud.replace_on = Remplacer : oui
+hud.replace_off = Remplacer : non
+hud.style_full = Style : entier
+hud.style_overlap = Style : chevauchement
+hud.style_connected = Style : connecté
+hud.free = Placement libre
+hud.free_on = Placement libre : oui
+hud.free_off = Placement libre : non
+hud.wheel = + molette : {0} m
+hud.menu = Menu des outils
+
+# Floating text under the crosshair
+float.too_big = trop grand
+float.size = {0} x {1}, h {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Maj
+key.alt = Alt
+key.number = touche {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = Touches
+menu.options = Options
+menu.footer = Version {0}. Échap ou la touche du menu ferme le menu.
+menu.close = Fermer
+menu.cancel = Annuler
+menu.press_key = Appuyez sur une touche...
+menu.no_key = Aucune
+menu.keys_help = Cliquez sur une touche pour la changer. Enregistré dans BuildingTools.ini.
+menu.keys_waiting = Appuyez sur la nouvelle touche, aussi avec Maj, Ctrl ou Alt. Échap annule, Suppr l'efface.
+menu.translation_note = Cette traduction peut contenir des erreurs, désolé ! Les corrections sont les bienvenues (Nexus ou GitHub).
+menu.key_menu = Menu Building Tools
+menu.key_area = Mode zone oui / non
+menu.key_replace = Remplacement oui / non
+menu.key_style = Style de remplacement
+menu.key_fill = Remplissage de zone
+menu.key_clear = Effacer les coins de la zone
+menu.key_free = Placement libre oui / non
+menu.key_farther = Placement libre plus loin
+menu.key_closer = Placement libre plus près
+menu.key_wheel = Distance (maintenir + molette)
+menu.key_off = Tout le mod non / oui
+
+# Options tab
+option.off = Désactivé
+option.on = Activé
+option.mode = Mode
+option.mode_prefab = Normal (comme le jeu)
+option.mode_area = Zone
+option.replace = Remplacement
+option.style = Style de remplacement
+option.style_full = Forme entière
+option.style_overlap = Chevauchement seulement
+option.style_connected = Connecté (pot de peinture)
+option.fill = Remplissage de zone
+option.fill_solid = Plein
+option.fill_hollow = Pièce creuse
+option.fill_walls = Murs seulement
+option.free = Placement libre
+option.language = Langue
+option.language_game = Comme le jeu

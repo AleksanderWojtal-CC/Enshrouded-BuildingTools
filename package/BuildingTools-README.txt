@@ -5,6 +5,7 @@ Files in the game folder
   dinput8.dll           the mod (Windows loads it with the game)
   BuildingTools.ini     settings, created on first start
   BuildingTools.log     what the mod did (previous session: BuildingTools.prev.log)
+  BuildingTools-Languages\   the translations, one text file per language
 
 Keys (with the Construction Hammer)
   Home  Building Tools menu: change keys and options in the game's own UI
@@ -87,7 +88,7 @@ Menu (Home)
   tabs with Q / E or a click; Esc or Home closes it.
   Keys tab: click a key, then press the new one. Shift, Ctrl and Alt
   combinations work (Shift+K). Esc cancels, Delete clears. Saved at once.
-  Options tab: mode, Replace, replace style, area fill, free placement.
+  Options tab: mode, Replace, replace style, area fill, free placement, language.
 
 Building box and floating text
   While you build, the game's building box (bottom right) lists the mod's keys
@@ -119,6 +120,19 @@ Changing keys and settings
   Ctrl, 16384 for Alt (Shift+K = 4096 + 75 = 4171). Example: to use F4 for Area mode,
   set ToggleAreaMode=115. The comments in the file explain each option.
   Delete the ini to get all defaults back.
+
+Language
+  The mod's texts follow the game's language (Settings > Gameplay > Language, or
+  Steam's language when the game uses the system language). Options tab in the
+  menu > Language picks one by hand; Language= under [Interface] in the ini does
+  the same (auto, en, de, fr, it, ja, ko, pl, pt-BR, ru, es, th, tr, uk, zh-CN,
+  zh-TW). The translations are text files in the BuildingTools-Languages folder.
+  All except English are drafts and may contain mistakes, sorry! Corrections are
+  very welcome: edit the file, test it in the game (it is read when the language
+  is set and when the menu opens), and send it in a Nexus comment or on GitHub:
+  https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools
+  Language=test shows every text longer and in [brackets ~~], to check that
+  long translations fit.
 
 Turning the mod off
   F5 (ToggleMod in the ini) switches the whole mod off: Prefab mode, Replace,
@@ -152,7 +166,8 @@ Magic chests of all bases
   base far away may not count until you have been near it. Off by default.
 
 Uninstall
-  Close the game and delete dinput8.dll (the ini and log can go too).
+  Close the game and delete dinput8.dll and the BuildingTools-Languages folder
+  (the ini and log can go too).
 
 With other mods that ship a dinput8.dll (Creative Mode, XHL mods)
   Only one file can be called dinput8.dll. Use the XHL Native Core (the

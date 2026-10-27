@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: Italian texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = ,
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} pronto
+msg.ready_creative = Building Tools {0} pronto (costruzione creativa)
+msg.unsupported = Building Tools: questa versione del gioco non è supportata
+msg.mod_off = Building Tools DISATTIVATO (gioco senza mod)  |  {0} lo attiva
+msg.mod_on = Building Tools ATTIVO  |  {0} lo disattiva
+msg.mode_area = Modalità area
+msg.mode_prefab = Modalità normale (come nel gioco)
+msg.replace_on = Sostituzione ATTIVA
+msg.replace_off = Sostituzione DISATTIVATA
+msg.style_full = Stile di sostituzione: forma intera
+msg.style_overlap = Stile di sostituzione: solo sovrapposizione
+msg.style_connected = Stile di sostituzione: collegato (secchio di vernice, modalità normale; clic destro elimina)
+msg.fill_solid = Riempimento area: pieno
+msg.fill_hollow = Riempimento area: stanza vuota (pareti, pavimento, soffitto)
+msg.fill_walls = Riempimento area: solo pareti
+msg.free_on = Posizionamento libero ATTIVO (senza aggancio alle superfici)
+msg.free_off = Posizionamento libero DISATTIVATO
+msg.free_distance = Distanza del posizionamento libero: {0} m
+msg.corners_cleared = Angoli cancellati
+msg.build_corner = Costruisci: angolo {0} di {1} impostato
+msg.replace_corner = Sostituisci: angolo {0} di {1} impostato
+msg.remove_corner = Rimuovi: angolo {0} di {1} impostato
+msg.too_big = Troppo grande: {0} forme (max {1})
+msg.placed = Forme piazzate: {0}
+msg.placed_partial = Forme piazzate: {0} di {1} (materiale insufficiente)
+msg.removed = Forme rimosse: {0}
+msg.undo_covers = l'annullamento copre {0}
+msg.not_enough = Materiale insufficiente per {0} forme (servono {1} oggetti)
+msg.undo_needs = Per annullare serve di nuovo nell'inventario il materiale sostituito
+msg.nothing_to_replace = Niente da sostituire qui
+msg.replace_read_fail = Sostituisci: impossibile leggere il blocco mirato, riprova
+msg.creplace_own = Sostituzione collegata: è già il tuo materiale
+msg.creplace_nothing = Sostituzione collegata: niente da sostituire qui
+msg.creplace_capped = Sostituzione collegata: solo le prime {0} forme (FillLimit)
+msg.cdelete_unavailable = Eliminazione collegata: non disponibile in questa versione del gioco
+msg.cdelete_nothing = Eliminazione collegata: niente da rimuovere qui
+msg.cdelete_capped = Eliminazione collegata: solo le prime {0} forme (FillLimit)
+msg.language_set = Lingua di Building Tools: italiano
+
+# Info bar at the bottom of the screen (short words)
+bar.area = Area {0}/{1}
+bar.area_build = Area costruisci {0}/{1}
+bar.area_replace = Area sostituisci {0}/{1}
+bar.area_remove = Area rimuovi {0}/{1}
+bar.hollow = vuoto
+bar.walls = pareti
+bar.prefab = Normale
+bar.prefab_replace = Normale sostituisci
+bar.full = forma intera
+bar.overlap = sovrapposizione
+bar.connected = collegato
+bar.free = libero {0} m
+bar.creative = creativo
+bar.size = {0}x{1} a{2} = {3}
+bar.too_big = TROPPO GRANDE (max {0})
+bar.key_area = area
+bar.key_replace = sostituisci
+bar.key_clear = cancella
+bar.key_style = stile
+bar.key_free = libero
+bar.key_fill = riempimento
+bar.key_wheel = +rotella distanza
+bar.key_off = disattiva
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = Modalità area
+hud.area_on = Modalità area: sì
+hud.area_off = Modalità area: no
+hud.fill_solid = Riempimento: pieno
+hud.fill_hollow = Riempimento: vuoto
+hud.fill_walls = Riempimento: pareti
+hud.clear = Cancella angoli
+hud.replace = Sostituisci
+hud.replace_on = Sostituisci: sì
+hud.replace_off = Sostituisci: no
+hud.style_full = Stile: intero
+hud.style_overlap = Stile: sovrapposizione
+hud.style_connected = Stile: collegato
+hud.free = Posizionamento libero
+hud.free_on = Posizionamento libero: sì
+hud.free_off = Posizionamento libero: no
+hud.wheel = + rotella: {0} m
+hud.menu = Menu strumenti
+
+# Floating text under the crosshair
+float.too_big = troppo grande
+float.size = {0} x {1}, a {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Maiusc
+key.alt = Alt
+key.number = tasto {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = Tasti
+menu.options = Opzioni
+menu.footer = Versione {0}. Esc o il tasto del menu chiude il menu.
+menu.close = Chiudi
+menu.cancel = Annulla
+menu.press_key = Premi un tasto...
+menu.no_key = Nessuno
+menu.keys_help = Fai clic su un tasto per cambiarlo. Salvato in BuildingTools.ini.
+menu.keys_waiting = Premi il nuovo tasto, anche con Maiusc, Ctrl o Alt. Esc annulla, Canc lo cancella.
+menu.translation_note = Questa traduzione può contenere errori, ci scusiamo! Le correzioni sono benvenute (Nexus o GitHub).
+menu.key_menu = Menu di Building Tools
+menu.key_area = Modalità area sì / no
+menu.key_replace = Sostituzione sì / no
+menu.key_style = Stile di sostituzione
+menu.key_fill = Riempimento area
+menu.key_clear = Cancella gli angoli dell'area
+menu.key_free = Posizionamento libero sì / no
+menu.key_farther = Posizionamento libero più lontano
+menu.key_closer = Posizionamento libero più vicino
+menu.key_wheel = Distanza (tieni premuto + rotella)
+menu.key_off = Intera mod no / sì
+
+# Options tab
+option.off = No
+option.on = Sì
+option.mode = Modalità
+option.mode_prefab = Normale (come nel gioco)
+option.mode_area = Area
+option.replace = Sostituzione
+option.style = Stile di sostituzione
+option.style_full = Forma intera
+option.style_overlap = Solo sovrapposizione
+option.style_connected = Collegato (secchio di vernice)
+option.fill = Riempimento area
+option.fill_solid = Pieno
+option.fill_hollow = Stanza vuota
+option.fill_walls = Solo pareti
+option.free = Posizionamento libero
+option.language = Lingua
+option.language_game = Come nel gioco

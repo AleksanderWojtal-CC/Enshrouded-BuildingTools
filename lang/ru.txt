@@ -1,0 +1,147 @@
+# Enshrouded Building Tools: Russian texts.
+# Draft translation, not yet checked by a native speaker: it may contain mistakes.
+# Corrections are very welcome: a comment on Nexus Mods or an issue / pull request on
+# https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
+# Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
+# been checked, menu.translation_note can be left empty.
+
+# Numbers
+num.decimal = ,
+
+# Messages (shown for a few seconds)
+msg.ready = Building Tools {0} готов
+msg.ready_creative = Building Tools {0} готов (творческое строительство)
+msg.unsupported = Building Tools: эта версия игры не поддерживается
+msg.mod_off = Building Tools ВЫКЛ. (игра без мода)  |  {0} включает
+msg.mod_on = Building Tools ВКЛ.  |  {0} выключает
+msg.mode_area = Режим области
+msg.mode_prefab = Обычный режим (как в игре)
+msg.replace_on = Замена ВКЛ.
+msg.replace_off = Замена ВЫКЛ.
+msg.style_full = Стиль замены: вся форма
+msg.style_overlap = Стиль замены: только пересечение
+msg.style_connected = Стиль замены: связанный (заливка, обычный режим; правая кнопка удаляет)
+msg.fill_solid = Заполнение области: сплошное
+msg.fill_hollow = Заполнение области: пустая комната (стены, пол, потолок)
+msg.fill_walls = Заполнение области: только стены
+msg.free_on = Свободная установка ВКЛ. (без привязки к поверхности)
+msg.free_off = Свободная установка ВЫКЛ.
+msg.free_distance = Расстояние свободной установки: {0} м
+msg.corners_cleared = Углы сброшены
+msg.build_corner = Строительство: угол {0} из {1} задан
+msg.replace_corner = Замена: угол {0} из {1} задан
+msg.remove_corner = Удаление: угол {0} из {1} задан
+msg.too_big = Слишком большая область (форм: {0}, макс. {1})
+msg.placed = Поставлено форм: {0}
+msg.placed_partial = Поставлено форм: {0} из {1} (не хватает материала)
+msg.removed = Удалено форм: {0}
+msg.undo_covers = отмена охватывает: {0}
+msg.not_enough = Не хватает материала (форм: {0}, нужно предметов: {1})
+msg.undo_needs = Для отмены заменённый материал должен снова быть в инвентаре
+msg.nothing_to_replace = Здесь нечего заменять
+msg.replace_read_fail = Замена: не удалось прочитать блок под прицелом, попробуйте ещё раз
+msg.creplace_own = Связанная замена: это уже ваш материал
+msg.creplace_nothing = Связанная замена: здесь нечего заменять
+msg.creplace_capped = Связанная замена: только первые формы, лимит {0} (FillLimit)
+msg.cdelete_unavailable = Связанное удаление: недоступно в этой версии игры
+msg.cdelete_nothing = Связанное удаление: здесь нечего удалять
+msg.cdelete_capped = Связанное удаление: только первые формы, лимит {0} (FillLimit)
+msg.language_set = Язык Building Tools: русский
+
+# Info bar at the bottom of the screen (short words)
+bar.area = Область {0}/{1}
+bar.area_build = Область: стройка {0}/{1}
+bar.area_replace = Область: замена {0}/{1}
+bar.area_remove = Область: удаление {0}/{1}
+bar.hollow = пустая
+bar.walls = стены
+bar.prefab = Обычный
+bar.prefab_replace = Обычный, замена
+bar.full = вся форма
+bar.overlap = пересечение
+bar.connected = связанный
+bar.free = свободно {0} м
+bar.creative = творческий
+bar.size = {0}x{1} в{2} = {3}
+bar.too_big = СЛИШКОМ МНОГО (макс. {0})
+bar.key_area = область
+bar.key_replace = замена
+bar.key_clear = сброс
+bar.key_style = стиль
+bar.key_free = свободно
+bar.key_fill = заполнение
+bar.key_wheel = +колесо расст.
+bar.key_off = выкл.
+
+# Rows in the game's building box, bottom right (narrow: keep them short)
+hud.area = Режим области
+hud.area_on = Режим области: вкл.
+hud.area_off = Режим области: выкл.
+hud.fill_solid = Заполнение: сплошное
+hud.fill_hollow = Заполнение: пустое
+hud.fill_walls = Заполнение: стены
+hud.clear = Сбросить углы
+hud.replace = Замена
+hud.replace_on = Замена: вкл.
+hud.replace_off = Замена: выкл.
+hud.style_full = Стиль: вся
+hud.style_overlap = Стиль: пересечение
+hud.style_connected = Стиль: связанный
+hud.free = Свободная установка
+hud.free_on = Свободная установка: вкл.
+hud.free_off = Свободная установка: выкл.
+hud.wheel = + колесо: {0} м
+hud.menu = Меню инструментов
+
+# Floating text under the crosshair
+float.too_big = слишком много
+float.size = {0} x {1}, в {2} = {3}
+
+# Key names
+key.ctrl = Ctrl
+key.shift = Shift
+key.alt = Alt
+key.number = клавиша {0}
+
+# Building Tools menu
+menu.title = Building Tools
+menu.keys = Клавиши
+menu.options = Настройки
+menu.footer = Версия {0}. Esc или клавиша меню закрывает меню.
+menu.close = Закрыть
+menu.cancel = Отмена
+menu.press_key = Нажмите клавишу...
+menu.no_key = Нет
+menu.keys_help = Нажмите на клавишу, чтобы изменить её. Сохраняется в BuildingTools.ini.
+menu.keys_waiting = Нажмите новую клавишу, можно с Shift, Ctrl или Alt. Esc отменяет, Delete очищает.
+menu.translation_note = В этом переводе могут быть ошибки, простите! Исправления приветствуются (Nexus или GitHub).
+menu.key_menu = Меню Building Tools
+menu.key_area = Режим области вкл. / выкл.
+menu.key_replace = Замена вкл. / выкл.
+menu.key_style = Стиль замены
+menu.key_fill = Заполнение области
+menu.key_clear = Сбросить углы области
+menu.key_free = Свободная установка вкл. / выкл.
+menu.key_farther = Свободная установка дальше
+menu.key_closer = Свободная установка ближе
+menu.key_wheel = Расстояние (удерживать + колесо мыши)
+menu.key_off = Весь мод выкл. / вкл.
+
+# Options tab
+option.off = Выкл.
+option.on = Вкл.
+option.mode = Режим
+option.mode_prefab = Обычный (как в игре)
+option.mode_area = Область
+option.replace = Замена
+option.style = Стиль замены
+option.style_full = Вся форма
+option.style_overlap = Только пересечение
+option.style_connected = Связанный (заливка)
+option.fill = Заполнение области
+option.fill_solid = Сплошное
+option.fill_hollow = Пустая комната
+option.fill_walls = Только стены
+option.free = Свободная установка
+option.language = Язык
+option.language_game = Как в игре

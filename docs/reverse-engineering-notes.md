@@ -559,3 +559,20 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   {x-8, y-4, w+16, h+8}; pass a3f2e0(uiCtx) / 119b2b0(pass) == 4 means draw; list 119b380(pass);
   blend 11ae450(list, 3) .. (list, 0); nine-slice 118bc50(list, rect, image u32, borders, radii[4]
   = min(w,h)/2, colour u64) with texture bundle+0xd3b0, borders bundle+0xd3c0. Used by dev14 at 63% alpha.
+
+## v0.20: the game's language
+- Reflection: `LanguageId` enum (35 values, 0 None, 1 En_Us, 10 Pl_Pl, 11 Ja_Jp, 20 Zh_Cn ...).
+  The language menu (`FbUiLocaLanguages`) offers 15: English, German, French, Italian,
+  Japanese, Korean, Polish, Portuguese (Brazil), Russian, Spanish, Thai, Turkish,
+  Ukrainian, Simplified and Traditional Chinese.
+- The choice is `g38_options::common::user::GameplaySettings.languageIdOverride` (+0x18).
+  Saved as `"languageIdOverride": "Pl_Pl"` (enum name; "None" = system language) in
+  `<Steam>\userdata\<account>\1203620\remote\user_settings.json` (Steam cloud). Machine
+  settings (graphics, sound) are in `Saved Games\keen games\Enshrouded\local_settings.json`.
+- With "None" the game uses the Steam language: `SteamAPI_SteamApps_v009()` +
+  `SteamAPI_ISteamApps_GetCurrentGameLanguage` in steam_api64.dll ("polish", "schinese",
+  "koreana", "brazilian", "latam" ...). The mod reads the json (newest user folder; Steam
+  folder from steamclient64.dll's path), then Steam, at start and when its menu opens.
+- Fonts: separate font groups `enshrouded_Japanese`, `_Korean`, `_SimplifiedChinese`,
+  `_TraditionalChinese` (`UiFontLanguageGroupResource`). TextStrings are taken as UTF-8
+  (checked with Polish in 0.20.0-dev1).

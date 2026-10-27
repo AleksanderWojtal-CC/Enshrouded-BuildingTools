@@ -31,6 +31,9 @@ A client-side mod for **Enshrouded 1.0 (single player)** that extends the Constr
   sit in the game's building box with the game's key icons and on/off switches, and the
   area size and messages show as floating text below the crosshair.
   Everything is also in `BuildingTools.ini`.
+- **In your language**: the mod's texts follow the game's language (all 15 languages of
+  the game's language menu). Translations other than English are drafts that may contain
+  mistakes; corrections are very welcome, see [TRANSLATING.md](TRANSLATING.md).
 
 Materials are charged and refunded through the game's own building code, and edits
 replicate like vanilla building.
@@ -43,7 +46,10 @@ replicate like vanilla building.
    (Steam: right click Enshrouded → Manage → Browse local files).
 3. Start the game. The banner "Building Tools <version> ready" confirms it loaded.
 
-Uninstall by deleting `dinput8.dll` from the game folder. The full key list and
+The zip also holds the `BuildingTools-Languages` folder with the translations; keep it
+next to `dinput8.dll` (without it the mod shows English).
+
+Uninstall by deleting `dinput8.dll` and `BuildingTools-Languages` from the game folder. The full key list and
 options are in [`package/BuildingTools-README.txt`](package/BuildingTools-README.txt),
 which is also shipped in the zip.
 
