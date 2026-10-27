@@ -64,9 +64,9 @@ Area mode (2 corners)
   build or remove nothing. Switching between left and right click starts over.
   Build charges per shape as usual; Replace works as in Prefab mode (F9 style);
   Remove refunds like normal removal.
-  Remove works on blocks. Building pieces (foundations, stairs and other
-  placed pieces) are objects for the game: a right click on one removes just
-  that piece, as without the mod, and keeps your corners.
+  Building pieces (foundations, stairs and other placed pieces) are removed
+  as blocks too, in Area mode and with connected delete. In Prefab mode a
+  right click removes the whole piece, as in the game.
   Fill (F11): solid fills the whole box; hollow room builds only the outer
   shell (walls, floor and ceiling, one shape thick); walls only leaves out the
   floor and ceiling. Floors, walls and lines come out complete in every mode.

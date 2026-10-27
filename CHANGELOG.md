@@ -6,10 +6,12 @@ changelog on Nexus Mods, so keep it short and written for players.
 ## 0.20.1
 
 - Fix: **Area remove and connected delete on building pieces** (foundations, stairs and
-  other placed pieces). The game removes these as single objects, not as blocks, so a
-  right click deleted the clicked piece and the area reset, and the refund could count
-  pieces that stayed. Now a right click on a piece removes just that piece, says so, and
-  keeps your corners. Area remove and connected delete work on blocks as before.
+  other placed pieces). The game removes a piece as one object, so a right click deleted
+  the whole clicked piece, the area reset, and the refund could count pieces that stayed.
+  Now Area remove and connected delete treat pieces like blocks: corners work, and the
+  blocks of the area (or the touching blocks of the clicked material) are removed and
+  refunded. In Prefab mode without connected delete, a right click still removes the
+  whole piece as in the game.
 
 ## 0.20.0
 

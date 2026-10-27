@@ -11,7 +11,7 @@ A client-side mod for **Enshrouded 1.0 (single player)** that extends the Constr
   block (or terrain) of the clicked material and leaves other materials alone.
 - **Area mode**: click two opposite corners and the selected shape is repeated over a
   line, floor, wall or box. You can build, replace or remove the area in one action.
-  Remove works on blocks; building pieces such as foundations are removed one at a time.
+  Area remove and connected delete cut building pieces (foundations...) like blocks.
   Fills: solid, hollow room (walls + floor + ceiling) or walls only. A live size readout
   and an in-game edge highlight show what the next click will make.
 - **Free placement**: the block ghost hovers in front of you, snapped to the 0.5 m
