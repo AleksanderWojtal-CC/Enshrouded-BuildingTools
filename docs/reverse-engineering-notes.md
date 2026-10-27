@@ -522,3 +522,5 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
 - Row params 0x78: +0 combo index, +6 custom align flag (+4 u16), +0x28 flag, +0x2f = fill label from
   the action's name (bc4e20), +0x30 flag, +0x3c 1.0, +0x44 500.0, +0x48 hold progress (+0x4c set),
   +0x54 24.0, label TextString @0x58, colour {ARGB, intensity} @0x70.
+- On/off switch `cf05d0`(bool* value, u8, u8) -> bool clicked; draws FbUiMenu.toggle textures
+  (bundle +0xe860 menu, +0x1044 toggleOn/toggleOff). Used in dev10 for HUD rows and the Options page.
