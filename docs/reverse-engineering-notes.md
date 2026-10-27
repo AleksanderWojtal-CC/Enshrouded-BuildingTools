@@ -463,3 +463,12 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   (screen fn + 0x73) to open it fullscreen, layer 9, modal.
 - Other screen predicates: `1205720` true for 2, 3, 38, 39, 40, 49, 50; `1205830` true for
   29, 31-33, 36, 37; `1205690` true for 21, 22, 41.
+- Test (dev3, modal window): mouse works, camera and walking stop, Esc and Home close it.
+- Popup recipe (`c6a820`, reportSharedWorldPopup): beginWindow(fullscreen 1, layer 0x1b,
+  mask -1, flags 1); beginRoot; root stretch (1,1) (`a3d000`); root background
+  {0x80000000, 1.0} (ARGB, black at half alpha); beginBox panel; padding 90/60/90/60;
+  spacing (0,30); selfAlignment 0x202 (centre); layout 0x102 (column); fancyBox(panel,
+  params 0xb8: style 8, scale 1.0, rest 0); content; endBox x2; endWindow. Text styles
+  in the UI bundle ([ui ctx]+0xc8): +0x11b94 (title), +0x10a0c (body), +0x11bec, +0x10abc.
+  Node field writes: layout u16 @+0x6e, selfAlignment @+0x6c, stretch @+0x90,
+  padding @+0xa8. dev4 draws the mod's own panel this way.

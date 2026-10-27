@@ -20,7 +20,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.18.0-dev3"
+#define MOD_VERSION "0.18.0-dev4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -270,6 +270,23 @@ static const char* SIG_TOGGLE_SCREEN =
 // beginWindow(window, name, fullscreen, layer, inputMask, flags). Flags bit 0 makes the
 // window modal: windows on lower layers (the game world among them) get no input.
 static const char* SIG_BEGIN_WINDOW = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 50 48 8B 05 ?? ?? ?? ?? 45 8B D9";
+// The game's immediate-mode UI building blocks the menu draws with (a box is 0x28 bytes,
+// its layout node at +8; a text 0x150).
+static const char* SIG_UI_WINDOW_CTX   = "48 8B 41 10 C3 CC CC CC CC CC CC CC CC CC CC CC 48 8B 41 10 48 83 C0 20";
+static const char* SIG_UI_BEGIN_ROOT   = "40 53 48 83 EC 20 48 8B D9 48 C7 41 10 00 00 00 00 48 C7 01 00 00 00 00";
+static const char* SIG_UI_BEGIN_BOX    = "40 53 48 83 EC 20 48 8B 05 ?? ?? ?? ?? 48 8B D9 45 33 C0 48 8B 48 18 48 89 0B";
+static const char* SIG_UI_END_BOX      = "48 89 5C 24 18 48 89 74 24 20 57 48 83 EC 60 80 79 20 00 48 8B D9 74 6A";
+static const char* SIG_UI_END_WINDOW   = "40 53 48 83 EC 20 48 89 74 24 38 48 8B D9 48 8B 35 ?? ?? ?? ?? 48 89 7C 24 40";
+static const char* SIG_UI_BACKGROUND   = "48 89 5C 24 08 57 48 83 EC 60 48 8B 1A 48 8B F9 48 8B 49 08 0F 29 74 24 50";
+static const char* SIG_UI_PADDING      = "0F 10 02 0F 11 81 A8 00 00 00 C3 CC CC CC CC CC 0F 57 C0 F3 0F 5F C1 F3 0F 11 81 84 00 00 00";
+static const char* SIG_UI_SPACING      = "C7 81 B8 00 00 00 02 00 00 00 44 0F B6 89 BC 00 00 00 41 0F B6 C1 41 80 C9 02";
+static const char* SIG_UI_SELF_ALIGN   = "0F B7 02 66 89 41 6C C3 CC CC CC CC CC CC CC CC 0F 10 02 0F 11 81 98 00 00 00";
+static const char* SIG_UI_LAYOUT       = "0F B7 02 66 89 41 6E C3 CC CC CC CC CC CC CC CC 0F B7 02 66 89 41 6C C3";
+static const char* SIG_UI_STRETCH      = "48 89 91 90 00 00 00 C3 CC CC CC CC CC CC CC CC 88 51 6D C3 CC CC CC CC";
+static const char* SIG_UI_WIDTH        = "0F 57 C0 C7 81 90 00 00 00 00 00 00 00 F3 0F 5F C8 F3 0F 11 49 78 F3 0F 11 89 88 00 00 00";
+static const char* SIG_UI_FANCY_BOX    = "48 8B C4 55 41 56 48 8D A8 B8 FE FF FF 48 81 EC 38 02 00 00 48 89 58 20";
+static const char* SIG_UI_BEGIN_TEXT   = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 41 56 48 83 EC 50 48 8B DA 41 0F B6 F9";
+static const char* SIG_UI_END_TEXT     = "40 55 56 57 48 8D 6C 24 B9 48 81 EC F0 00 00 00 0F 29 BC 24 B0 00 00 00";
 static const char* SIG_HUD_UPDATE = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 88 FE FF FF 48 81 EC 78 02 00 00";
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
 static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 88 B3 D9 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 88 2B 01 00 0F 29 44 24 20 E8";
@@ -2462,19 +2479,84 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
     g_playUiOrig(a, b, c, d);
 }
 
-// Screen 52. Stage 1 still runs the game's own test screen to prove the slot works,
-// but opens its window like the game's menus do (fullscreen, layer 9, modal) so the
-// world stops taking mouse and keys.
+// Screen 52: the mod's own window, built like the game's popups (reportSharedWorldPopup):
+// fullscreen window on layer 9, modal; dimmed root; centred panel with the game's menu
+// frame (fancyBox style 8); text in the game's title and body styles.
 typedef void* (*BeginWindowFn)(void* win, const void* name, uint8_t fullscreen, int32_t layer, int32_t inputMask, int32_t flags);
 static BeginWindowFn g_beginWindow = nullptr;
-static void* mod_begin_window(void* win, const void* name, uint8_t, int32_t, int32_t inputMask, int32_t) {
-    return g_beginWindow(win, name, 1, 9, inputMask, 1);
+struct UiVec2 { float x, y; };
+struct UiColor { uint32_t argb; float intensity; };
+struct UiStringView { const char* p; uint64_t n; };
+struct UiTextString { const char* p; uint64_t n; uint64_t hash; };
+static struct {
+    void* (*windowContext)(void*);
+    void (*beginRoot)(void*, void*);
+    void (*beginBox)(void*, uintptr_t);
+    void (*endBox)(void*);
+    void (*endWindow)(void*);
+    void (*setBackground)(void*, const UiColor*);
+    void (*setPadding)(void*, const float*);
+    void (*setSpacing)(void*, const UiVec2*, uintptr_t);
+    void (*setSelfAlign)(void*, const uint16_t*);
+    void (*setLayout)(void*, const uint16_t*);
+    void (*setStretch)(void*, UiVec2);
+    void (*setWidth)(void*, float);
+    void (*fancyBox)(void*, const void*);
+    void (*beginText)(void*, const UiTextString*, const void*, uintptr_t);
+    void (*endText)(void*);
+} ui;
+enum { STYLE_TITLE = 0x11b94, STYLE_BODY = 0x10a0c };   // text styles in the UI bundle
+
+static UiTextString ui_str(const char* t) {
+    UiTextString s{ t, 0, 0xcbf29ce484222325ull };          // FNV-1a 64, as the game hashes it
+    for (; t[s.n]; s.n++) { s.hash ^= (uint8_t)t[s.n]; s.hash *= 0x100000001b3ull; }
+    return s;
+}
+static void ui_text(const char* t, int style) {
+    alignas(16) uint8_t text[0x200] = {};
+    UiTextString s = ui_str(t);
+    uint8_t* bundle = *(uint8_t**)(*g_uiCtxGlobal + 0xc8);
+    ui.beginText(text, &s, bundle + style, 0);
+    ui.endText(text);
+}
+static void* ui_node(uint8_t* box) { return *(void**)(box + 8); }
+
+static void draw_mod_menu() {
+    alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, fancy[0x100] = {};
+    UiStringView name{ "buildingToolsMenu", 17 };
+    g_beginWindow(win, &name, 1, 9, -1, 1);
+    ui.beginRoot(root, ui.windowContext(win));
+    ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
+    UiColor dim{ 0x80000000, 1.0f };
+    ui.setBackground(root, &dim);
+
+    ui.beginBox(panel, 0);
+    void* n = ui_node(panel);
+    const float pad[4] = { 90, 60, 90, 60 };
+    ui.setPadding(n, pad);
+    UiVec2 gap{ 0, 30 };
+    ui.setSpacing(n, &gap, 0);
+    uint16_t centre = 0x202, column = 0x102;
+    ui.setSelfAlign(n, &centre);
+    ui.setLayout(n, &column);
+    ui.setWidth(n, 900);
+    *(uint32_t*)(fancy + 0) = 8;                            // frame style of the game's popups
+    *(float*)(fancy + 4) = 1.0f;                            // scale
+    ui.fancyBox(panel, fancy);
+
+    ui_text("Building Tools", STYLE_TITLE);
+    ui_text("This is where the Building Tools menu will be: tools, options and keys.", STYLE_BODY);
+    ui_text("Version " MOD_VERSION ". Esc or Home closes it.", STYLE_BODY);
+
+    ui.endBox(panel);
+    ui.endBox(root);
+    ui.endWindow(win);
 }
 
-static void mod_screen_hook(void* a, void* b, void* c, void* d) {
+static void mod_screen_hook(void*, void*, void*, void*) {
     static LONG logged = 0;
     if (!InterlockedExchange(&logged, 1)) LOG(.str("menu: screen drawn"));
-    g_modScreenOrig(a, b, c, d);
+    draw_mod_menu();
 }
 
 static void install_menu() {
@@ -2492,12 +2574,20 @@ static void install_menu() {
     g_uiCtxGlobal = (uint8_t**)(pu + 0x12 + 7 + *(int32_t*)(pu + 0x12 + 3));
     g_modScreenOrig = (PlayUiFn)(s52 + 5 + *(int32_t*)(s52 + 1));
     g_playUiOrig = (PlayUiFn)pu;
-    uint8_t* bw = (uint8_t*)g_modScreenOrig + 0x73;               // its beginWindow call
     g_beginWindow = (BeginWindowFn)find_unique("BeginWindow", SIG_BEGIN_WINDOW);
-    if (!g_beginWindow || bw[0] != 0xE8 || bw + 5 + *(int32_t*)(bw + 1) != (uint8_t*)g_beginWindow ||
-        hook_calls((uint8_t*)g_beginWindow, (void*)&mod_begin_window, &bw, 1) != 1) {
-        LOG(.str("menu: not available (window call not found)")); g_playUiOrig = nullptr; return;
-    }
+    struct { void** fn; const char* name; const char* sig; } need[] = {
+        { (void**)&ui.windowContext, "UiWindowCtx", SIG_UI_WINDOW_CTX }, { (void**)&ui.beginRoot, "UiBeginRoot", SIG_UI_BEGIN_ROOT },
+        { (void**)&ui.beginBox, "UiBeginBox", SIG_UI_BEGIN_BOX },        { (void**)&ui.endBox, "UiEndBox", SIG_UI_END_BOX },
+        { (void**)&ui.endWindow, "UiEndWindow", SIG_UI_END_WINDOW },     { (void**)&ui.setBackground, "UiBackground", SIG_UI_BACKGROUND },
+        { (void**)&ui.setPadding, "UiPadding", SIG_UI_PADDING },         { (void**)&ui.setSpacing, "UiSpacing", SIG_UI_SPACING },
+        { (void**)&ui.setSelfAlign, "UiSelfAlign", SIG_UI_SELF_ALIGN },  { (void**)&ui.setLayout, "UiLayout", SIG_UI_LAYOUT },
+        { (void**)&ui.setStretch, "UiStretch", SIG_UI_STRETCH },         { (void**)&ui.setWidth, "UiWidth", SIG_UI_WIDTH },
+        { (void**)&ui.fancyBox, "UiFancyBox", SIG_UI_FANCY_BOX },        { (void**)&ui.beginText, "UiBeginText", SIG_UI_BEGIN_TEXT },
+        { (void**)&ui.endText, "UiEndText", SIG_UI_END_TEXT },
+    };
+    bool all = g_beginWindow != nullptr;
+    for (auto& f : need) all &= (*f.fn = find_unique(f.name, f.sig)) != nullptr;
+    if (!all) { LOG(.str("menu: not available (UI functions not found)")); g_playUiOrig = nullptr; return; }
     if (hook_calls((uint8_t*)g_modScreenOrig, (void*)&mod_screen_hook, &s52, 1) != 1 ||
         hook_calls(pu, (void*)&play_ui_hook, &site, 1) != 1) {
         LOG(.str("menu: not available (hook failed)")); g_playUiOrig = nullptr; return;
