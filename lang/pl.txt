@@ -31,6 +31,7 @@ msg.corners_cleared = Narożniki wyczyszczone
 msg.build_corner = Budowa: narożnik {0} z {1} ustawiony
 msg.replace_corner = Zastępowanie: narożnik {0} z {1} ustawiony
 msg.remove_corner = Usuwanie: narożnik {0} z {1} ustawiony
+msg.remove_piece = Elementy budowli usuwa się pojedynczo (usuwanie obszarem działa na bloki)
 msg.too_big = Obszar za duży (kształty: {0}, maks. {1})
 msg.placed = Zbudowano: {0}
 msg.placed_partial = Zbudowano: {0} z {1} (za mało materiału)

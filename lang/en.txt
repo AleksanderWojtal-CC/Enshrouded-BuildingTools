@@ -32,6 +32,7 @@ msg.corners_cleared = Corners cleared
 msg.build_corner = Build corner {0} of {1} set
 msg.replace_corner = Replace corner {0} of {1} set
 msg.remove_corner = Remove corner {0} of {1} set
+msg.remove_piece = Building pieces are removed one at a time (Area remove works on blocks)
 msg.too_big = Too big: {0} shapes (max {1})
 # numbers can be 1 or 2000: write it so any number reads well (e.g. "Shapes placed: {0}")
 msg.placed = Placed {0} shapes

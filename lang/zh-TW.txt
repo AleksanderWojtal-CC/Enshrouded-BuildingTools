@@ -31,6 +31,7 @@ msg.corners_cleared = 已清除角點
 msg.build_corner = 建造：已設定角點 {0}/{1}
 msg.replace_corner = 替換：已設定角點 {0}/{1}
 msg.remove_corner = 移除：已設定角點 {0}/{1}
+msg.remove_piece = 建築部件只能逐一移除（區域移除僅適用於方塊）
 msg.too_big = 太大：{0} 個形狀（最多 {1}）
 msg.placed = 已放置 {0} 個形狀
 msg.placed_partial = 已放置 {0}/{1} 個形狀（材料不足）

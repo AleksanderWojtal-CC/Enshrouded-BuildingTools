@@ -31,6 +31,7 @@ msg.corners_cleared = Esquinas borradas
 msg.build_corner = Construir: esquina {0} de {1} fijada
 msg.replace_corner = Reemplazar: esquina {0} de {1} fijada
 msg.remove_corner = Quitar: esquina {0} de {1} fijada
+msg.remove_piece = Las piezas de construcción se quitan de una en una (quitar en área funciona con bloques)
 msg.too_big = Demasiado grande: {0} formas (máx. {1})
 msg.placed = Formas colocadas: {0}
 msg.placed_partial = Formas colocadas: {0} de {1} (no hay material suficiente)

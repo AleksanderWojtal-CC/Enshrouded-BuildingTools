@@ -3,6 +3,14 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.20.1
+
+- Fix: **Area remove and connected delete on building pieces** (foundations, stairs and
+  other placed pieces). The game removes these as single objects, not as blocks, so a
+  right click deleted the clicked piece and the area reset, and the refund could count
+  pieces that stayed. Now a right click on a piece removes just that piece, says so, and
+  keeps your corners. Area remove and connected delete work on blocks as before.
+
 ## 0.20.0
 
 - New: **the mod speaks your language.** Menu, building box rows, floating text, info bar
