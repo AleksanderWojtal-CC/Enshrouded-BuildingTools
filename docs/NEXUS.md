@@ -66,7 +66,8 @@ the game's building box with the game's key icons and on/off switches.
 [b]In your language[/b]
 The mod's texts follow the game's language: English, Deutsch, Français, Italiano, 日本語,
 한국어, Polski, Português (Brasil), Русский, Español, ไทย, Türkçe, Українська, 简体中文 and 繁體中文.
-Translations other than English are drafts and may contain mistakes, sorry! Please
+English and Polish are checked; the other translations are drafts and may contain
+mistakes, sorry! Please
 help: corrections are very welcome in the comments or on GitHub
 ([url=https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools/blob/main/TRANSLATING.md]how to translate[/url]).
 

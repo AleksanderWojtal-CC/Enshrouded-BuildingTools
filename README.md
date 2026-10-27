@@ -32,7 +32,7 @@ A client-side mod for **Enshrouded 1.0 (single player)** that extends the Constr
   area size and messages show as floating text below the crosshair.
   Everything is also in `BuildingTools.ini`.
 - **In your language**: the mod's texts follow the game's language (all 15 languages of
-  the game's language menu). Translations other than English are drafts that may contain
+  the game's language menu). English and Polish are checked; the other translations are drafts that may contain
   mistakes; corrections are very welcome, see [TRANSLATING.md](TRANSLATING.md).
 
 Materials are charged and refunded through the game's own building code, and edits
