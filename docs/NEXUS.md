@@ -100,6 +100,7 @@ and Creative Mode's to CreativeModeLoader.dll, and create dinput8-chain.ini:
 [code][Chain]
 CreativeMode=CreativeModeLoader.dll
 BuildingTools=BuildingTools.dll[/code]
+Works next to XHL mods such as XHL Vein Mining (0.20.2 and later).
 
 [b]Found a bug?[/b]
 Please report it here, with your BuildingTools.log attached:
