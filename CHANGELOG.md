@@ -3,6 +3,14 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.20.2
+
+- Fix: **works together with XHL Vein Mining again.** Building Tools rerouted every
+  call of the game's item payment, including the one that gives you the ore you mine.
+  Vein Mining checks that call before it starts, saw it changed and stayed off. Building
+  Tools now only reroutes the building systems' own calls, so both mods run at the same
+  time (load them through the XHL `dinput8.dll` and `dinput8-chain.ini`, see the README).
+
 ## 0.20.1
 
 - Fix: **Area remove and connected delete on building pieces** (foundations, stairs and

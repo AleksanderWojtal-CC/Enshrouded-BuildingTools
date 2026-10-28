@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.20.1"
+#define MOD_VERSION "0.20.2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -4017,10 +4017,30 @@ static DWORD WINAPI init_thread(void*) {
         }
     }
     // PayCost is redirected at its call sites, not hooked at its entry: Creative Mode
-    // scans for its first bytes and hooks it too.
+    // scans for its first bytes and hooks it too. Only the building systems' calls (the
+    // functions of the four found above) are redirected: the other systems' calls stay
+    // untouched, since XHL Vein Mining checks that the pickaxe's reward call (3e700e)
+    // still goes to PayCost and does not start otherwise.
     {
-        int calls = hook_calls(pay, (void*)&pay_hook, nullptr, 0);
-        LOG(.str("PayCost: ").i(calls).str(" calls redirected"));
+        uint8_t* sites[64]; int nSites = 0;
+        DWORD64 fnStart[4]; int nFn = 0;
+        for (uint8_t* ret : g_creativeSites) {
+            DWORD64 img = 0;
+            if (!ret) continue;
+            if (PRUNTIME_FUNCTION rf = RtlLookupFunctionEntry((DWORD64)(ret - 5), &img, nullptr))
+                fnStart[nFn++] = img + rf->BeginAddress;
+        }
+        uint8_t* end = g_textBase + g_textSize - 5;
+        for (uint8_t* p = g_textBase; nFn && p < end && nSites < 64; p++) {
+            if (p[0] != 0xE8 || p + 5 + *(int32_t*)(p + 1) != pay) continue;
+            DWORD64 img = 0;
+            PRUNTIME_FUNCTION rf = RtlLookupFunctionEntry((DWORD64)p, &img, nullptr);
+            for (int k = 0; rf && k < nFn; k++)
+                if (img + rf->BeginAddress == fnStart[k]) { sites[nSites++] = p; break; }
+        }
+        // without the building calls known, every call (as before 0.20.2)
+        int calls = nSites ? hook_calls(pay, (void*)&pay_hook, sites, nSites) : hook_calls(pay, (void*)&pay_hook, nullptr, 0);
+        LOG(.str("PayCost: ").i(calls).str(nSites ? " building calls redirected" : " calls redirected (building calls not found)"));
         if (calls <= 0 || calls > 64) { LOG(.str("pay hook failed; mod disabled")); return 0; }
         g_payOrig = (PayFn)pay;
     }

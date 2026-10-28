@@ -105,7 +105,9 @@ BuildingTools=BuildingTools.dll
 
 Building Tools redirects the calls to the two functions Creative Mode also hooks
 (`PayCost`, `9bc1a0`) at their call sites and leaves their first bytes alone, so the two mods
-can start in either order.
+can start in either order. Only the building systems' own `PayCost` calls are redirected:
+XHL Vein Mining checks that the pickaxe's reward call still goes to `PayCost` and stays off
+otherwise.
 
 ## License
 

@@ -192,3 +192,5 @@ With other mods that ship a dinput8.dll (Creative Mode, XHL mods)
      (leave out the CreativeMode line if you don't use it).
   XHL-Native-Plugin-Host.log shows what it loaded; BuildingTools.log should end
   with "ready".
+  XHL mods with their own folder under mods\ (e.g. XHL Vein Mining) are loaded
+  by the XHL dinput8.dll as before; Building Tools runs next to them.

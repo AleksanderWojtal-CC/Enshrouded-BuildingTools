@@ -299,6 +299,15 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
 - PayCost callers: 2d39ab blueprints (place), 2d46b0 dismantle shape (-> RemoveCommit),
   2d4b5a dismantle prefab (-> 488670), 2d4cc4 dismantle prop pickup, 2d5934/2d5991
   place prop, 2d6040 undo, 2c8e6f/2c8eca, 3d3b89, 3e1ef7, 3e700e other systems.
+- 0.20.2: only the PayCost calls in the functions (.pdata chunks) of the four building
+  calls are redirected (2d39ab, 2d46b0, 2d4b5a, 2d4cc4, 2d6040). XHL Vein Mining 1.1.1 finds
+  the Terraform reward transfer (pattern at 3e6fe0, in 3e6c15), follows its E8 at +0x2e
+  (3e700e -> PayCost) and requires the target inside the game image ("inventory Terraform
+  reward transfer relationship changed" -> NOT APPLIED); our relay is outside it. Its other
+  entries (remove 489bd0, terrain a86210, voxel a828c0, payout 49fd90, cursor_update
+  28fc10, cursor_resolve 2949f0, terraform 3e5ef0, 121fb60/121faf0, 48b610) and body
+  patterns do not overlap bytes this mod patches. XHL Native Core also redirects the tab
+  bar's tab-list call bdb2a4 (as we do); each side chains to the other's relay.
 - Missing-materials check 2865e0 (one caller 2975f2; true -> cursor flag 0x1000).
 - `g38_items::updateInventoryStocks` 4076b0(stocks, ctx, onlyShown): 7 stock lists of
   0x648 bytes at stocks + type*0x648 ({data, count, cap, grow}, entries {itemId,
