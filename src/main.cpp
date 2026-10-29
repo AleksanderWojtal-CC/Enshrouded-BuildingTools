@@ -760,7 +760,7 @@ static volatile DWORD g_buildTick = 0;   // last frame the hammer's place cursor
 // The last place cursor each cursor system computed: the raw ray hit (not yet on the
 // 0.5 m grid), camera and view direction. Far from the character (free camera) the
 // client stops updating its cursor component, but this still runs every frame.
-struct CxSeen { uint8_t* sys; DWORD tick; int64_t cam[3]; int64_t pos[3]; float fwd[3]; uint8_t valid; };
+struct CxSeen { uint8_t* sys; DWORD tick; int64_t cam[3]; int64_t pos[3]; float fwd[3]; float rot[4]; uint8_t valid; };
 static CxSeen g_cxSeen[4];
 static volatile LONG g_cxLast = -1;
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
@@ -773,7 +773,7 @@ static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* 
         if (k == 4) k = 3;
         CxSeen& e = g_cxSeen[k];
         e.sys = sys; e.tick = g_buildTick; e.valid = out[0x28];
-        memcpy(e.cam, sys + 0x640, 24); memcpy(e.pos, out, 24);
+        memcpy(e.cam, sys + 0x640, 24); memcpy(e.pos, out, 24); memcpy(e.rot, out + 0x18, 16);
         const float* cq = (const float*)(sys + 0x658);
         float x = cq[0], y = cq[1], z = cq[2], w = cq[3];
         e.fwd[0] = 2.f * (x * z + w * y); e.fwd[1] = 2.f * (y * z - w * x); e.fwd[2] = 1.f - 2.f * (x * x + y * y);
@@ -2278,9 +2278,20 @@ static bool query_cursor(int64_t placeC[3], int64_t aimC[3], int64_t step[3]) {
         int64_t r = e.pos[a] & (((int64_t)1 << 31) - 1), dist = r < ((int64_t)1 << 30) ? r : ((int64_t)1 << 31) - r;
         if (dist < best) { best = dist; face = a; }
     }
+    // Terrain is not on the grid: the hit lies inside the place cell. The aimed cell is
+    // the next one into the surface, along the cursor's normal (its rotation turns +y
+    // onto the surface normal), on the side the camera looks to.
+    const bool onGrid = best < (int64_t)(0.01 * 4294967296.0);
+    if (!onGrid) {
+        float x = e.rot[0], y = e.rot[1], z = e.rot[2], w = e.rot[3];
+        float n[3] = { 2.f * (x * y - w * z), 1.f - 2.f * (x * x + z * z), 2.f * (y * z + w * x) };
+        face = 0;
+        for (int a = 1; a < 3; a++) if ((n[a] < 0 ? -n[a] : n[a]) > (n[face] < 0 ? -n[face] : n[face])) face = a;
+    }
     for (int a = 0; a < 3; a++) {
-        int64_t fd = a == face ? (int64_t)(e.fwd[a] * (float)d) : 0;
+        int64_t fd = onGrid && a == face ? (int64_t)(e.fwd[a] * (float)d) : 0;
         int64_t front = (e.pos[a] + fd) >> 31, back = (e.pos[a] - fd) >> 31;   // 0.5 m cells
+        if (!onGrid && a == face) front += e.fwd[a] < 0 ? -1 : 1;
         placeC[a] = (back << 31) + q;
         aimC[a] = (front << 31) + q;
         step[a] = (front - back) << 31;

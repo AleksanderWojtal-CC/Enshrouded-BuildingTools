@@ -644,5 +644,10 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   is 9 mm from the z grid line, so +-5 cm stepped on y and z. Another click near an edge
   "fit" but aimed one cell off in z. dev5 steps only on the axis whose grid line the hit
   is closest to.
+- dev5 test: blocks fine far away; terrain failed: the hit is inside a voxel cell, not on
+  a grid line (e.g. (3720.182, 844.734, 1388.196), server place (3720.0, 844.5, 1388.0) =
+  that cell), so there was no face step. dev6: when the hit is more than 1 cm from every
+  grid line, step one cell along the cursor's normal (rotation applied to +y; 28bc80 out
+  +0x18), towards where the camera looks.
 - Not changed: the dismantle path (Area remove, connected delete) still uses the server's
   aimed transform; untested far from the character.
