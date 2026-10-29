@@ -757,9 +757,12 @@ static int64_t round_grid(double v, double grid) {           // v, grid in fixed
     return (int64_t)(r * grid);
 }
 static volatile DWORD g_buildTick = 0;   // last frame the hammer's place cursor was computed
-// Diagnostics (aim far from the character): the last place cursor each cursor system computed.
-struct CxSeen { uint8_t* sys; DWORD tick; int64_t cam[3]; int64_t pos[3]; uint8_t valid; };
+// The last place cursor each cursor system computed: the raw ray hit (not yet on the
+// 0.5 m grid), camera and view direction. Far from the character (free camera) the
+// client stops updating its cursor component, but this still runs every frame.
+struct CxSeen { uint8_t* sys; DWORD tick; int64_t cam[3]; int64_t pos[3]; float fwd[3]; uint8_t valid; };
 static CxSeen g_cxSeen[4];
+static volatile LONG g_cxLast = -1;
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
     uint8_t* r = g_cxOrig(out, sys, q, ray);
     if (!out || !sys || !q || q[3] != 4) return r;
@@ -771,6 +774,10 @@ static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* 
         CxSeen& e = g_cxSeen[k];
         e.sys = sys; e.tick = g_buildTick; e.valid = out[0x28];
         memcpy(e.cam, sys + 0x640, 24); memcpy(e.pos, out, 24);
+        const float* cq = (const float*)(sys + 0x658);
+        float x = cq[0], y = cq[1], z = cq[2], w = cq[3];
+        e.fwd[0] = 2.f * (x * z + w * y); e.fwd[1] = 2.f * (y * z - w * x); e.fwd[2] = 1.f - 2.f * (x * x + y * y);
+        g_cxLast = k;
     }
     float* rot = (float*)(out + 0x18);
     bool valid = out[0x28] != 0;
@@ -2251,6 +2258,25 @@ static int aim_candidates(uint8_t* out[5]) {
 }
 
 extern volatile DWORD g_hoverTick;
+
+// Place and aimed cursor from this frame's ray hit, for small (0.5 m) shapes: the place
+// cell is the hit floored to the 0.5 m grid on the camera's side of the hit face; the
+// aimed cell is the one across that face (one 0.5 m step along the view direction on
+// the axis whose grid line the hit sits on). Used when the client cursor is not live.
+static bool query_cursor(int64_t place[3], int64_t aim[3]) {
+    LONG k = g_cxLast;
+    if (k < 0 || k > 3) return false;
+    const CxSeen e = g_cxSeen[k];
+    if (!e.valid || GetTickCount() - e.tick > 250) return false;
+    const int64_t d = (int64_t)(0.05 * 4294967296.0);
+    for (int a = 0; a < 3; a++) {
+        int64_t fd = (int64_t)(e.fwd[a] * (float)d);
+        int64_t front = (e.pos[a] + fd) >> 31, back = (e.pos[a] - fd) >> 31;   // 0.5 m cells
+        place[a] = back << 31;
+        aim[a] = front << 31;
+    }
+    return true;
+}
 // A cursor component the blueprint system read in the last half second (the world
 // is loaded and the hammer is out), not one of a world that was unloaded.
 static bool cc_live(const uint8_t* c) {
@@ -2259,7 +2285,15 @@ static bool cc_live(const uint8_t* c) {
     return false;
 }
 
-static bool aim_lookup(const CursorXf* place, uint32_t shape, CursorXf* out, const char** how, CursorXf* clientPlace) {
+// One the blueprint system used to read but has not read for half a second: its
+// values are left over (free camera far from the character).
+static bool cc_stale(const uint8_t* c) {
+    for (int k = 0; k < 4; k++) if (g_frameCC[k] == c) return GetTickCount() - g_frameCCTick[k] >= 500;
+    return false;
+}
+
+static bool aim_lookup(const CursorXf* place, void* state, CursorXf* out, const char** how, CursorXf* clientPlace) {
+    const uint32_t shape = state ? *(uint32_t*)state : 0;
     uint8_t* cand[5]; const int nc = aim_candidates(cand);
     for (int k = 0; k < nc; k++) {
         uint8_t* c = cand[k];
@@ -2279,7 +2313,7 @@ static bool aim_lookup(const CursorXf* place, uint32_t shape, CursorXf* out, con
     // is close to the server's place cursor (the ghost sits next to the aimed shape).
     for (int n = 0; n < nc; n++) {
         uint8_t* c = cand[n];
-        if (zero_pos(*(CursorXf*)(c + 0x338))) continue;
+        if (zero_pos(*(CursorXf*)(c + 0x338)) || cc_stale(c)) continue;
         const CursorXf* a = (const CursorXf*)(c + 0x338);
         int64_t lim = (int64_t)6 << 32;                       // 6 m
         bool close = true;
@@ -2296,6 +2330,19 @@ static bool aim_lookup(const CursorXf* place, uint32_t shape, CursorXf* out, con
         *out = *(CursorXf*)(c + 0x338);
         if (clientPlace) *clientPlace = *(CursorXf*)(c + 0x300);
         *how = "client cursor (far)"; return true;
+    }
+    // Farther still the client cursor component is not updated at all (its last values
+    // stay); the server's place cursor is right. Derive the aim from this frame's ray hit.
+    {
+        int64_t qp[3], qa[3];
+        if (query_cursor(qp, qa)) {
+            if (!small_item(state)) { *out = *place; *how = "server cursor (big shape)"; return true; }
+            if (!memcmp(qp, place->pos, sizeof(qp))) {
+                *out = *place; memcpy(out->pos, qa, sizeof(qa));
+                *how = "ray hit"; return true;
+            }
+            LOG(.str("  ray hit place (").fix(qp[0]).c(',').fix(qp[1]).c(',').fix(qp[2]).str(") is not the server's"));
+        }
     }
     for (int n = 0; n < nc; n++) {
         const CursorXf* cp = (const CursorXf*)(cand[n] + 0x300); const CursorXf* ca = (const CursorXf*)(cand[n] + 0x338);
@@ -2594,7 +2641,7 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
     // Place cursor: where the ghost sits (next to the surface for small blocks).
     // Aimed cursor: the shape overlapping the block you look at. Replace uses it.
     CursorXf aim, clientPlace = *xf; const char* how = "";
-    bool haveAim = aim_lookup(xf, shape, &aim, &how, &clientPlace);
+    bool haveAim = aim_lookup(xf, state, &aim, &how, &clientPlace);
     if (g_cfg.log) {
         LOG(.str("click: mode=").str(mode == MODE_AREA ? "area" : "prefab")
             .str(" replace=").i(replace).str(" shape=").x(shape).str(" corners=").i(g_sc)
@@ -2753,6 +2800,10 @@ static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
     LONG off = g_scCursorOff;
     if (!readable(cc + off, 0x18)) return false;
     int64_t* p = (int64_t*)(cc + off);
+    int64_t qp[3], qa[3];
+    if (!cc_live(cc) && query_cursor(qp, qa)) {          // free camera far from the character
+        p = off == 0x338 && g_scStep[0] < kSmallShape ? qa : qp;
+    }
     if (!p[0] && !p[1] && !p[2]) return false;
     I3 live{ p[0] + g_scOff[0], p[1] + g_scOff[1], p[2] + g_scOff[2] };
     I3 c[3];

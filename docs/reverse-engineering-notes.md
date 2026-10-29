@@ -621,5 +621,18 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   client cursor read in the last 500 ms (single player: only the local player clicks),
   and the client's place cursor replaces the server's as the target (Area build corners).
   Logged as aim=client cursor (far) with a "client" transform line.
+- dev1 test (Aleksander, free camera = game's Z + Space): worked near the character,
+  failed from about half the distance: the client blueprint system stops its per-frame
+  cursor read (frame cursor last read 9..28 s before the click) and the client cursor
+  component keeps its last values (later all zero). 28bc80 still runs every frame with
+  the live camera; its raw out is the ray hit (e.g. (3740.177, 843.000, 1428.830)) and
+  the server's place cursor is exactly that floored to 0.5 m (3740.0, 843.0, 1428.5).
+  The server cursor +0x338 is zero. The hover function 28e2f0 also still runs.
+- dev3: 28bc80 keeps the raw hit, camera and view direction. query_cursor: place = cell
+  of (hit - 0.05 m * fwd), aim = cell of (hit + 0.05 m * fwd) on the 0.5 m grid (the
+  hit lies on the face's grid line). aim_lookup uses it ("ray hit") when that place
+  equals the server's; big shapes take the server place (place == aim). The 6 m near
+  fallback skips cursor components not read for 500 ms; the area preview and size
+  readout use the ray-hit cursor while the client cursor is stale.
 - Not changed: the dismantle path (Area remove, connected delete) still uses the server's
   aimed transform; untested far from the character.

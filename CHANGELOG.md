@@ -5,11 +5,12 @@ changelog on Nexus Mods, so keep it short and written for players.
 
 ## 0.20.3
 
-- Fix: **Replace far from your character with a free camera.** Flying the camera away
-  from the character and clicking Replace failed with "could not read the aimed block":
-  far from the character the game's own cursor is not where you look, so the mod did not
-  trust what it saw. Replace (and Area build corners) now use the block under your
-  crosshair however far the camera is.
+- Fix: **Replace, the fill bucket and the area preview far from your character with the
+  free camera** (Z + Space). Flying the camera away from the character, Replace failed
+  with "could not read the aimed block" and the blue area preview disappeared: far from
+  the character the game stops updating the cursor the mod reads. The mod now works out
+  the aimed block from your crosshair itself, so all of these work however far the
+  camera is.
 
 ## 0.20.2
 
