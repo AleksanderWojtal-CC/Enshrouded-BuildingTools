@@ -634,5 +634,11 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   equals the server's; big shapes take the server place (place == aim). The 6 m near
   fallback skips cursor components not read for 500 ms; the area preview and size
   readout use the ray-hit cursor while the client cursor is stale.
+- dev3 test: middle distance worked (top faces); farthest failed on side faces: hit
+  (3721.500, 844.739, 1389.555) looking +x, server place (3721.5, 844.5, 1389.5) with
+  rot (0,0,0.707,0.707): the cursor position is a corner of the place cell that depends
+  on the rotation, not the cell's minimum. dev4: check that the server place is a corner
+  of the ray's place cell (0.25 m from its centre on every axis) and move the server
+  place by (aimed cell - place cell); the area preview uses cell centres directly.
 - Not changed: the dismantle path (Area remove, connected delete) still uses the server's
   aimed transform; untested far from the character.

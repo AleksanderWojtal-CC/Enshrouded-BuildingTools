@@ -2259,21 +2259,24 @@ static int aim_candidates(uint8_t* out[5]) {
 
 extern volatile DWORD g_hoverTick;
 
-// Place and aimed cursor from this frame's ray hit, for small (0.5 m) shapes: the place
-// cell is the hit floored to the 0.5 m grid on the camera's side of the hit face; the
-// aimed cell is the one across that face (one 0.5 m step along the view direction on
-// the axis whose grid line the hit sits on). Used when the client cursor is not live.
-static bool query_cursor(int64_t place[3], int64_t aim[3]) {
+// Place and aimed cell from this frame's ray hit (0.5 m cells): the place cell is on
+// the camera's side of the hit face, the aimed cell across it (the hit lies on that
+// face's grid line). Returns the two cell centres and step = aimed - place cell. The
+// cursor position itself sits on a corner of the cell that depends on the cursor
+// rotation, so callers move the server's place cursor by step instead of using the
+// cells. Used when the client cursor is not live.
+static bool query_cursor(int64_t placeC[3], int64_t aimC[3], int64_t step[3]) {
     LONG k = g_cxLast;
     if (k < 0 || k > 3) return false;
     const CxSeen e = g_cxSeen[k];
     if (!e.valid || GetTickCount() - e.tick > 250) return false;
-    const int64_t d = (int64_t)(0.05 * 4294967296.0);
+    const int64_t d = (int64_t)(0.05 * 4294967296.0), q = (int64_t)1 << 30;   // 5 cm, 0.25 m
     for (int a = 0; a < 3; a++) {
         int64_t fd = (int64_t)(e.fwd[a] * (float)d);
         int64_t front = (e.pos[a] + fd) >> 31, back = (e.pos[a] - fd) >> 31;   // 0.5 m cells
-        place[a] = back << 31;
-        aim[a] = front << 31;
+        placeC[a] = (back << 31) + q;
+        aimC[a] = (front << 31) + q;
+        step[a] = (front - back) << 31;
     }
     return true;
 }
@@ -2334,14 +2337,19 @@ static bool aim_lookup(const CursorXf* place, void* state, CursorXf* out, const 
     // Farther still the client cursor component is not updated at all (its last values
     // stay); the server's place cursor is right. Derive the aim from this frame's ray hit.
     {
-        int64_t qp[3], qa[3];
-        if (query_cursor(qp, qa)) {
+        int64_t qp[3], qa[3], st[3];
+        if (query_cursor(qp, qa, st)) {
             if (!small_item(state)) { *out = *place; *how = "server cursor (big shape)"; return true; }
-            if (!memcmp(qp, place->pos, sizeof(qp))) {
-                *out = *place; memcpy(out->pos, qa, sizeof(qa));
+            // the server's place cursor is a corner of the place cell
+            bool same = true; const int64_t q = (int64_t)1 << 30;
+            for (int a = 0; a < 3; a++) { int64_t dd = place->pos[a] - qp[a]; if (dd != q && dd != -q) same = false; }
+            if (same && (st[0] | st[1] | st[2])) {
+                *out = *place;
+                for (int a = 0; a < 3; a++) out->pos[a] += st[a];
                 *how = "ray hit"; return true;
             }
-            LOG(.str("  ray hit place (").fix(qp[0]).c(',').fix(qp[1]).c(',').fix(qp[2]).str(") is not the server's"));
+            LOG(.str("  ray hit place cell (").fix(qp[0]).c(',').fix(qp[1]).c(',').fix(qp[2]).str(") step (")
+                .fix(st[0]).c(',').fix(st[1]).c(',').fix(st[2]).str(") does not fit the server's place cursor"));
         }
     }
     for (int n = 0; n < nc; n++) {
@@ -2800,12 +2808,15 @@ static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
     LONG off = g_scCursorOff;
     if (!readable(cc + off, 0x18)) return false;
     int64_t* p = (int64_t*)(cc + off);
-    int64_t qp[3], qa[3];
-    if (!cc_live(cc) && query_cursor(qp, qa)) {          // free camera far from the character
-        p = off == 0x338 && g_scStep[0] < kSmallShape ? qa : qp;
+    int64_t qp[3], qa[3], st[3];
+    I3 live;
+    if (!cc_live(cc) && query_cursor(qp, qa, st)) {      // free camera far from the character: cell centres
+        const int64_t* c = off == 0x338 && g_scStep[0] < kSmallShape ? qa : qp;
+        live = I3{ c[0], c[1], c[2] };
+    } else {
+        if (!p[0] && !p[1] && !p[2]) return false;
+        live = I3{ p[0] + g_scOff[0], p[1] + g_scOff[1], p[2] + g_scOff[2] };
     }
-    if (!p[0] && !p[1] && !p[2]) return false;
-    I3 live{ p[0] + g_scOff[0], p[1] + g_scOff[1], p[2] + g_scOff[2] };
     I3 c[3];
     const int64_t tol = (int64_t)(0.1 * core::kFix);
     if (nc == 1) { c[0] = g_scPos[0]; c[1] = live; c[2] = live; }   // 2-corner mode: the final size
