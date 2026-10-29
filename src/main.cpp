@@ -757,10 +757,21 @@ static int64_t round_grid(double v, double grid) {           // v, grid in fixed
     return (int64_t)(r * grid);
 }
 static volatile DWORD g_buildTick = 0;   // last frame the hammer's place cursor was computed
+// Diagnostics (aim far from the character): the last place cursor each cursor system computed.
+struct CxSeen { uint8_t* sys; DWORD tick; int64_t cam[3]; int64_t pos[3]; uint8_t valid; };
+static CxSeen g_cxSeen[4];
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
     uint8_t* r = g_cxOrig(out, sys, q, ray);
     if (!out || !sys || !q || q[3] != 4) return r;
     g_buildTick = GetTickCount();
+    {
+        int k = 0;
+        while (k < 4 && g_cxSeen[k].sys && g_cxSeen[k].sys != sys) k++;
+        if (k == 4) k = 3;
+        CxSeen& e = g_cxSeen[k];
+        e.sys = sys; e.tick = g_buildTick; e.valid = out[0x28];
+        memcpy(e.cam, sys + 0x640, 24); memcpy(e.pos, out, 24);
+    }
     float* rot = (float*)(out + 0x18);
     bool valid = out[0x28] != 0;
     if (valid) {
@@ -2239,6 +2250,7 @@ static int aim_candidates(uint8_t* out[5]) {
     return n;
 }
 
+extern volatile DWORD g_hoverTick;
 // A cursor component the blueprint system read in the last half second (the world
 // is loaded and the hammer is out), not one of a world that was unloaded.
 static bool cc_live(const uint8_t* c) {
@@ -2291,6 +2303,18 @@ static bool aim_lookup(const CursorXf* place, uint32_t shape, CursorXf* out, con
             .str(") client aim (").fix(ca->pos[0]).c(',').fix(ca->pos[1]).c(',').fix(ca->pos[2]).c(')'));
     }
     if (!nc) LOG(.str("  aim lookup failed: no client cursor known yet"));
+    {
+        DWORD now2 = GetTickCount();
+        for (int k = 0; k < 4; k++) if (g_frameCC[k])
+            LOG(.str("    frame cursor ").i(k).str(" read ").u(now2 - g_frameCCTick[k]).str(" ms ago")
+                .str(k == ((g_frameCCNext - 1) & 3) ? " (newest)" : ""));
+        for (int k = 0; k < 4; k++) if (g_cxSeen[k].sys) {
+            const CxSeen& e = g_cxSeen[k];
+            LOG(.str("    cursor query ").i(k).str(" ").u(now2 - e.tick).str(" ms ago cam (").fix(e.cam[0]).c(',').fix(e.cam[1]).c(',').fix(e.cam[2])
+                .str(") place (").fix(e.pos[0]).c(',').fix(e.pos[1]).c(',').fix(e.pos[2]).str(") valid ").i(e.valid));
+        }
+        LOG(.str("    hover highlight ran ").u(now2 - g_hoverTick).str(" ms ago"));
+    }
     return false;
 }
 
@@ -2578,6 +2602,7 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
         log_xf("  place ", xf);
         if (haveAim) log_xf("  aim   ", &aim);
         if (memcmp(&clientPlace, xf, sizeof(CursorXf))) log_xf("  client", &clientPlace);
+        if (!haveAim && cc) { log_xf("  server cursor +300", (CursorXf*)(cc + 0x300)); log_xf("  server cursor +338", (CursorXf*)(cc + 0x338)); }
     }
     CursorXf target = clientPlace;
     if (replace) {
@@ -2814,8 +2839,10 @@ static int preview_voxels(uint32_t out[][3], int cap) {
     return n;
 }
 
+volatile DWORD g_hoverTick = 0;
 static void hover_fx_hook(uint8_t* ctx, void* b, void* c) {
     g_hoverFxOrig(ctx, b, c);
+    g_hoverTick = GetTickCount();
     if (!ctx || !g_vfxStart || !g_vfxStop || !g_gameTime) return;
     void* world = *(void**)ctx;
     void* sys = *(void**)(ctx + 0x168);
