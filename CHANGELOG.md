@@ -3,6 +3,14 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.20.3
+
+- Fix: **Replace far from your character with a free camera.** Flying the camera away
+  from the character and clicking Replace failed with "could not read the aimed block":
+  far from the character the game's own cursor is not where you look, so the mod did not
+  trust what it saw. Replace (and Area build corners) now use the block under your
+  crosshair however far the camera is.
+
 ## 0.20.2
 
 - Fix: **works together with XHL Vein Mining again.** Building Tools rerouted every

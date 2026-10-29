@@ -21,7 +21,8 @@ Keys (with the Construction Hammer)
 
 Prefab mode
   Vanilla placement. With Replace on, the shape replaces the blocks you aim at
-  with your current material (aim at the block itself, not the ghost).
+  with your current material (aim at the block itself, not the ghost). This also
+  works with a free camera flown far away from your character.
   Replace styles (F9):
     full shape   - blocks inside the shape get the new material and the rest of
                    the shape is built as well

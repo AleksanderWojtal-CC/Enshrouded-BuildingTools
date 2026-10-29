@@ -30,7 +30,7 @@ the clicked material (up to FillLimit, default 500), leaving other materials alo
 Roof materials also spread diagonally, so a whole sloped roof is caught in one click.
 The old material is refunded with the normal item pop-up, and undo puts everything
 back exactly. With a terrain material selected it also repaints the ground, for
-example dirt into stone.
+example dirt into stone. It also works with a free camera far from your character.
 The fill bucket works with the small shapes (first row of the shape picker); bigger
 shapes replace or delete one whole shape, and building pieces work as in the game.
 With the connected style, a right click deletes instead: every touching block of the
