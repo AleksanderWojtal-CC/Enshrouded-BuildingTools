@@ -640,5 +640,9 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   on the rotation, not the cell's minimum. dev4: check that the server place is a corner
   of the ray's place cell (0.25 m from its centre on every axis) and move the server
   place by (aimed cell - place cell); the area preview uses cell centres directly.
+- dev4 test: works far away; one top-face click failed: hit (3720.826, 844.500, 1388.491)
+  is 9 mm from the z grid line, so +-5 cm stepped on y and z. Another click near an edge
+  "fit" but aimed one cell off in z. dev5 steps only on the axis whose grid line the hit
+  is closest to.
 - Not changed: the dismantle path (Area remove, connected delete) still uses the server's
   aimed transform; untested far from the character.

@@ -2271,8 +2271,15 @@ static bool query_cursor(int64_t placeC[3], int64_t aimC[3], int64_t step[3]) {
     const CxSeen e = g_cxSeen[k];
     if (!e.valid || GetTickCount() - e.tick > 250) return false;
     const int64_t d = (int64_t)(0.05 * 4294967296.0), q = (int64_t)1 << 30;   // 5 cm, 0.25 m
+    // The face is on the axis whose grid line the hit is closest to (on it, up to float
+    // noise). Only that axis steps: a hit near a block edge must not step twice.
+    int face = 0; int64_t best = 0x7fffffffffffffffLL;
     for (int a = 0; a < 3; a++) {
-        int64_t fd = (int64_t)(e.fwd[a] * (float)d);
+        int64_t r = e.pos[a] & (((int64_t)1 << 31) - 1), dist = r < ((int64_t)1 << 30) ? r : ((int64_t)1 << 31) - r;
+        if (dist < best) { best = dist; face = a; }
+    }
+    for (int a = 0; a < 3; a++) {
+        int64_t fd = a == face ? (int64_t)(e.fwd[a] * (float)d) : 0;
         int64_t front = (e.pos[a] + fd) >> 31, back = (e.pos[a] - fd) >> 31;   // 0.5 m cells
         placeC[a] = (back << 31) + q;
         aimC[a] = (front << 31) + q;
