@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.20.2"
+#define MOD_VERSION "0.20.3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -2222,6 +2222,7 @@ static void aim_record(const CursorXf* place, uint32_t shape, const CursorXf& ai
 // common when flying (Airborne Architect), so without these the first clicks of a
 // session had no client cursor at all. Single player has one or two client worlds.
 static uint8_t* volatile g_frameCC[4] = {};
+static volatile DWORD g_frameCCTick[4] = {};        // last frame each one was read
 
 static volatile LONG g_frameCCNext = 0;
 static uint8_t* live_cc() { uint8_t* c = g_clientCC; return c ? c : g_frameCC[(g_frameCCNext - 1) & 3]; }
@@ -2238,7 +2239,15 @@ static int aim_candidates(uint8_t* out[5]) {
     return n;
 }
 
-static bool aim_lookup(const CursorXf* place, uint32_t shape, CursorXf* out, const char** how) {
+// A cursor component the blueprint system read in the last half second (the world
+// is loaded and the hammer is out), not one of a world that was unloaded.
+static bool cc_live(const uint8_t* c) {
+    DWORD now = GetTickCount();
+    for (int k = 0; k < 4; k++) if (g_frameCC[k] == c && now - g_frameCCTick[k] < 500) return true;
+    return false;
+}
+
+static bool aim_lookup(const CursorXf* place, uint32_t shape, CursorXf* out, const char** how, CursorXf* clientPlace) {
     uint8_t* cand[5]; const int nc = aim_candidates(cand);
     for (int k = 0; k < nc; k++) {
         uint8_t* c = cand[k];
@@ -2265,6 +2274,17 @@ static bool aim_lookup(const CursorXf* place, uint32_t shape, CursorXf* out, con
         for (int k = 0; k < 3; k++) { int64_t d = a->pos[k] - place->pos[k]; if (d < -lim || d > lim) close = false; }
         if (close) { *out = *a; *how = "client cursor (near)"; return true; }
     }
+    // Far from the character (free camera) the server's cursor is not where the player
+    // looks: its place cursor was tens of metres from the client's. Single player has
+    // only the local player, so the live client aim is the clicked block; the client's
+    // place cursor replaces the server's (area build corners).
+    for (int n = 0; n < nc; n++) {
+        uint8_t* c = cand[n];
+        if (zero_pos(*(CursorXf*)(c + 0x338)) || !cc_live(c)) continue;
+        *out = *(CursorXf*)(c + 0x338);
+        if (clientPlace) *clientPlace = *(CursorXf*)(c + 0x300);
+        *how = "client cursor (far)"; return true;
+    }
     for (int n = 0; n < nc; n++) {
         const CursorXf* cp = (const CursorXf*)(cand[n] + 0x300); const CursorXf* ca = (const CursorXf*)(cand[n] + 0x338);
         LOG(.str("  aim lookup failed: client place (").fix(cp->pos[0]).c(',').fix(cp->pos[1]).c(',').fix(cp->pos[2])
@@ -2284,9 +2304,10 @@ static uint8_t* cursor_get_hook(uint8_t* out, uint8_t* player, uint8_t* cc) {
     uint8_t* r = g_cursorGetOrig(out, player, cc);
     uint8_t* frame = out - 0xf8;
     if (!cc || !readable(frame + 0x50, 8) || *(void**)(frame + 0x50)) return r;     // server world
-    for (int k = 0; k < 4; k++) if (g_frameCC[k] == cc) return r;
+    for (int k = 0; k < 4; k++) if (g_frameCC[k] == cc) { g_frameCCTick[k] = GetTickCount(); return r; }
     LONG k = InterlockedIncrement(&g_frameCCNext) - 1;      // a new world (load) replaces the oldest
     g_frameCC[k & 3] = cc;
+    g_frameCCTick[k & 3] = GetTickCount();
     LOG(.str("client cursor ").i(k + 1).str(" found"));
     return r;
 }
@@ -2548,16 +2569,17 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
 
     // Place cursor: where the ghost sits (next to the surface for small blocks).
     // Aimed cursor: the shape overlapping the block you look at. Replace uses it.
-    CursorXf aim; const char* how = "";
-    bool haveAim = aim_lookup(xf, shape, &aim, &how);
+    CursorXf aim, clientPlace = *xf; const char* how = "";
+    bool haveAim = aim_lookup(xf, shape, &aim, &how, &clientPlace);
     if (g_cfg.log) {
         LOG(.str("click: mode=").str(mode == MODE_AREA ? "area" : "prefab")
             .str(" replace=").i(replace).str(" shape=").x(shape).str(" corners=").i(g_sc)
             .str(" aim=").str(haveAim ? how : "none"));
         log_xf("  place ", xf);
         if (haveAim) log_xf("  aim   ", &aim);
+        if (memcmp(&clientPlace, xf, sizeof(CursorXf))) log_xf("  client", &clientPlace);
     }
-    CursorXf target = *xf;
+    CursorXf target = clientPlace;
     if (replace) {
         if (!haveAim) {
             LOG(.str("  no live aim for this click; nothing done"));

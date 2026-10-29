@@ -608,3 +608,18 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   +0x458 voxelObject, +0x468 terrainVoxelObject. Piece = voxelObject && !isBuildingVoxel.
   The dismantle's block path needs terrain or (voxelObject && isBuildingVoxel). The shape
   state passed to PlaceShape / RemoveShape / ShapeBounds is this ItemInfo.
+
+## v0.20.3: Replace far from the character (free camera)
+- Player log (0.20.2): free camera tens of metres from the sitting character, Replace ->
+  "aim lookup failed": client place (4384.5, 778.5, 2821.5), client aim 0.5 m below it
+  (live and consistent), but the server's place cursor was (4401.5, 778.0, 2766.5), about
+  57 m away; second client cursor all zero. Within some range of the character it works.
+  The server cursor (server_cursor_no_prediction) is not where the player looks when the
+  camera is far from the character, so neither the exact match nor the 6 m check held.
+- v0.20.3: cursor_get_hook stamps each client cursor component with the last frame it
+  was read. When the exact and near matches fail, aim_lookup takes the live aim of a
+  client cursor read in the last 500 ms (single player: only the local player clicks),
+  and the client's place cursor replaces the server's as the target (Area build corners).
+  Logged as aim=client cursor (far) with a "client" transform line.
+- Not changed: the dismantle path (Area remove, connected delete) still uses the server's
+  aimed transform; untested far from the character.
