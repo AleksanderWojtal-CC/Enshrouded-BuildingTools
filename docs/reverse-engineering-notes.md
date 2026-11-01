@@ -696,3 +696,11 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   texture bundle+0xb9e8 24x24 per slot. Images through resolveImage(imageCtx, &h, texture).
 - Mouse while open: the low-level mouse hook sums the moves (pt - GetCursorPos) and swallows
   moves, wheel turns and left/right clicks, so the camera stays still and nothing is built.
+- Scrolling list (0.22.0-dev8), as the settings menu (`cc49d0`) draws its pages:
+  params = GameUiScrollingLayoutParameterData (0x104) from `a324d0`; the settings menu sets
+  enableScrollbar, centerChildren and useGlobalFocus (+0x2b/+0x2f/+0x32), hotkey mask |= 0x18,
+  spacing 0, padding {0,10,0,0}, and the scroll bar (+0x44) textures from the UI bundle
+  (+0xf954 range colour, +0xf914 range texture, +0xf8d4 slider texture), textured style,
+  widths 24/24/24/20. beginScroll `a31640`(state 0x4e0, 1, &persistent float offset, 0,
+  &params); node = state+8; scroll speed `d3aff0`(state) stored at state+0x464 (flag +0x468);
+  endScroll `a33780`(state).

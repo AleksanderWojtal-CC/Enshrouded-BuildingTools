@@ -69,7 +69,7 @@ right now: Replace style while Replace is on, area fill and clear corners in Are
 
 [b]Menu in the game's own UI[/b] (Home)
 A full-screen menu that looks like the game's: Keys tab (click a key, press the new one,
-Shift/Ctrl/Alt combinations and mouse side buttons work), Quick keys tab (keys that set one
+Shift/Ctrl/Alt combinations and mouse side buttons work), Quick keys section on the scrolling Keys tab (keys that set one
 option directly) and Options tab. While you build, the mod's keys sit in
 the game's building box with the game's key icons and on/off switches.
 

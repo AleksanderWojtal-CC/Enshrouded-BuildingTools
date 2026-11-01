@@ -115,7 +115,7 @@ Menu (Home)
   Keys tab: click a key, then press the new one. Shift, Ctrl and Alt
   combinations work (Shift+K). Esc cancels, Delete clears. Saved at once.
   The middle mouse button and Mouse 4 / 5 can be bound too.
-  Quick keys tab: Replace while held (Replace is on while you hold the key and
+  Quick keys (section of the Keys tab, scroll down): Replace while held (Replace is on while you hold the key and
   back as it was when you let go), and keys that set one option directly
   (Prefab or Area mode, Replace on or off, each replace style, each area fill,
   creative building on / off). They have no key until you set one.
