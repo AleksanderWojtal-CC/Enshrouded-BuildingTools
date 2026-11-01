@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.22.0-dev4"
+#define MOD_VERSION "0.22.0-dev5"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -127,6 +127,8 @@ struct Config {
     int keyStyleFull = 0, keyStyleOverlap = 0, keyStyleConnected = 0;   // quick keys: set an option directly
     int keyFillSolid = 0, keyFillHollow = 0, keyFillWalls = 0;
     int keyCreative  = 0;      // creative building on / off
+    int keyReplaceHold = 0;    // Replace on while this key is held
+    int keyPrefab = 0, keyAreaOn = 0, keyReplaceOn = 0, keyReplaceOff = 0;   // set a mode / Replace directly
     char language[16] = "auto";  // text language: auto (as the game), or a file code (pl, de, ...)
 };
 static Config g_cfg;
@@ -172,6 +174,9 @@ static void write_full_ini(const Config& c) {
      .t("StyleFull=").i(c.keyStyleFull).t("\r\nStyleOverlap=").i(c.keyStyleOverlap).t("\r\nStyleConnected=").i(c.keyStyleConnected).t("\r\n")
      .t("FillSolid=").i(c.keyFillSolid).t("\r\nFillHollow=").i(c.keyFillHollow).t("\r\nFillWalls=").i(c.keyFillWalls).t("\r\n")
      .t("ToggleCreative=").i(c.keyCreative).t("\r\n")
+     .t("PrefabMode=").i(c.keyPrefab).t("\r\nAreaMode=").i(c.keyAreaOn).t("\r\n")
+     .t("ReplaceOn=").i(c.keyReplaceOn).t("\r\nReplaceOff=").i(c.keyReplaceOff).t("\r\n")
+     .t("; Replace is on while this key is held, back as it was when you let go\r\nHoldReplace=").i(c.keyReplaceHold).t("\r\n")
      .t("\r\n[Creative]\r\n")
      .t("; 1 = creative building: blocks cost nothing, removing or undoing gives nothing back,\r\n")
      .t(";     so your inventory is never touched (props, crafting and chests stay normal)\r\n")
@@ -244,6 +249,11 @@ static void load_config() {
     g_cfg.keyFillHollow = ini_int(L"Keys", L"FillHollow", 0);
     g_cfg.keyFillWalls  = ini_int(L"Keys", L"FillWalls", 0);
     g_cfg.keyCreative   = ini_int(L"Keys", L"ToggleCreative", 0);
+    g_cfg.keyPrefab     = ini_int(L"Keys", L"PrefabMode", 0);
+    g_cfg.keyAreaOn     = ini_int(L"Keys", L"AreaMode", 0);
+    g_cfg.keyReplaceOn  = ini_int(L"Keys", L"ReplaceOn", 0);
+    g_cfg.keyReplaceOff = ini_int(L"Keys", L"ReplaceOff", 0);
+    g_cfg.keyReplaceHold = ini_int(L"Keys", L"HoldReplace", 0);
     bool noLanguage;
     {
         wchar_t p[MAX_PATH], w[16];
@@ -264,7 +274,7 @@ static void load_config() {
         ini_int(L"Area", L"Preview", -1) == -1 || ini_int(L"Creative", L"CreativeBuilding", -1) == -1 ||
         ini_int(L"Keys", L"ToggleMod", -1) == -1 || ini_int(L"Limits", L"FillLimit", -1) == -1 ||
         ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1 || noLanguage ||
-        ini_int(L"Keys", L"RadialMenu", -1) == -1)
+        ini_int(L"Keys", L"RadialMenu", -1) == -1 || ini_int(L"Keys", L"HoldReplace", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -3310,7 +3320,8 @@ static int held_mods() {
 static int* const g_allKeys[] = { &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg.keyCancel, &g_cfg.keyStyle, &g_cfg.keyHover,
                                   &g_cfg.keyFarther, &g_cfg.keyCloser, &g_cfg.wheelKey, &g_cfg.keyFill, &g_cfg.keyMenu, &g_cfg.keyOff,
                                   &g_cfg.keyRadial, &g_cfg.keyStyleFull, &g_cfg.keyStyleOverlap, &g_cfg.keyStyleConnected,
-                                  &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative };
+                                  &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
+                                  &g_cfg.keyReplaceHold, &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff };
 // Down with exactly its modifiers. A key without modifiers ignores held modifiers (Shift
 // while sprinting), unless another setting uses the same key with the held ones.
 static bool key_down(int code) {
@@ -3571,7 +3582,7 @@ static bool set_creative(bool on) {
 enum {
     ACT_AREA, ACT_REPLACE, ACT_CLEAR, ACT_STYLE, ACT_FREE, ACT_FARTHER, ACT_CLOSER, ACT_FILL,
     ACT_STYLE_FULL, ACT_STYLE_OVERLAP, ACT_STYLE_CONNECTED, ACT_FILL_SOLID, ACT_FILL_HOLLOW, ACT_FILL_WALLS,
-    ACT_CREATIVE, ACT_KEYED,          // the actions above have their own key
+    ACT_CREATIVE, ACT_PREFAB, ACT_AREA_ON, ACT_REPLACE_ON, ACT_REPLACE_OFF, ACT_KEYED,          // the actions above have their own key
     ACT_MENU = ACT_KEYED,             // the wheel's menu entry (the menu key is handled with the menu)
 };
 static int* const kActKey[ACT_KEYED] = {
@@ -3579,6 +3590,7 @@ static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyFarther, &g_cfg.keyCloser, &g_cfg.keyFill,
     &g_cfg.keyStyleFull, &g_cfg.keyStyleOverlap, &g_cfg.keyStyleConnected,
     &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
+    &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
 };
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
 static volatile LONG g_menuOpen = 0;
@@ -3598,7 +3610,17 @@ static void do_act(int a) {
         flash(T(m == MODE_AREA ? S_MODE_AREA : S_MODE_PREFAB));
         break;
     }
-    case ACT_REPLACE: { LONG r = !g_replace; set_replace(r); flash(T(r ? S_REPLACE_ON : S_REPLACE_OFF)); break; }
+    case ACT_REPLACE: case ACT_REPLACE_ON: case ACT_REPLACE_OFF: {
+        LONG r = a == ACT_REPLACE ? !g_replace : a == ACT_REPLACE_ON;
+        set_replace(r); flash(T(r ? S_REPLACE_ON : S_REPLACE_OFF));
+        break;
+    }
+    case ACT_PREFAB: case ACT_AREA_ON: {
+        LONG m = a == ACT_AREA_ON ? MODE_AREA : MODE_PREFAB;
+        if (m != g_mode) set_mode(m);
+        flash(T(m == MODE_AREA ? S_MODE_AREA : S_MODE_PREFAB));
+        break;
+    }
     case ACT_STYLE: style_set(g_replaceStyle == STYLE_FULL ? STYLE_OVERLAP : g_replaceStyle == STYLE_OVERLAP ? STYLE_CONNECTED : STYLE_FULL); break;
     case ACT_FILL: fill_set((g_fill + 1) % core::FILL_COUNT); break;
     case ACT_FARTHER: case ACT_CLOSER: hover_step(a == ACT_FARTHER ? 0.5f : -0.5f); return;   // no sound: held keys repeat
@@ -3829,10 +3851,15 @@ static KeyAction g_keyActions[] = {
     { S_ACT_CLOSER, &g_cfg.keyCloser, 0 },
     { S_ACT_WHEEL, &g_cfg.wheelKey, 0 },
     { S_ACT_OFF, &g_cfg.keyOff, 0 },
+    { S_ACT_REPLACE_HOLD, &g_cfg.keyReplaceHold, 1 },
+    { S_ACT_PREFAB, &g_cfg.keyPrefab, 1 },
+    { S_ACT_AREA_ON, &g_cfg.keyAreaOn, 1 },
+    { S_ACT_REPLACE_ON, &g_cfg.keyReplaceOn, 1 },
+    { S_ACT_REPLACE_OFF, &g_cfg.keyReplaceOff, 1 },
+    { S_ACT_CREATIVE, &g_cfg.keyCreative, 1 },
     { S_ACT_STYLE_FULL, &g_cfg.keyStyleFull, 1 },
     { S_ACT_STYLE_OVERLAP, &g_cfg.keyStyleOverlap, 1 },
     { S_ACT_STYLE_CONNECTED, &g_cfg.keyStyleConnected, 1 },
-    { S_ACT_CREATIVE, &g_cfg.keyCreative, 1 },
     { S_ACT_FILL_SOLID, &g_cfg.keyFillSolid, 1 },
     { S_ACT_FILL_HOLLOW, &g_cfg.keyFillHollow, 1 },
     { S_ACT_FILL_WALLS, &g_cfg.keyFillWalls, 1 },
@@ -4565,6 +4592,17 @@ static DWORD WINAPI input_thread(void*) {
             }
         }
         if (g_radialOpen) { for (bool& p : prev) p = true; continue; }   // the wheel has the mouse
+        {   // Replace while a key is held; as it was when let go (unless changed meanwhile)
+            static bool held = false; static LONG before = 0;
+            bool down = focus && key_down(g_cfg.keyReplaceHold);
+            if (down && !held) {
+                before = g_replace;
+                if (!g_replace) { set_replace(1); flash(T(S_REPLACE_ON)); beep(MB_ICONQUESTION); }
+            } else if (!down && held && !before && g_replace) {
+                set_replace(0); flash(T(S_REPLACE_OFF));
+            }
+            held = down;
+        }
         for (int k = 0; k < ACT_KEYED; k++) {
             int code = *kActKey[k];
             if ((k == ACT_FARTHER || k == ACT_CLOSER) && !g_hover) code = 0;

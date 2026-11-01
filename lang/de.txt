@@ -6,6 +6,7 @@
 # been checked, menu.translation_note can be left empty.
 # Numbers
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -146,6 +147,11 @@ menu.key_fill_solid = Bereichsfüllung: massiv
 menu.key_fill_hollow = Bereichsfüllung: hohler Raum
 menu.key_fill_walls = Bereichsfüllung: nur Wände
 menu.key_creative = Kreatives Bauen an / aus
+menu.key_replace_hold = Ersetzen (halten)
+menu.key_prefab = Normaler Modus (wie im Spiel)
+menu.key_area_on = Bereichsmodus
+menu.key_replace_on = Ersetzen an
+menu.key_replace_off = Ersetzen aus
 menu.quick_help = Tasten, die eine Option direkt setzen. Klicke auf eine Taste, um sie festzulegen.
 
 # Options tab

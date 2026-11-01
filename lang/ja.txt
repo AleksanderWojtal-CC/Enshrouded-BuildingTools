@@ -6,6 +6,7 @@
 # been checked, menu.translation_note can be left empty.
 # Numbers
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = .
@@ -146,6 +147,11 @@ menu.key_fill_solid = 範囲の塗りつぶし: 中身あり
 menu.key_fill_hollow = 範囲の塗りつぶし: 中空の部屋
 menu.key_fill_walls = 範囲の塗りつぶし: 壁のみ
 menu.key_creative = クリエイティブ建築 オン / オフ
+menu.key_replace_hold = 置換（長押し）
+menu.key_prefab = 通常モード（ゲーム標準）
+menu.key_area_on = 範囲モード
+menu.key_replace_on = 置換 オン
+menu.key_replace_off = 置換 オフ
 menu.quick_help = オプションを直接設定するキーです。キーをクリックして設定します。
 
 # Options tab

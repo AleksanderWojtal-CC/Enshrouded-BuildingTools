@@ -138,6 +138,11 @@
     X(S_ACT_FILL_HOLLOW, "menu.key_fill_hollow", "Area fill: hollow room") \
     X(S_ACT_FILL_WALLS, "menu.key_fill_walls", "Area fill: walls only") \
     X(S_ACT_CREATIVE, "menu.key_creative", "Creative building on / off") \
+    X(S_ACT_REPLACE_HOLD, "menu.key_replace_hold", "Replace while held") \
+    X(S_ACT_PREFAB, "menu.key_prefab", "Prefab mode (vanilla)") \
+    X(S_ACT_AREA_ON, "menu.key_area_on", "Area mode") \
+    X(S_ACT_REPLACE_ON, "menu.key_replace_on", "Replace on") \
+    X(S_ACT_REPLACE_OFF, "menu.key_replace_off", "Replace off") \
     X(S_MENU_QUICK_HELP, "menu.quick_help", "Keys that set an option directly. Click a key to set it.") \
     X(S_OPT_OFF, "option.off", "Off") \
     X(S_OPT_ON, "option.on", "On") \

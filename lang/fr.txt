@@ -6,6 +6,7 @@
 # been checked, menu.translation_note can be left empty.
 # Numbers
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -146,6 +147,11 @@ menu.key_fill_solid = Remplissage : plein
 menu.key_fill_hollow = Remplissage : pièce creuse
 menu.key_fill_walls = Remplissage : murs seuls
 menu.key_creative = Construction créative activée / désactivée
+menu.key_replace_hold = Remplacer (maintenir)
+menu.key_prefab = Mode normal (comme le jeu)
+menu.key_area_on = Mode zone
+menu.key_replace_on = Remplacer activé
+menu.key_replace_off = Remplacer désactivé
 menu.quick_help = Touches qui règlent directement une option. Cliquez sur une touche pour la définir.
 
 # Options tab

@@ -6,6 +6,7 @@
 # been checked, menu.translation_note can be left empty.
 # Numbers
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = .
@@ -146,6 +147,11 @@ menu.key_fill_solid = การเติมพื้นที่: ทึบ
 menu.key_fill_hollow = การเติมพื้นที่: ห้องกลวง
 menu.key_fill_walls = การเติมพื้นที่: เฉพาะผนัง
 menu.key_creative = การสร้างแบบสร้างสรรค์ เปิด / ปิด
+menu.key_replace_hold = แทนที่ (กดค้าง)
+menu.key_prefab = โหมดปกติ (แบบในเกม)
+menu.key_area_on = โหมดพื้นที่
+menu.key_replace_on = แทนที่ เปิด
+menu.key_replace_off = แทนที่ ปิด
 menu.quick_help = ปุ่มที่ตั้งค่าตัวเลือกโดยตรง คลิกปุ่มเพื่อกำหนด
 
 # Options tab
