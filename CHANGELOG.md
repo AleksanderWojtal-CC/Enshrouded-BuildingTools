@@ -3,6 +3,17 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.21.0
+
+- **Dedicated servers.** Put `dinput8.dll` next to `enshrouded_server.exe` as well as
+  in your game folder. Area mode, Replace, the fill bucket, connected delete and area
+  remove then work on the server. Your game sends your Building Tools settings to the
+  server with its normal input, so each player builds with their own settings, and
+  players without the mod build as usual. The server's `BuildingTools.ini` decides
+  creative building, chests of all bases and the shape limits.
+- The area corners and guide lines show in your game while you play on a server, and
+  "Area sent to the server: N shapes" confirms the final corner.
+
 ## 0.20.3
 
 - Fix: **Replace, the fill bucket and the area preview far from your character with the

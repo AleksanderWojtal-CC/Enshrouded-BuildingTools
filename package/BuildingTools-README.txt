@@ -1,11 +1,18 @@
-Enshrouded Building Tools 0.18.0 (single player)
-==============================================
+Enshrouded Building Tools 0.21.0
+================================
 
 Files in the game folder
   dinput8.dll           the mod (Windows loads it with the game)
   BuildingTools.ini     settings, created on first start
   BuildingTools.log     what the mod did (previous session: BuildingTools.prev.log)
   BuildingTools-Languages\   the translations, one text file per language
+
+Dedicated server
+  Copy dinput8.dll (and BuildingTools-Languages) next to enshrouded_server.exe as
+  well. Your game sends your Building Tools settings with its input, so each player
+  builds with their own settings; players without the mod build as usual. The
+  server's BuildingTools.ini sets creative building, chests of all bases and the
+  shape limits. Games hosted by a player don't support per-player settings yet.
 
 Keys (with the Construction Hammer)
   Home  Building Tools menu: change keys and options in the game's own UI

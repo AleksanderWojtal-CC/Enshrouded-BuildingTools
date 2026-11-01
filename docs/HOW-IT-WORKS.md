@@ -199,6 +199,30 @@ instructions; the game functions themselves are not patched.
 Chests whose entity is not loaded are skipped by the game itself (the entity lookup
 fails), so a base far away may only count once the game has it in memory.
 
+## Dedicated servers
+
+`enshrouded_server.exe` loads the same DLL (`g_dedicated`, from the exe name). It has
+the server-side building code, so every server hook installs; the UI, input and preview
+hooks are skipped. The server never sees a player's keys, so the client sends them:
+
+- **Client.** `input_encode_hook` wraps the encoder of `ClientPlayerInputData` (client
+  3a5640, sent every frame). After the original runs, the mod's state is packed into
+  the lowest 16 bits of the int64 camera position x/y/z (`core::net_pack`: tag, on,
+  area, replace, style, fill, corner count, a 3-bit click counter, a check word). That
+  moves the camera by under 0.02 mm and is sent losslessly. While a building item is in
+  hand the encoder is also told to send the secondary (aim) cursor transform, which the
+  game otherwise sends only while the right button is held, so Replace has an aim.
+- **Server.** The decoded input is the PlayerInput component: camera at +0x28, primary
+  cursor at +0x300, aim at +0x338. `NetScope` loads the clicking player's settings and
+  area corners into the mod's globals for one hook call and saves the corners back.
+  The dismantle context holds PlayerInput at +0x58; the blueprint system fills that
+  field only after `PlaceShape`, so `place_hook` takes PlayerInput from the caller's
+  frame (the cursor component it read the transform from, rbp-0x58 = xf-0x118).
+  A player whose camera bits fail the check (no mod) or with the mod off builds vanilla.
+- **Corners in step.** The client counts its own corner clicks and mirrors the corners
+  for its HUD and guide lines; the server uses the client's count and click counter
+  (`core::net_corner_index`) to skip repeated clicks and restart when it missed one.
+
 ## Off switch
 
 `ToggleMod` (F5) sets the mod back to vanilla: Prefab mode, Replace, free placement and
