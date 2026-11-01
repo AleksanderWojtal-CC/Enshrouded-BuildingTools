@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.23.0-dev5"
+#define MOD_VERSION "0.23.0-dev4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -657,10 +657,6 @@ static const char* SIG_ZONE_VIS_CALL = "48 8B 8E E0 D4 47 00 E8 ?? ?? ?? ?? 0F 1
 // 298fc0(sys, handle, hash, &float3), found through calls in client_cursor_entity.
 static const char* SIG_VFX_PARAM_F_CALL = "E8 ?? ?? ?? ?? F3 0F 10 9B CC 05 00 00 41 B8 15 36 D0 83 41 8B 95 CC 10 00 00";
 static const char* SIG_VFX_PARAM_V_CALL = "E8 ?? ?? ?? ?? 40 38 BD 70 03 00 00 74 12 41 0F 28 C5 41 0F 28 DD 41 0F 28 CD";
-// Looped effect with a full world transform: start 29d3a0(sys, time, &guid, &xf, &params) and
-// move 29cd90(sys, handle, &xf), both called by client_cursor_entity for the building gizmos.
-static const char* SIG_VFX_START_XF_CALL = "E8 ?? ?? ?? ?? 41 89 85 CC 10 00 00 41 8B 95 CC 10 00 00 4C 8D 45 A0 48 8B 8D 90 00 00 00";
-static const char* SIG_VFX_MOVE_XF_CALL = "E8 ?? ?? ?? ?? 41 8B 95 CC 10 00 00 41 0F 28 DD 48 8B 8D 90 00 00 00 41 B8 B3 4C BA 0D";
 static const char* SIG_MISSING_CALL = "E8 ?? ?? ?? ?? 8B 13 8B CA 0F BA F1 0C 0F BA EA 0C 84 C0 0F 44 D1 89 13";
 // The client's input packet builder: copies ClientPlayerInputData into the network
 // layout (camera first). Client only; the dedicated server has no such code.
@@ -3454,70 +3450,10 @@ static int preview_voxels(uint32_t out[][3], int cap) {
 }
 
 volatile DWORD g_hoverTick = 0;
-// ---- effect trial (dev build): candidate effects placed over the area, Numpad + cycles
-struct WorldXf { int64_t pos[3]; float rot[4]; float scale[3]; float pad; };
-typedef uint32_t (*VfxStartXfFn)(void* sys, uint64_t time, const void* guid, const WorldXf* xf, void* params);
-typedef void (*VfxMoveXfFn)(void* sys, uint32_t handle, const WorldXf* xf);
-static VfxStartXfFn g_vfxStartXf = nullptr;
-static VfxMoveXfFn g_vfxMoveXf = nullptr;
-static const uint32_t kTrialGuids[][4] = {
-    { 0x9183293c, 0x4fa853c0, 0xd0ed4f84, 0x2d8b98e1 },     // started when picking a prefab
-    { 0xd108e943, 0x428c1546, 0xfc62398e, 0xd50fc18b },
-    { 0xfd5ffb74, 0x4b6b0777, 0xb27e2e85, 0x06212c2e },
-    { 0xafa9569e, 0x4c8d564b, 0x400a93bb, 0x88110033 },     // hammer cursor entity effect
-};
-static const int kTrialN = 4;
-static int g_trial = 0;                                     // kTrialN = off
-static int g_trialScaleMode = 0;                            // 0 = size in metres, 1 = size / shape, 2 = 1
-static void effect_trial(void* world, void* sys) {
-    static uint32_t handle = 0; static int handleTrial = -1; static int handleMode = -1;
-    static bool plusDown = false, minusDown = false;
-    bool plus = (GetAsyncKeyState(VK_ADD) & 0x8000) != 0, minus = (GetAsyncKeyState(VK_SUBTRACT) & 0x8000) != 0;
-    if (plus && !plusDown) {
-        g_trial = (g_trial + 1) % (kTrialN + 1);
-        Buf b; b.str("effect trial: ");
-        if (g_trial == kTrialN) b.str("off"); else b.i(g_trial + 1).c('/').i(kTrialN).str(" ").u(kTrialGuids[g_trial][0], 16, 8);
-        flash(b.z()); LOG(.str(b.z()));
-    }
-    if (minus && !minusDown) {
-        g_trialScaleMode = (g_trialScaleMode + 1) % 3;
-        Buf b; b.str("effect trial scale: ").str(g_trialScaleMode == 0 ? "metres" : g_trialScaleMode == 1 ? "shapes" : "none");
-        flash(b.z()); LOG(.str(b.z()));
-    }
-    plusDown = plus; minusDown = minus;
-    if (!g_vfxStartXf || !g_vfxMoveXf || !g_vfxStop || !g_gameTime) return;
-    int64_t lo[3], hi[3];
-    bool want = g_trial < kTrialN && area_box_live(lo, hi);
-    uint64_t tbuf[4] = {};
-    uint64_t* tp = g_gameTime(world, tbuf);
-    uint64_t now = tp ? *tp : 0;
-    if (handle && (!want || handleTrial != g_trial || handleMode != g_trialScaleMode)) {
-        alignas(16) uint8_t extra[16] = {};
-        g_vfxStop(sys, &handle, now, extra);
-        handle = 0;
-    }
-    if (!want) return;
-    WorldXf x = {};
-    x.rot[3] = 1.f;
-    for (int a = 0; a < 3; a++) {
-        x.pos[a] = lo[a] + (hi[a] - lo[a]) / 2;
-        double m = (double)(hi[a] - lo[a]) * kInv;
-        float st = g_scStep[a] > 0.f ? g_scStep[a] : 0.5f;
-        x.scale[a] = g_trialScaleMode == 0 ? (float)m : g_trialScaleMode == 1 ? (float)(m / st) : 1.f;
-    }
-    if (!handle) {
-        alignas(16) uint8_t params[0x80] = {};
-        handle = g_vfxStartXf(sys, now, kTrialGuids[g_trial], &x, params);
-        handleTrial = g_trial; handleMode = g_trialScaleMode;
-        LOG(.str("effect trial: started ").i(g_trial + 1).str(" handle ").x(handle));
-    } else g_vfxMoveXf(sys, handle, &x);
-}
-
 static void hover_fx_hook(uint8_t* ctx, void* b, void* c) {
     g_hoverFxOrig(ctx, b, c);
     g_hoverTick = GetTickCount();
     update_preview_box();
-    if (ctx && *(void**)ctx && *(void**)(ctx + 0x168)) effect_trial(*(void**)ctx, *(void**)(ctx + 0x168));
     if (!ctx || !g_vfxStart || !g_vfxStop || !g_gameTime) return;
     void* world = *(void**)ctx;
     void* sys = *(void**)(ctx + 0x168);
@@ -5238,15 +5174,6 @@ static DWORD WINAPI init_thread(void*) {
         }
     }
     if (!g_dedicated) install_vfx_log();
-    if (g_hoverFxOrig) {
-        uint8_t* a = find_unique("VfxStartXfCall", SIG_VFX_START_XF_CALL);
-        uint8_t* m = find_unique("VfxMoveXfCall", SIG_VFX_MOVE_XF_CALL);
-        if (a && m && a[0] == 0xE8 && m[0] == 0xE8) {
-            g_vfxStartXf = (VfxStartXfFn)(a + 5 + *(int32_t*)(a + 1));
-            g_vfxMoveXf = (VfxMoveXfFn)(m + 5 + *(int32_t*)(m + 1));
-        }
-        LOG(.str("effect trial: ").str(g_vfxStartXf ? "available (Numpad + = next effect, Numpad - = scale mode)" : "not available"));
-    }
     LOG(.str("area preview: ").str(g_hoverFxOrig ? "available" : "not available").str(", 3D box ")
         .str(g_zoneVisOrig ? "available" : "not available"));
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
