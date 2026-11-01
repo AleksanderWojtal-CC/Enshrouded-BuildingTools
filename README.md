@@ -89,8 +89,14 @@ research log with all game addresses.
 
 The mod is built against the Enshrouded 1.0 client from 2026-10-20. It finds the game code by
 byte signatures. If an update changes that code, the mod turns itself off safely, and
-`BuildingTools.log` says which signature was not found. It is single player only.
-Online, the server does not run the mod.
+`BuildingTools.log` says which signature was not found.
+
+**Dedicated servers:** put the same `dinput8.dll` (and `BuildingTools-Languages`) next
+to `enshrouded_server.exe` too. Each player's game sends that player's Building Tools
+settings to the server with its input, so everyone builds with their own Area/Replace
+settings, and players without the mod build as usual. The server's `BuildingTools.ini`
+sets creative building, chests of all bases and the shape limits for everyone. In a game
+hosted by a player (not a dedicated server), per-player settings are not supported yet.
 
 **Other mods with a `dinput8.dll`** (Creative Mode, XHL mods): only one file can have
 that name. Use the XHL Native Core (the `dinput8.dll` from an XHL mod) and chain the

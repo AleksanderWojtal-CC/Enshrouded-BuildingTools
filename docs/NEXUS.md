@@ -92,7 +92,10 @@ Uninstall: delete dinput8.dll and BuildingTools-Languages.
 [b]Compatibility[/b]
 Built for the 1.0 client (2026-10-20). After a game update the mod disables itself
 safely if the game code changed; check BuildingTools.log.
-Not for dedicated/online servers (the server does not run the mod).
+[b]Dedicated servers[/b]: put the same dinput8.dll next to enshrouded_server.exe as well.
+Every player with the mod builds with their own settings; players without it build as
+usual. The server's BuildingTools.ini sets creative building, chests of all bases and
+the shape limits. Games hosted by a player don't support per-player settings yet.
 
 [b]With Creative Mode / XHL mods[/b]
 They also ship a dinput8.dll. Keep the XHL dinput8.dll, rename ours to BuildingTools.dll

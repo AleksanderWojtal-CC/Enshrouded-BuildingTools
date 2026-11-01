@@ -651,3 +651,24 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   +0x18), towards where the camera looks.
 - Not changed: the dismantle path (Area remove, connected delete) still uses the server's
   aimed transform; untested far from the character.
+
+## 0.21.0: dedicated server (issue #32)
+
+- `enshrouded_server.exe` loads dinput8.dll; every server-side signature matches (PlaceShape
+  223420, RemoveShape 223f40, CursorCall c06eb, PlaceCall c0a33, ServerCheck c09e2;
+  blueprint fn c0560, dismantle fn c0f70). UI, free placement, preview: not found (expected).
+- 0.20.3 on a server did nothing: the mod's settings live in the client process.
+- Client->server: `ClientPlayerInputData` (0x3b8), encoder client 3a5640
+  `(out, src, flags*, r9)`, server decoder 235060. camera.position int64 fixed point at
+  +0x20, sent losslessly (schema code 9). cursorInput primary +0x2f8, secondary +0x330;
+  digitalInput +0x3a8 (bit 0 MainhandAction, bit 4 SecondaryBuildingAction). flags bit0 =
+  send primary, bit1 = send secondary (normally only while bit 4 is held). Steam P2P only,
+  so no side channel.
+- Server PlayerInput (0x5c0): fromClient at +8 -> camera +0x28, primary +0x300, aim +0x338.
+  The "cursor component" the mod always read at +0x300/+0x338 is this component.
+- Dismantle ctx+0x58 = PlayerInput. Blueprint ctx (rbp+0x130) is zeroed per item at
+  c0791 and ctx+0x58 (rbp+0x188) is written only at c0cfc, after PlaceShape: dev1 found
+  no player at place clicks, so area build and Replace ran vanilla while area remove
+  worked. dev2 takes PlayerInput from rbp-0x58 (xf-0x118, the cursor read's r8).
+- At the cursor read rbx = building item (`48 8B D8 48 85 C0 0F 84` at cc-0x49 in both exes).
+- dev2 test (Aleksander, 2026-11-01): single player and dedicated server work.
