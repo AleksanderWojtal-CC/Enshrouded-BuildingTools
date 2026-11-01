@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.22.0-dev6"
+#define MOD_VERSION "0.22.0-dev7"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -4509,7 +4509,9 @@ static void radial_keys(bool focus) {
     prevDown = down;
     if (!g_radialOpen) {
         bool inGame = wheel_screen(g_hudScreen) && GetTickCount() - g_hudScreenTick < 500;
-        if (down && !wasDown && inGame && !g_menuOpen) {
+        // only while building: the hammer or a building material in hand (the game draws its building box then)
+        bool building = g_hudRowOrig ? GetTickCount() - g_gameRowTick < 300 : GetTickCount() - g_buildTick < 500;
+        if (down && !wasDown && inGame && building && !g_menuOpen) {
             g_radialX = g_radialY = 0.f; g_radialSel = -1; g_radialClicks = 0; g_radialCancel = 0;
             g_radialPicked = false;
             wheel_refresh();

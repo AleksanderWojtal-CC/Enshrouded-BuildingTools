@@ -100,7 +100,7 @@ Undo after area actions
   area remove.
 
 Tools wheel (hold Caps Lock)
-  A blurred wheel in the middle of the screen, drawn with the game's own wheel.
+  With the hammer or a building material in hand: a blurred wheel in the middle of the screen, drawn with the game's own wheel.
   Move the mouse towards an option and let go of the key to pick it. A left
   click picks the option and keeps the wheel open (change several things at
   once); a right click closes it without changes. The camera stays still and
