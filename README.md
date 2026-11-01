@@ -1,6 +1,6 @@
 # Enshrouded Building Tools
 
-A client-side mod for **Enshrouded 1.0 (single player)** that extends the Construction Hammer:
+A mod for **Enshrouded 1.0** (single player and dedicated servers) that extends the Construction Hammer:
 
 - **Replace**: repaint existing blocks with your current material, as a full shape,
   only where the shape overlaps existing blocks, or **connected** (fill bucket: every
@@ -48,6 +48,10 @@ replicate like vanilla building.
 2. Extract it into the game folder, next to `enshrouded.exe`
    (Steam: right click Enshrouded → Manage → Browse local files).
 3. Start the game. The banner "Building Tools <version> ready" confirms it loaded.
+
+**On a dedicated server**, also extract the same zip next to `enshrouded_server.exe`
+and restart the server; every player who wants the tools installs the mod in their game
+as above. See [Compatibility](#compatibility).
 
 The zip also holds the `BuildingTools-Languages` folder with the translations; keep it
 next to `dinput8.dll` (without it the mod shows English).

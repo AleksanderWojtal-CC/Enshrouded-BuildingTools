@@ -7,7 +7,8 @@ GitHub release as the main file.
 The zip root is the game folder, so Vortex and manual installs put `dinput8.dll` next to
 `enshrouded.exe`.
 
-Suggested settings: category *Building*, requirement *none*, single player only,
+Suggested settings: category *Building*, requirement *none*, single player and
+dedicated servers,
 virus-scan friendly (no installer, no executable).
 
 ## Summary (short description)
@@ -20,7 +21,7 @@ costs, refunds and undo.
 
 ```
 [size=5][b]Enshrouded Building Tools[/b][/size]
-Extends the Construction Hammer. Single player only.
+Extends the Construction Hammer. Works in single player and on dedicated servers.
 
 [b]Replace[/b] (F7)
 Aim at existing blocks and click: they take your current material, also a terrain
@@ -84,18 +85,30 @@ help: corrections are very welcome in the comments or on GitHub
 of a large area; use an area remove for the rest.
 [/list]
 
-[b]Install[/b]
+[b]Install (single player)[/b]
 Extract the zip into the game folder (next to enshrouded.exe), with the
 BuildingTools-Languages folder.
 Uninstall: delete dinput8.dll and BuildingTools-Languages.
 
+[b]Install on a dedicated server[/b]
+[list=1]
+[*]Install the mod in your game as above (every player who wants the tools does this).
+[*]Extract the same zip into the server folder too, next to enshrouded_server.exe
+(Steam: Enshrouded Dedicated Server, Manage, Browse local files; or your host's file manager).
+[*]Restart the server. BuildingTools.log next to enshrouded_server.exe should say
+"dedicated server: every player builds with the settings of their own Building Tools".
+[/list]
+Each player builds with their own keys and settings (Area, Replace, styles, fill); players
+without the mod build as usual. The server's BuildingTools.ini (created on its first start)
+decides creative building, chests of all bases, MaxShapes and FillLimit for everyone.
+Server and players should run the same version of the mod.
+
 [b]Compatibility[/b]
 Built for the 1.0 client (2026-10-20). After a game update the mod disables itself
 safely if the game code changed; check BuildingTools.log.
-[b]Dedicated servers[/b]: put the same dinput8.dll next to enshrouded_server.exe as well.
-Every player with the mod builds with their own settings; players without it build as
-usual. The server's BuildingTools.ini sets creative building, chests of all bases and
-the shape limits. Games hosted by a player don't support per-player settings yet.
+Multiplayer: dedicated servers are supported (see Install). In a game hosted by a player
+(not a dedicated server) the mod runs in the host's game, and per-player settings are not
+supported yet.
 
 [b]With Creative Mode / XHL mods[/b]
 They also ship a dinput8.dll. Keep the XHL dinput8.dll, rename ours to BuildingTools.dll
