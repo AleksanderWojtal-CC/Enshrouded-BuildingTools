@@ -4,6 +4,7 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -27,6 +28,9 @@ msg.fill_walls = Obszar: tylko ściany
 msg.free_on = Tryb swobodny WŁ. (bez przyciągania do powierzchni)
 msg.free_off = Tryb swobodny WYŁ.
 msg.free_distance = Odległość trybu swobodnego: {0} m
+msg.creative_on = Tryb kreatywny WŁ. (budowanie nic nie kosztuje)
+msg.creative_off = Tryb kreatywny WYŁ.
+msg.creative_server = Tryb kreatywny ustawia serwer (jego BuildingTools.ini)
 msg.corners_cleared = Narożniki wyczyszczone
 msg.build_corner = Budowa: narożnik {0} z {1} ustawiony
 msg.replace_corner = Zastępowanie: narożnik {0} z {1} ustawiony
@@ -94,6 +98,7 @@ hud.free_on = Tryb swobodny: wł.
 hud.free_off = Tryb swobodny: wył.
 hud.wheel = + kółko: {0} m
 hud.menu = Menu narzędzi
+hud.radial = Koło narzędzi
 
 # Floating text under the crosshair
 float.too_big = za duży
@@ -104,11 +109,15 @@ key.ctrl = Ctrl
 key.shift = Shift
 key.alt = Alt
 key.number = klawisz {0}
+key.mouse_middle = Środkowy przycisk myszy
+key.mouse4 = Mysz 4
+key.mouse5 = Mysz 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = Sterowanie
 menu.options = Opcje
+menu.quick_keys = Szybkie klawisze
 menu.footer = Wersja {0}. Esc lub klawisz menu zamyka menu.
 menu.close = Zamknij
 menu.cancel = Anuluj
@@ -116,8 +125,9 @@ menu.press_key = Naciśnij klawisz...
 menu.no_key = Brak
 menu.keys_help = Kliknij klawisz, aby go zmienić. Zmiana zostanie zapisana w BuildingTools.ini.
 menu.keys_waiting = Naciśnij nowy klawisz, także z Shift, Ctrl lub Alt. Esc anuluje, Delete czyści.
-menu.translation_note =
+menu.translation_note = 
 menu.key_menu = Menu Building Tools
+menu.key_radial = Koło narzędzi (przytrzymaj)
 menu.key_area = Tryb obszaru wł. / wył.
 menu.key_replace = Zastępowanie wł. / wył.
 menu.key_style = Styl zastępowania
@@ -128,6 +138,14 @@ menu.key_farther = Tryb swobodny oddal
 menu.key_closer = Tryb swobodny przybliż
 menu.key_wheel = Odległość (przytrzymaj + kółko myszy)
 menu.key_off = Cały mod wył. / wł.
+menu.key_style_full = Styl zastępowania: cały kształt
+menu.key_style_overlap = Styl zastępowania: tylko część wspólna
+menu.key_style_connected = Styl zastępowania: sąsiednie
+menu.key_fill_solid = Wypełnienie obszaru: pełne
+menu.key_fill_hollow = Wypełnienie obszaru: pudełko
+menu.key_fill_walls = Wypełnienie obszaru: tylko ściany
+menu.key_creative = Tryb kreatywny wł. / wył.
+menu.quick_help = Klawisze, które od razu ustawiają opcję. Kliknij klawisz, aby go ustawić.
 
 # Options tab
 option.off = Wył.
@@ -145,5 +163,9 @@ option.fill_solid = Pełne
 option.fill_hollow = Pudełko
 option.fill_walls = Tylko ściany
 option.free = Tryb Swobodny
+option.creative = Tryb kreatywny
 option.language = Język
 option.language_game = Użyj języka gry
+
+# Tools wheel (hold its key)
+wheel.hint = Kliknij lub puść klawisz, aby wybrać

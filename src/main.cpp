@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.21.0"
+#define MOD_VERSION "0.22.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -123,6 +123,10 @@ struct Config {
     int keyOff       = VK_F5;  // the whole mod off / on (vanilla game while off)
     int fillLimit    = 500;    // most shapes one connected replace (fill bucket) may repaint
     int globalChests = 0;      // building and crafting use the magic chests of every base
+    int keyRadial    = VK_CAPITAL;  // hold: tools wheel (radial menu)
+    int keyStyleFull = 0, keyStyleOverlap = 0, keyStyleConnected = 0;   // quick keys: set an option directly
+    int keyFillSolid = 0, keyFillHollow = 0, keyFillWalls = 0;
+    int keyCreative  = 0;      // creative building on / off
     char language[16] = "auto";  // text language: auto (as the game), or a file code (pl, de, ...)
 };
 static Config g_cfg;
@@ -136,7 +140,7 @@ static int ini_int(const wchar_t* sec, const wchar_t* key, int def) {
 // Writes the whole ini with comments and the given values (first start, or an ini
 // from an older version that lacks newer options: its values are kept).
 struct IniText {
-    char s[6144]; int n = 0;
+    char s[8192]; int n = 0;
     IniText& t(const char* x) { while (*x && n < (int)sizeof(s) - 1) s[n++] = *x++; return *this; }
     IniText& i(int v) { char b[16]; int k = 0; bool neg = v < 0; unsigned u = neg ? 0u - (unsigned)v : (unsigned)v;
         do { b[k++] = (char)('0' + u % 10); u /= 10; } while (u && k < 15);
@@ -147,6 +151,7 @@ static void write_full_ini(const Config& c) {
     o.t("; Enshrouded Building Tools " MOD_VERSION "\r\n")
      .t("; Close the game before editing. Keys are Windows virtual-key codes (decimal):\r\n")
      .t(";   F1..F12 = 112..123   A..Z = 65..90   0..9 = 48..57   Page Up 33  Page Down 34\r\n")
+     .t(";   Middle mouse 4  Mouse 4 = 5  Mouse 5 = 6\r\n")
      .t(";   Insert 45  Delete 46  Home 36  End 35  Numpad 0..9 = 96..105  (0 = key off)\r\n")
      .t(";   Add 4096 for Shift, 8192 for Ctrl, 16384 for Alt (Shift+K = 4096+75 = 4171).\r\n")
      .t(";   Easier: change keys in the game with the Building Tools menu.\r\n")
@@ -161,7 +166,12 @@ static void write_full_ini(const Config& c) {
      .t("; Free placement distance: hold this key + mouse wheel (81 = Q), or the two keys below\r\nFreePlacementWheelKey=").i(c.wheelKey).t("\r\n")
      .t("FreePlacementFarther=").i(c.keyFarther).t("\r\n")
      .t("FreePlacementCloser=").i(c.keyCloser).t("\r\n")
-     .t("; Building Tools menu in the game's own UI (experimental)\r\nMenu=").i(c.keyMenu).t("\r\n")
+     .t("; Building Tools menu in the game's own UI\r\nMenu=").i(c.keyMenu).t("\r\n")
+     .t("; Tools wheel: hold the key, move the mouse to an option, click or let go to pick it (20 = Caps Lock)\r\nRadialMenu=").i(c.keyRadial).t("\r\n")
+     .t("; Quick keys: set one option directly (0 = no key)\r\n")
+     .t("StyleFull=").i(c.keyStyleFull).t("\r\nStyleOverlap=").i(c.keyStyleOverlap).t("\r\nStyleConnected=").i(c.keyStyleConnected).t("\r\n")
+     .t("FillSolid=").i(c.keyFillSolid).t("\r\nFillHollow=").i(c.keyFillHollow).t("\r\nFillWalls=").i(c.keyFillWalls).t("\r\n")
+     .t("ToggleCreative=").i(c.keyCreative).t("\r\n")
      .t("\r\n[Creative]\r\n")
      .t("; 1 = creative building: blocks cost nothing, removing or undoing gives nothing back,\r\n")
      .t(";     so your inventory is never touched (props, crafting and chests stay normal)\r\n")
@@ -226,6 +236,14 @@ static void load_config() {
     g_cfg.keyOff       = ini_int(L"Keys", L"ToggleMod", VK_F5);
     g_cfg.fillLimit    = ini_int(L"Limits", L"FillLimit", 500);
     g_cfg.globalChests = ini_int(L"Chests", L"GlobalMagicChests", 0) != 0;
+    g_cfg.keyRadial    = ini_int(L"Keys", L"RadialMenu", VK_CAPITAL);
+    g_cfg.keyStyleFull = ini_int(L"Keys", L"StyleFull", 0);
+    g_cfg.keyStyleOverlap   = ini_int(L"Keys", L"StyleOverlap", 0);
+    g_cfg.keyStyleConnected = ini_int(L"Keys", L"StyleConnected", 0);
+    g_cfg.keyFillSolid  = ini_int(L"Keys", L"FillSolid", 0);
+    g_cfg.keyFillHollow = ini_int(L"Keys", L"FillHollow", 0);
+    g_cfg.keyFillWalls  = ini_int(L"Keys", L"FillWalls", 0);
+    g_cfg.keyCreative   = ini_int(L"Keys", L"ToggleCreative", 0);
     bool noLanguage;
     {
         wchar_t p[MAX_PATH], w[16];
@@ -245,7 +263,8 @@ static void load_config() {
     if (ini_int(L"Keys", L"CycleAreaFill", -1) == -1 || ini_int(L"Interface", L"RefundPopup", -1) == -1 ||
         ini_int(L"Area", L"Preview", -1) == -1 || ini_int(L"Creative", L"CreativeBuilding", -1) == -1 ||
         ini_int(L"Keys", L"ToggleMod", -1) == -1 || ini_int(L"Limits", L"FillLimit", -1) == -1 ||
-        ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1 || noLanguage)
+        ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1 || noLanguage ||
+        ini_int(L"Keys", L"RadialMenu", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -568,6 +587,12 @@ static const char* SIG_UI_SOFT_BACKDROP =
     "?? ?? ?? 48 8B C8 E8 ?? ?? ?? ?? 83 F8 04 75 59 E8 ?? ?? ?? ?? 4C 8D 44 24 60 48 8B C8 48 8D 95 20 02 00 00 "
     "E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 8B 18 E8 ?? ?? ?? ?? 48 8B C8 E8 ?? ?? ?? ?? 48 8B 8D 28 02 00 00 4C 8D "
     "4C 24 70 48 89 4C 24 28 48 8D 55 90 48 8D 4C 24 40 44 8B C3 48 89 4C 24 20 48 8B C8 E8";
+// Wheel drawing (the game's item wheel c04c50): draw rect / image in a box 118ca30(box,
+// rect {x,y,w,h}, image u32 (0 = fill), colour u64), rotated image 118d030(box, rect,
+// angle, image, colour), blend mode of a box's draw list 11ae3e0(box, mode).
+static const char* SIG_UI_DRAW_RECT    = "48 8B 41 08 48 8B 48 50 48 8B 49 18 48 85 C9 74 12 83 79 08 04 75 0C 48 8B 89 E0 6C 00 00";
+static const char* SIG_UI_DRAW_ROTATED = "4C 8B DC 49 89 5B 18 49 89 6B 20 56 48 81 EC F0 00 00 00 48 8B 41 08 41 8B D9";
+static const char* SIG_UI_BOX_BLEND    = "48 8B 41 08 48 8B 48 50 4C 8B 41 18 4D 85 C0 74 5E 41 83 78 08 04 75 57";
 static const char* SIG_UI_SIZE = "48 89 54 24 08 0F 57 C0 F3 0F 10 54 24 08 33 C0";
 static const char* SIG_HUD_ROW_CALL1 = "0F 29 85 B0 00 00 00 F2 0F 11 8D C0 00 00 00 E8 ?? ?? ?? ?? 48 8B 3D ?? ?? ?? ?? E9";
 static const char* SIG_HUD_ROW_CALL2 = "F2 0F 11 8D C0 00 00 00 0F 29 85 B0 00 00 00 E8 ?? ?? ?? ?? 80 7D 36 00";
@@ -707,7 +732,7 @@ static void flash(const char* msg) {
 }
 // Sounds: the game's own UI sounds (FbUiBundle.sounds), played on the HUD thread.
 // Sound=1 game sounds, 2 = Windows sounds, 0 = off.
-enum { SND_CORNER = 0, SND_DONE, SND_FAIL, SND_TOGGLE, SND_COUNT };
+enum { SND_CORNER = 0, SND_DONE, SND_FAIL, SND_TOGGLE, SND_WHEEL_OPEN, SND_WHEEL_CLOSE, SND_WHEEL_MOVE, SND_COUNT };
 static uint8_t** g_uiCtxSlot = nullptr;           // global UI context pointer
 typedef void (*PlayUiSoundFn)(void* ctx, const void* soundRef);
 static PlayUiSoundFn g_playUiSound = nullptr;
@@ -720,7 +745,15 @@ static const uint32_t kSndOffset[SND_COUNT] = {
     0x12330,    // menu.entryTrigger
     0x12b70,    // hud.buildActionFailed
     0x12310,    // menu.tabChange
+    0x12a10,    // itemWheel.open
+    0x12a20,    // itemWheel.close
+    0x12a30,    // itemWheel.changeHighlight
 };
+// a game sound only (no Windows sound for these)
+static void game_sound(int k) {
+    if (g_cfg.sound != 1 || g_dedicated || !g_playUiSound || GetTickCount() - g_hudTick > 2000) return;
+    g_sndTick[k] = GetTickCount(); InterlockedExchange(&g_sndQueue[k], 1);
+}
 static void beep(UINT type) {
     if (!g_cfg.sound || g_dedicated) return;
     int k = type == MB_ICONHAND ? SND_FAIL : type == MB_ICONASTERISK ? SND_DONE : type == MB_ICONQUESTION ? SND_TOGGLE : SND_CORNER;
@@ -3275,7 +3308,9 @@ static int held_mods() {
            ((GetAsyncKeyState(VK_MENU) & 0x8000) ? KEY_ALT : 0);
 }
 static int* const g_allKeys[] = { &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg.keyCancel, &g_cfg.keyStyle, &g_cfg.keyHover,
-                                  &g_cfg.keyFarther, &g_cfg.keyCloser, &g_cfg.wheelKey, &g_cfg.keyFill, &g_cfg.keyMenu, &g_cfg.keyOff };
+                                  &g_cfg.keyFarther, &g_cfg.keyCloser, &g_cfg.wheelKey, &g_cfg.keyFill, &g_cfg.keyMenu, &g_cfg.keyOff,
+                                  &g_cfg.keyRadial, &g_cfg.keyStyleFull, &g_cfg.keyStyleOverlap, &g_cfg.keyStyleConnected,
+                                  &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative };
 // Down with exactly its modifiers. A key without modifiers ignores held modifiers (Shift
 // while sprinting), unless another setting uses the same key with the held ones.
 static bool key_down(int code) {
@@ -3296,6 +3331,8 @@ static void vk_name(int code, char* out) {
     char n[64];
     wchar_t w[32];
     if (vk >= VK_F1 && vk <= VK_F24) { Buf f; f.c('F').i(vk - VK_F1 + 1); lstrcpynA(n, f.z(), 24); }
+    else if (vk == VK_MBUTTON || vk == VK_XBUTTON1 || vk == VK_XBUTTON2)
+        copy_text(n, T(vk == VK_MBUTTON ? S_KEY_MOUSE_MIDDLE : vk == VK_XBUTTON1 ? S_KEY_MOUSE4 : S_KEY_MOUSE5), sizeof n);
     else {
         UINT sc = MapVirtualKeyA((UINT)vk, MAPVK_VK_TO_VSC);
         if (vk == VK_PRIOR || vk == VK_NEXT || vk == VK_HOME || vk == VK_END || vk == VK_INSERT || vk == VK_DELETE ||
@@ -3417,7 +3454,66 @@ static void hover_step(float d) {
     g_hoverDist = v;
     Buf b; b.fmt(T(S_FREE_DISTANCE), tenths((int)(v * 10.f + 0.5f)).s); flash(b.z());
 }
+// ---- tools wheel (radial menu): hold its key, move the mouse towards an option, click
+// it or let go of the key. While it is open the mouse hook below takes the mouse: the
+// moves turn the wheel's pointer instead of the camera, clicks pick instead of building.
+static const int kWheelSlots = 8;               // at most; only the options that apply are shown
+static volatile LONG g_radialOpen = 0;
+static volatile LONG g_wheelN = 0;               // slots shown now
+static int g_wheelAct[kWheelSlots];              // their actions (input thread)
+static volatile LONG g_radialSel = -1;          // highlighted slot, -1 = none
+static volatile LONG g_radialClicks = 0;        // left clicks while open (hook -> input thread)
+static volatile LONG g_radialCancel = 0;        // right click: close without picking
+static float g_radialX = 0.f, g_radialY = 0.f;  // pointer (mouse moves summed up, hook thread)
+static volatile DWORD g_wheelTid = 0;           // the mouse hook thread
+static bool g_radialReady = false;              // the wheel's UI functions were found
+// With n slots, slot k sits at angle -90 + k * 360 / n degrees (top first, clockwise on
+// screen: y points down). Directions by turning (0, -1) step by step.
+static float g_slotCos[kWheelSlots], g_slotSin[kWheelSlots];
+static void wheel_layout(int n) {
+    static const float stepCos[9] = { 1.f, 1.00000000f, -1.00000000f, -0.50000000f, 0.00000000f, 0.30901699f, 0.50000000f, 0.62348980f, 0.70710678f };
+    static const float stepSin[9] = { 0.f, -0.00000000f, 0.00000000f, 0.86602540f, 1.00000000f, 0.95105652f, 0.86602540f, 0.78183148f, 0.70710678f };
+    float c = 0.f, si = -1.f;
+    for (int k = 0; k < n && k < kWheelSlots; k++) {
+        g_slotCos[k] = c; g_slotSin[k] = si;
+        float nc = c * stepCos[n] - si * stepSin[n], ns = c * stepSin[n] + si * stepCos[n];
+        c = nc; si = ns;
+    }
+}
+static float slot_angle(int k, int n) { return -1.5707963f + (float)k * 6.2831853f / (float)n; }
+static float fsqrt(float x) { float r; __asm__("sqrtss %1, %0" : "=x"(r) : "x"(x)); return r; }
+static void radial_move(float dx, float dy) {
+    const float kReach = 120.f, kDead = 30.f;      // pixels of mouse travel
+    float x = g_radialX + dx, y = g_radialY + dy, d2 = x * x + y * y;
+    if (d2 > kReach * kReach) { float f = kReach / fsqrt(d2); x *= f; y *= f; d2 = kReach * kReach; }
+    g_radialX = x; g_radialY = y;
+    if (d2 < kDead * kDead) return;                 // near the centre: keep the last highlight
+    int best = -1; float bestDot = -1e9f;
+    for (int k = 0; k < g_wheelN; k++) {
+        float dot = x * g_slotCos[k] + y * g_slotSin[k];
+        if (dot > bestDot) { bestDot = dot; best = k; }
+    }
+    if (best >= 0 && best != g_radialSel) { g_radialSel = best; game_sound(SND_WHEEL_MOVE); }
+}
+
 static LRESULT CALLBACK wheel_proc(int code, WPARAM w, LPARAM l) {
+    if (code == HC_ACTION && g_radialOpen && game_focused()) {
+        const MSLLHOOKSTRUCT* m = (const MSLLHOOKSTRUCT*)l;
+        static bool lDown = false, rDown = false;   // downs taken here: their ups are taken too
+        switch (w) {
+        case WM_MOUSEMOVE: {
+            POINT c;
+            if (GetCursorPos(&c)) radial_move((float)(m->pt.x - c.x), (float)(m->pt.y - c.y));
+            return 1;                                // the camera does not turn
+        }
+        case WM_LBUTTONDOWN: lDown = true; InterlockedIncrement(&g_radialClicks); return 1;
+        case WM_RBUTTONDOWN: rDown = true; g_radialCancel = 1; return 1;
+        case WM_LBUTTONUP: if (lDown) { lDown = false; return 1; } break;
+        case WM_RBUTTONUP: if (rDown) { rDown = false; return 1; } break;
+        case WM_MOUSEWHEEL: case WM_MOUSEHWHEEL: return 1;
+        }
+        // middle and side buttons pass: one of them may be the wheel's own key
+    }
     if (code == HC_ACTION && w == WM_MOUSEWHEEL && g_active && g_hover && game_focused() &&
         key_down(g_cfg.wheelKey)) {
         short delta = (short)HIWORD(((MSLLHOOKSTRUCT*)l)->mouseData);
@@ -3427,20 +3523,22 @@ static LRESULT CALLBACK wheel_proc(int code, WPARAM w, LPARAM l) {
     return CallNextHookEx(nullptr, code, w, l);
 }
 // A low-level mouse hook sits in the path of every mouse event on the system, so it
-// is installed only while free placement is on and the game has focus (the only
-// time Q + wheel is used), and removed otherwise. The thread runs at high priority
-// and pumps messages continuously, so the hook never delays mouse input.
+// is installed only while it is needed and the game has focus (free placement on, for
+// Q + wheel; the tools wheel open), and removed otherwise. The thread runs at high
+// priority and pumps messages continuously, so the hook never delays mouse input; the
+// input thread wakes it with a message when the tools wheel opens.
 static DWORD WINAPI wheel_thread(void*) {
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+    g_wheelTid = GetCurrentThreadId();
     HHOOK h = nullptr;
     for (;;) {
-        bool want = g_active && g_hover && g_cfg.wheelKey > 0 && game_focused();
+        bool want = g_active && game_focused() && ((g_hover && g_cfg.wheelKey > 0) || g_radialOpen);
         if (want && !h) {
             h = SetWindowsHookExW(WH_MOUSE_LL, wheel_proc, GetModuleHandleW(nullptr), 0);
-            LOG(.str("mouse wheel hook ").str(h ? "on" : "failed"));
+            LOG(.str("mouse hook ").str(h ? "on" : "failed"));
         } else if (!want && h) {
             UnhookWindowsHookEx(h); h = nullptr;
-            LOG(.str("mouse wheel hook off"));
+            LOG(.str("mouse hook off"));
         }
         MsgWaitForMultipleObjects(0, nullptr, FALSE, 100, QS_ALLINPUT);
         MSG m;
@@ -3461,6 +3559,71 @@ static void set_replace_style(LONG st) {
 }
 static void set_fill(LONG f) { g_fill = f; LOG(.str("fill -> ").i(f)); }
 static void set_hover(LONG h) { g_hover = h; g_cxLogged = 0; LOG(.str("free placement -> ").i(h)); }
+static bool set_creative(bool on) {
+    if (remote_session()) { flash(T(S_CREATIVE_SERVER)); beep(MB_ICONHAND); return false; }   // the server's ini decides
+    g_cfg.creative = on;
+    write_full_ini(g_cfg);
+    LOG(.str("creative building -> ").str(on ? "on" : "off"));
+    return true;
+}
+
+// ---- tool actions: the hotkeys, the quick keys and the tools wheel all end here
+enum {
+    ACT_AREA, ACT_REPLACE, ACT_CLEAR, ACT_STYLE, ACT_FREE, ACT_FARTHER, ACT_CLOSER, ACT_FILL,
+    ACT_STYLE_FULL, ACT_STYLE_OVERLAP, ACT_STYLE_CONNECTED, ACT_FILL_SOLID, ACT_FILL_HOLLOW, ACT_FILL_WALLS,
+    ACT_CREATIVE, ACT_KEYED,          // the actions above have their own key
+    ACT_MENU = ACT_KEYED,             // the wheel's menu entry (the menu key is handled with the menu)
+};
+static int* const kActKey[ACT_KEYED] = {
+    &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg.keyCancel, &g_cfg.keyStyle, &g_cfg.keyHover,
+    &g_cfg.keyFarther, &g_cfg.keyCloser, &g_cfg.keyFill,
+    &g_cfg.keyStyleFull, &g_cfg.keyStyleOverlap, &g_cfg.keyStyleConnected,
+    &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
+};
+static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
+static volatile LONG g_menuOpen = 0;
+static void style_set(LONG st) {
+    set_replace_style(st);
+    flash(T(st == STYLE_FULL ? S_STYLE_FULL : st == STYLE_OVERLAP ? S_STYLE_OVERLAP : S_STYLE_CONNECTED));
+}
+static void fill_set(LONG f) {
+    set_fill(f);
+    flash(T(f == core::FILL_SOLID ? S_FILL_SOLID : f == core::FILL_HOLLOW ? S_FILL_HOLLOW : S_FILL_WALLS));
+}
+static void do_act(int a) {
+    switch (a) {
+    case ACT_AREA: {
+        LONG m = g_mode == MODE_PREFAB ? MODE_AREA : MODE_PREFAB;
+        set_mode(m);
+        flash(T(m == MODE_AREA ? S_MODE_AREA : S_MODE_PREFAB));
+        break;
+    }
+    case ACT_REPLACE: { LONG r = !g_replace; set_replace(r); flash(T(r ? S_REPLACE_ON : S_REPLACE_OFF)); break; }
+    case ACT_STYLE: style_set(g_replaceStyle == STYLE_FULL ? STYLE_OVERLAP : g_replaceStyle == STYLE_OVERLAP ? STYLE_CONNECTED : STYLE_FULL); break;
+    case ACT_FILL: fill_set((g_fill + 1) % core::FILL_COUNT); break;
+    case ACT_FARTHER: case ACT_CLOSER: hover_step(a == ACT_FARTHER ? 0.5f : -0.5f); return;   // no sound: held keys repeat
+    case ACT_FREE: { LONG h = !g_hover; set_hover(h); flash(T(h ? S_FREE_ON : S_FREE_OFF)); break; }
+    case ACT_CLEAR:
+        g_cancelReq = 1; g_corners = 0;
+        flash(T(S_CORNERS_CLEARED));
+        LOG(.str("key: corners cleared"));
+        break;
+    case ACT_STYLE_FULL: style_set(STYLE_FULL); break;
+    case ACT_STYLE_OVERLAP: style_set(STYLE_OVERLAP); break;
+    case ACT_STYLE_CONNECTED: style_set(STYLE_CONNECTED); break;
+    case ACT_FILL_SOLID: fill_set(core::FILL_SOLID); break;
+    case ACT_FILL_HOLLOW: fill_set(core::FILL_HOLLOW); break;
+    case ACT_FILL_WALLS: fill_set(core::FILL_WALLS); break;
+    case ACT_CREATIVE:
+        if (!set_creative(!g_cfg.creative)) return;
+        flash(T(g_cfg.creative ? S_CREATIVE_ON : S_CREATIVE_OFF));
+        break;
+    case ACT_MENU:
+        if (!g_menuOpen) { lang_update(); g_menuReq = 1; LOG(.str("wheel: menu")); }
+        return;
+    }
+    beep(MB_ICONQUESTION);
+}
 
 // ---- in-game menu (native game UI), stage 1 experiment
 // The play-state UI runs every frame on the UI thread and draws the screen named by
@@ -3474,8 +3637,6 @@ typedef uint8_t (*ToggleScreenFn)(void* uiCtx, uint8_t screen);
 static ToggleScreenFn g_toggleScreen = nullptr;
 static PlayUiFn g_playUiOrig = nullptr, g_modScreenOrig = nullptr;
 static uint8_t** g_uiCtxGlobal = nullptr;          // the UI context pointer (rip global)
-static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
-static volatile LONG g_menuOpen = 0;
 static volatile LONG g_bindWaiting = -1;           // key action in the menu waiting for its new key
 static bool g_tabsHooked = false;                   // the game's tab bar shows the menu's pages
 
@@ -3490,8 +3651,12 @@ static uint8_t* hud_screen_byte() {
 }
 
 static void draw_float_info();
+static void draw_radial();
+static volatile LONG g_hudScreen = 0;               // the HUD screen (UI thread -> input thread)
+static volatile DWORD g_hudScreenTick = 0;
 static void play_ui_hook(void* a, void* b, void* c, void* d) {
     uint8_t* scr = hud_screen_byte();
+    if (scr) { g_hudScreen = *scr; g_hudScreenTick = GetTickCount(); }
     if (scr) {
         static int last = -1;
         LONG req = InterlockedExchange(&g_menuReq, 0);
@@ -3510,6 +3675,7 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
     }
     g_playUiOrig(a, b, c, d);
     draw_float_info();
+    if (g_radialOpen && scr && *scr == SCREEN_INGAME) draw_radial();
 }
 
 // Screen 52: the mod's own window, built like the game's popups (reportSharedWorldPopup):
@@ -3559,6 +3725,9 @@ static struct {
     void (*nineSlice)(void* list, const float* rect, uint32_t image, const float* borders, const float* radii, uint64_t color);
     void* (*stretcher)(void* box, UiVec2);                  // optional: the HUD toggle row
     void (*hudSwitch)(uint8_t on);
+    void (*drawRect)(void* box, const float* rect, uint32_t image, uint64_t color);          // optional: the tools wheel
+    void (*drawRotated)(void* box, const float* rect, float angle, uint32_t image, uint64_t color);
+    void (*boxBlend)(void* box, uint8_t mode);
 } ui;
 enum { STYLE_TITLE = 0x11b94, STYLE_BODY = 0x10a0c };   // text styles in the UI bundle
 
@@ -3626,6 +3795,8 @@ static void draw_tool_settings() {
     if (ui_option(T(S_OPT_STYLE), styles, 3, st, &v)) set_replace_style(styleIds[v]);
     if (ui_option(T(S_OPT_FILL), fills, core::FILL_COUNT, g_fill, &v)) set_fill(v);
     if (ui_option(T(S_OPT_FREE), offOn, 2, g_hover ? 1 : 0, &v)) set_hover(v);
+    if (ui_option(T(S_OPT_CREATIVE), offOn, 2, g_cfg.creative ? 1 : 0, &v) && set_creative(v != 0))
+        flash(T(g_cfg.creative ? S_CREATIVE_ON : S_CREATIVE_OFF));
     // language: as the game, or one by hand (saved as Language= in the ini)
     const char* langs[1 + kLanguageCount];
     langs[0] = T(S_OPT_LANGUAGE_GAME);
@@ -3643,19 +3814,28 @@ static void draw_tool_settings() {
 
 // Keys page: one row per action, the button shows its key; click it, then press the
 // new key (the input thread catches it). Esc cancels, Delete or Backspace clears.
-struct KeyAction { Str label; int* key; };
+// Page 0 = Keys (the tools), page 1 = Quick keys (set one option directly).
+struct KeyAction { Str label; int* key; int page; };
 static KeyAction g_keyActions[] = {
-    { S_ACT_MENU, &g_cfg.keyMenu },
-    { S_ACT_AREA, &g_cfg.keyStructure },
-    { S_ACT_REPLACE, &g_cfg.keyReplace },
-    { S_ACT_STYLE, &g_cfg.keyStyle },
-    { S_ACT_FILL, &g_cfg.keyFill },
-    { S_ACT_CLEAR, &g_cfg.keyCancel },
-    { S_ACT_FREE, &g_cfg.keyHover },
-    { S_ACT_FARTHER, &g_cfg.keyFarther },
-    { S_ACT_CLOSER, &g_cfg.keyCloser },
-    { S_ACT_WHEEL, &g_cfg.wheelKey },
-    { S_ACT_OFF, &g_cfg.keyOff },
+    { S_ACT_MENU, &g_cfg.keyMenu, 0 },
+    { S_ACT_RADIAL, &g_cfg.keyRadial, 0 },
+    { S_ACT_AREA, &g_cfg.keyStructure, 0 },
+    { S_ACT_REPLACE, &g_cfg.keyReplace, 0 },
+    { S_ACT_STYLE, &g_cfg.keyStyle, 0 },
+    { S_ACT_FILL, &g_cfg.keyFill, 0 },
+    { S_ACT_CLEAR, &g_cfg.keyCancel, 0 },
+    { S_ACT_FREE, &g_cfg.keyHover, 0 },
+    { S_ACT_FARTHER, &g_cfg.keyFarther, 0 },
+    { S_ACT_CLOSER, &g_cfg.keyCloser, 0 },
+    { S_ACT_WHEEL, &g_cfg.wheelKey, 0 },
+    { S_ACT_OFF, &g_cfg.keyOff, 0 },
+    { S_ACT_STYLE_FULL, &g_cfg.keyStyleFull, 1 },
+    { S_ACT_STYLE_OVERLAP, &g_cfg.keyStyleOverlap, 1 },
+    { S_ACT_STYLE_CONNECTED, &g_cfg.keyStyleConnected, 1 },
+    { S_ACT_CREATIVE, &g_cfg.keyCreative, 1 },
+    { S_ACT_FILL_SOLID, &g_cfg.keyFillSolid, 1 },
+    { S_ACT_FILL_HOLLOW, &g_cfg.keyFillHollow, 1 },
+    { S_ACT_FILL_WALLS, &g_cfg.keyFillWalls, 1 },
 };
 static const int kKeyActions = sizeof g_keyActions / sizeof g_keyActions[0];
 
@@ -3681,24 +3861,26 @@ static void draw_key_row(int k) {
 }
 
 // Two columns side by side, so the list fits the screen.
-static void draw_keys() {
+static void draw_keys(int page) {
     alignas(16) uint8_t cols[0x40] = {}, col[2][0x40] = {};
     ui.beginBox(cols, 0);
     UiVec2 cgap{ 60, 0 };
     ui.setSpacingX(ui_node(cols), &cgap, 0);
     uint16_t topLeft = 0x101;
     ui.setLayout(ui_node(cols), &topLeft);
-    int half = (kKeyActions + 1) / 2;
+    int rows[kKeyActions], n = 0;
+    for (int k = 0; k < kKeyActions; k++) if (g_keyActions[k].page == page) rows[n++] = k;
+    int half = (n + 1) / 2;
     for (int c = 0; c < 2; c++) {
         ui.beginBox(col[c], 0);
         UiVec2 rgap{ 0, 14 };
         ui.setSpacing(ui_node(col[c]), &rgap, 0);
         ui.setLayout(ui_node(col[c]), &topLeft);
-        for (int k = c * half; k < kKeyActions && k < (c + 1) * half; k++) draw_key_row(k);
+        for (int i = c * half; i < n && i < (c + 1) * half; i++) draw_key_row(rows[i]);
         ui.endBox(col[c]);
     }
     ui.endBox(cols);
-    ui_text(T(g_bindWaiting >= 0 ? S_MENU_KEYS_WAITING : S_MENU_KEYS_HELP), STYLE_BODY);
+    ui_text(T(g_bindWaiting >= 0 ? S_MENU_KEYS_WAITING : page == 1 ? S_MENU_QUICK_HELP : S_MENU_KEYS_HELP), STYLE_BODY);
 }
 
 // Called by the input thread with the key pressed while an action waits for one.
@@ -3738,9 +3920,9 @@ static void draw_hint_bar() {
 }
 
 // Full-screen like the game's own menus: blurred, darkened world, the menu on the left.
-static volatile LONG g_menuPage = 0;                 // 0 = keys, 1 = options
-static const int kMenuPages = 2;
-static const Str g_pageNames[kMenuPages] = { S_MENU_KEYS, S_MENU_OPTIONS };
+static volatile LONG g_menuPage = 0;                 // 0 = keys, 1 = quick keys, 2 = options
+static const int kMenuPages = 3;
+static const Str g_pageNames[kMenuPages] = { S_MENU_KEYS, S_MENU_QUICK_KEYS, S_MENU_OPTIONS };
 static bool g_modTabs = false;                       // the tab bar being drawn is the mod's
 
 // Tab list of the game's tab bar: the mod's pages while it draws its bar. A tab is 0x40
@@ -3820,7 +4002,7 @@ static void draw_mod_menu() {
     }
     UiTextString h = ui_str(T(g_pageNames[g_menuPage]));
     ui.settingHeader(&h, 0);
-    if (g_menuPage == 0) draw_keys(); else draw_tool_settings();
+    if (g_menuPage < 2) draw_keys(g_menuPage); else draw_tool_settings();
     { Buf f; f.fmt(T(S_MENU_FOOTER), MOD_VERSION); ui_text(f.z(), STYLE_BODY); }
     if (*T(S_MENU_TRANSLATION_NOTE)) ui_text(T(S_MENU_TRANSLATION_NOTE), STYLE_BODY);   // "may contain mistakes, corrections welcome"
 
@@ -3971,6 +4153,7 @@ static void draw_hud_rows() {
     if (g_hover && g_cfg.wheelKey > 0) {
         Buf h; h.fmt(T(S_HUD_WHEEL), tenths((int)(g_hoverDist * 10.f + 0.5f)).s); hud_key_row(g_cfg.wheelKey, h.z());
     }
+    if (g_radialReady) hud_key_row(g_cfg.keyRadial, T(S_HUD_RADIAL));
     hud_key_row(g_cfg.keyMenu, T(S_HUD_MENU));
     g_hudRowsTick = GetTickCount();
 }
@@ -4040,6 +4223,95 @@ static void draw_float_info() {
     ui.endBox(root);
     ui.endWindow(win);
     g_floatTick = GetTickCount();
+}
+
+// ---- the tools wheel, drawn like the game's item wheel (emote wheel, c04c50): a blurred,
+// darkened disc (blur + 25% black, cut round by the wheel's blur mask), the centre disc,
+// the direction pointer at the highlighted slot and a dot per slot; the option names in
+// small windows around it (the highlighted one on the game's soft backdrop).
+static const float kWheelSize = 640.f;           // layout units, as the emote wheel's 600
+static volatile LONG g_wheelShown = 0;            // slots in the labels below (input thread fills)
+static char g_wheelName[kWheelSlots][96], g_wheelValue[kWheelSlots][96];
+static uint32_t ui_image(uint8_t* bundle, uint32_t off) {
+    uint32_t h = 0;
+    return *ui.resolveImage(ui.imageCtx(), &h, bundle + off);
+}
+static void wheel_text_window(int id, float dx, float dy, const char* a, const char* b, bool backdrop) {
+    static const char* const names[kWheelSlots + 2] = { "btWheel0", "btWheel1", "btWheel2", "btWheel3", "btWheel4",
+                                                         "btWheel5", "btWheel6", "btWheel7", "btWheelC", "btWheelH" };
+    alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, box[0x40] = {};
+    UiStringView name{ names[id], 8 };
+    g_beginWindow(win, &name, 1, 8, 0, 0);                 // fullscreen, above the HUD, takes no input
+    ui.beginRoot(root, ui.windowContext(win));
+    ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
+    ui.beginBox(box, 0);
+    uint8_t* n = (uint8_t*)ui_node(box);
+    uint16_t centre = 0x202;
+    ui.setSelfAlign(n, &centre);
+    ui.setLayout(n, &centre);
+    UiVec2 gap{ 0, 2 };
+    ui.setSpacing(n, &gap, 0);
+    *(UiVec2*)(n + 0x70) = UiVec2{ dx, dy };
+    const float pad[4] = { 12, 4, 12, 4 };
+    ui.setPadding(n, pad);
+    if (backdrop && ui.nineSlice && ui.passObj) soft_backdrop((const float*)(n + 0x114));
+    if (a && *a) ui_text(a, STYLE_BODY);
+    if (b && *b) ui_text(b, STYLE_BODY);
+    ui.endBox(box);
+    ui.endBox(root);
+    ui.endWindow(win);
+}
+static void draw_radial() {
+    int count = g_wheelShown;
+    if (count < 1 || count > kWheelSlots) return;
+    uint8_t* bundle = *(uint8_t**)(*g_uiCtxGlobal + 0xc8);
+    alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, wheel[0x40] = {};
+    UiStringView name{ "buildingToolsWheel", 18 };
+    g_beginWindow(win, &name, 1, 8, 0, 0);
+    ui.beginRoot(root, ui.windowContext(win));
+    ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
+    ui.beginBox(wheel, 0);
+    uint8_t* n = (uint8_t*)ui_node(wheel);
+    uint16_t centre = 0x202;
+    ui.setSelfAlign(n, &centre);
+    ui.setSize(n, UiVec2{ kWheelSize, kWheelSize });
+    const float* r = (const float*)(n + 0x114);            // node rect {x, y, w, h} (last layout)
+    float x = r[0], y = r[1], w = r[2], h = r[3];
+    if (w > 8.f && h > 8.f) {
+        const uint64_t white = 0x3f800000ffffffffull;
+        const float big[4] = { x - 30.f, y - 30.f, w + 60.f, h + 60.f };
+        ui.blurBehind(*g_uiCtxGlobal, big, white);
+        ui.drawRect(wheel, big, 0, 0x3f80000040000000ull);        // 25% black
+        ui.boxBlend(wheel, 3);
+        ui.drawRect(wheel, big, ui_image(bundle, 0xdbe0), white); // itemWheel.blurredBackgroundMask
+        ui.boxBlend(wheel, 0);
+        const float cd[4] = { x + w * 0.3f, y + h * 0.3f, w * 0.4f, h * 0.4f };
+        ui.drawRect(wheel, cd, ui_image(bundle, 0xdb80), *(uint64_t*)(bundle + 0xdb78));   // background, previewCenterColor
+        uint64_t accent = *(uint64_t*)(bundle + 0xd4c0);
+        float cx = x + w * 0.5f, cy = y + h * 0.5f;
+        LONG sel = g_radialSel;
+        if (sel >= 0 && sel < count) {                    // itemWheel.direction, turned to the slot
+            float s = w * 0.4f * 1.16f;
+            const float ar[4] = { cx - s * 0.5f, cy - s * 0.5f, s, s };
+            ui.drawRotated(wheel, ar, slot_angle(sel, count), ui_image(bundle, 0xdb90), accent);
+        }
+        float rd = w * 0.4f * 0.62f;
+        uint32_t dot = ui_image(bundle, 0xb9e8);
+        for (int k = 0; k < count; k++) {
+            const float dr[4] = { cx + g_slotCos[k] * rd - 12.f, cy + g_slotSin[k] * rd - 12.f, 24.f, 24.f };
+            uint64_t c = k == sel ? accent : (accent & 0xffffffff00ffffffull) | 0x80000000ull;   // others at half alpha
+            ui.drawRotated(wheel, dr, slot_angle(k, count), dot, c);
+        }
+    }
+    ui.endBox(wheel);
+    ui.endBox(root);
+    ui.endWindow(win);
+    float rl = kWheelSize * 0.5f * 0.7f;
+    LONG sel = g_radialSel;
+    for (int k = 0; k < count; k++)
+        wheel_text_window(k, g_slotCos[k] * rl, g_slotSin[k] * rl, g_wheelName[k], g_wheelValue[k], k == sel);
+    wheel_text_window(kWheelSlots, 0, 0, T(S_MENU_TITLE), nullptr, false);
+    wheel_text_window(kWheelSlots + 1, 0, kWheelSize * 0.5f + 40.f, T(S_WHEEL_HINT), nullptr, false);
 }
 
 static void hud_finish_hook(void* box) {
@@ -4125,6 +4397,11 @@ static void install_menu() {
             ui.imageCtx = (void* (*)())(t + 0x45 + *(int32_t*)(t + 0x41));
         }
     }
+    ui.drawRect = (void (*)(void*, const float*, uint32_t, uint64_t))find_unique("UiDrawRect", SIG_UI_DRAW_RECT);
+    ui.drawRotated = (void (*)(void*, const float*, float, uint32_t, uint64_t))find_unique("UiDrawRotated", SIG_UI_DRAW_ROTATED);
+    ui.boxBlend = (void (*)(void*, uint8_t))find_unique("UiBoxBlend", SIG_UI_BOX_BLEND);
+    g_radialReady = ui.drawRect && ui.drawRotated && ui.boxBlend && ui.setSize && ui.imageCtx && ui.resolveImage;
+    LOG(.str(g_radialReady ? "tools wheel: available" : "tools wheel: not available (UI functions not found)"));
     {   // the game's tab bar for the pages; without it the menu shows plain buttons
         uint8_t* bar = find_unique("UiTabBar", SIG_UI_TAB_BAR);
         uint8_t* lc = find_unique("UiTabListCall", SIG_UI_TAB_LIST_CALL);
@@ -4147,12 +4424,91 @@ static void install_menu() {
     install_hud_rows();
 }
 
+// The wheel's options: only those that apply now (Replace style while Replace is on, the
+// area fill and the corners in Area mode, creative building where this game decides it).
+static int wheel_entries(int* act) {
+    int n = 0;
+    act[n++] = ACT_AREA;
+    if (g_mode == MODE_AREA) act[n++] = ACT_FILL;
+    if (g_mode == MODE_AREA && g_corners > 0) act[n++] = ACT_CLEAR;
+    act[n++] = ACT_FREE;
+    act[n++] = ACT_MENU;
+    if (!remote_session()) act[n++] = ACT_CREATIVE;
+    if (g_replace) act[n++] = ACT_STYLE;
+    act[n++] = ACT_REPLACE;
+    return n;
+}
+static void wheel_texts(int a, char* name, char* value) {
+    const char* nm = ""; const char* v = "";
+    static const Str styles[] = { S_OPT_STYLE_FULL, S_OPT_STYLE_OVERLAP, S_OPT_STYLE_CONNECTED };
+    static const Str fills[] = { S_OPT_FILL_SOLID, S_OPT_FILL_HOLLOW, S_OPT_FILL_WALLS };
+    switch (a) {
+    case ACT_AREA: nm = T(S_OPT_MODE); v = T(g_mode == MODE_AREA ? S_OPT_MODE_AREA : S_OPT_MODE_PREFAB); break;
+    case ACT_FILL: nm = T(S_OPT_FILL); v = T(fills[g_fill % 3]); break;
+    case ACT_CLEAR: nm = T(S_HUD_CLEAR); break;
+    case ACT_FREE: nm = T(S_OPT_FREE); v = T(g_hover ? S_OPT_ON : S_OPT_OFF); break;
+    case ACT_MENU: nm = T(S_HUD_MENU); break;
+    case ACT_CREATIVE: nm = T(S_OPT_CREATIVE); v = T(g_cfg.creative ? S_OPT_ON : S_OPT_OFF); break;
+    case ACT_STYLE: nm = T(S_OPT_STYLE); v = T(styles[g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0]); break;
+    case ACT_REPLACE: nm = T(S_OPT_REPLACE); v = T(g_replace ? S_OPT_ON : S_OPT_OFF); break;
+    }
+    copy_text(name, nm, 96); copy_text(value, v, 96);
+}
+// Refreshes the slots (options can come and go after a click); the highlight follows its option.
+static void wheel_refresh() {
+    int act[kWheelSlots];
+    int n = wheel_entries(act);
+    LONG sel = g_radialSel, keep = -1;
+    for (int k = 0; sel >= 0 && k < n; k++) if (act[k] == g_wheelAct[sel]) keep = k;
+    for (int k = 0; k < n; k++) { g_wheelAct[k] = act[k]; wheel_texts(act[k], g_wheelName[k], g_wheelValue[k]); }
+    if (n != g_wheelN) wheel_layout(n);
+    g_wheelN = n;
+    g_radialSel = keep;
+    g_wheelShown = n;
+}
+static bool g_radialPicked = false;               // an option was clicked during this hold
+static void radial_close(bool pick) {
+    if (!g_radialOpen) return;
+    LONG sel = g_radialSel;
+    g_radialOpen = 0;
+    game_sound(SND_WHEEL_CLOSE);
+    LOG(.str("wheel: close").str(pick && sel >= 0 ? ", pick" : ""));
+    if (pick && sel >= 0 && sel < g_wheelN) do_act(g_wheelAct[sel]);
+}
+static void radial_keys(bool focus) {
+    static bool prevDown = false;
+    bool down = focus && g_radialReady && g_cfg.keyRadial > 0 && key_down(g_cfg.keyRadial);
+    bool wasDown = prevDown;
+    prevDown = down;
+    if (!g_radialOpen) {
+        bool inGame = g_hudScreen == SCREEN_INGAME && GetTickCount() - g_hudScreenTick < 500;
+        if (down && !wasDown && inGame && !g_menuOpen) {
+            g_radialX = g_radialY = 0.f; g_radialSel = -1; g_radialClicks = 0; g_radialCancel = 0;
+            g_radialPicked = false;
+            wheel_refresh();
+            g_radialOpen = 1;
+            if (g_wheelTid) PostThreadMessageW(g_wheelTid, WM_NULL, 0, 0);   // the mouse hook goes on now
+            game_sound(SND_WHEEL_OPEN);
+            LOG(.str("wheel: open, ").i(g_wheelN).str(" options"));
+        }
+        return;
+    }
+    if (!focus || g_menuOpen || g_hudScreen != SCREEN_INGAME || InterlockedExchange(&g_radialCancel, 0)) { radial_close(false); return; }
+    if (InterlockedExchange(&g_radialClicks, 0) && g_radialSel >= 0 && g_radialSel < g_wheelN) {
+        do_act(g_wheelAct[g_radialSel]);
+        g_radialPicked = true;
+    }
+    wheel_refresh();
+    if (!down) radial_close(!g_radialPicked);
+}
+
 static DWORD WINAPI input_thread(void*) {
-    bool prev[8] = {}, prevOff = false, prevMenu = false, prevEsc = false;
+    bool prev[ACT_KEYED] = {}, prevOff = false, prevMenu = false, prevEsc = false;
     for (;;) {
         Sleep(15);
         if (!g_active) continue;
         bool focus = game_focused();
+        if (g_radialOpen && (g_modOff || !focus)) radial_close(false);
         {   // whole mod off / on
             bool down = focus && key_down(g_cfg.keyOff);
             if (down && !prevOff) {
@@ -4170,16 +4526,17 @@ static DWORD WINAPI input_thread(void*) {
             prevOff = down;
             if (g_modOff) { for (bool& p : prev) p = false; continue; }
         }
+        if (g_bindWaiting < 0) radial_keys(focus);
         {   // in-game menu
             bool down = focus && g_playUiOrig && key_down(g_cfg.keyMenu);
             if (g_bindWaiting >= 0) {           // rebinding: the next key pressed (not a mouse button)
                 static bool held[256]; static LONG armed = -1;
                 if (armed != g_bindWaiting) {   // keys already down when it started do not count
-                    for (int vk = 8; vk < 256; vk++) held[vk] = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                    for (int vk = VK_MBUTTON; vk < 256; vk++) held[vk] = (GetAsyncKeyState(vk) & 0x8000) != 0;
                     armed = g_bindWaiting;
                 }
-                for (int vk = 8; vk < 256 && focus; vk++) {
-                    if (vk == VK_SHIFT || vk == VK_CONTROL || vk == VK_MENU || (vk >= VK_LSHIFT && vk <= VK_RMENU)) continue;
+                for (int vk = VK_MBUTTON; vk < 256 && focus; vk++) {   // keys, middle mouse, Mouse 4 / 5
+                    if (vk == 7 || vk == VK_SHIFT || vk == VK_CONTROL || vk == VK_MENU || (vk >= VK_LSHIFT && vk <= VK_RMENU)) continue;
                     bool d = (GetAsyncKeyState(vk) & 0x8000) != 0;
                     if (d && !held[vk]) {               // the key with the modifiers held now (Shift+K)
                         int mods = (vk == VK_ESCAPE || vk == VK_DELETE || vk == VK_BACK) ? 0 : held_mods();
@@ -4209,37 +4566,12 @@ static DWORD WINAPI input_thread(void*) {
                 continue;
             }
         }
-        int keys[8] = { g_cfg.keyStructure, g_cfg.keyReplace, g_cfg.keyCancel, g_cfg.keyStyle, g_cfg.keyHover,
-                        g_hover ? g_cfg.keyFarther : 0, g_hover ? g_cfg.keyCloser : 0, g_cfg.keyFill };
-        for (int k = 0; k < 8; k++) {
-            bool down = focus && key_down(keys[k]);
-            if (down && !prev[k]) {
-                if (k == 0) {
-                    LONG m = g_mode == MODE_PREFAB ? MODE_AREA : MODE_PREFAB;
-                    set_mode(m);
-                    flash(T(m == MODE_AREA ? S_MODE_AREA : S_MODE_PREFAB));
-                } else if (k == 1) {
-                    LONG r = !g_replace; set_replace(r);
-                    flash(T(r ? S_REPLACE_ON : S_REPLACE_OFF));
-                } else if (k == 3) {
-                    LONG st = g_replaceStyle == STYLE_FULL ? STYLE_OVERLAP : g_replaceStyle == STYLE_OVERLAP ? STYLE_CONNECTED : STYLE_FULL;
-                    set_replace_style(st);
-                    flash(T(st == STYLE_FULL ? S_STYLE_FULL : st == STYLE_OVERLAP ? S_STYLE_OVERLAP : S_STYLE_CONNECTED));
-                } else if (k == 7) {
-                    LONG f = (g_fill + 1) % core::FILL_COUNT; set_fill(f);
-                    flash(T(f == core::FILL_SOLID ? S_FILL_SOLID : f == core::FILL_HOLLOW ? S_FILL_HOLLOW : S_FILL_WALLS));
-                } else if (k == 5 || k == 6) {
-                    hover_step(k == 5 ? 0.5f : -0.5f);
-                } else if (k == 4) {
-                    LONG h = !g_hover; set_hover(h);
-                    flash(T(h ? S_FREE_ON : S_FREE_OFF));
-                } else {
-                    g_cancelReq = 1; g_corners = 0;
-                    flash(T(S_CORNERS_CLEARED));
-                    LOG(.str("key: corners cleared"));
-                }
-                if (k < 5 || k >= 7) beep(MB_ICONQUESTION);
-            }
+        if (g_radialOpen) { for (bool& p : prev) p = true; continue; }   // the wheel has the mouse
+        for (int k = 0; k < ACT_KEYED; k++) {
+            int code = *kActKey[k];
+            if ((k == ACT_FARTHER || k == ACT_CLOSER) && !g_hover) code = 0;
+            bool down = focus && key_down(code);
+            if (down && !prev[k]) do_act(k);
             prev[k] = down;
         }
     }

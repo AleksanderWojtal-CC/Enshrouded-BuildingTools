@@ -4,6 +4,7 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
+# Numbers
 
 # Numbers
 num.decimal = .
@@ -27,6 +28,9 @@ msg.fill_walls = 区域填充：仅墙壁
 msg.free_on = 自由放置 开（不吸附表面）
 msg.free_off = 自由放置 关
 msg.free_distance = 自由放置距离：{0} 米
+msg.creative_on = 创造建造 开（建造不消耗材料）
+msg.creative_off = 创造建造 关
+msg.creative_server = 创造建造由服务器设置（其 BuildingTools.ini）
 msg.corners_cleared = 已清除角点
 msg.build_corner = 建造：已设置角点 {0}/{1}
 msg.replace_corner = 替换：已设置角点 {0}/{1}
@@ -94,6 +98,7 @@ hud.free_on = 自由放置：开
 hud.free_off = 自由放置：关
 hud.wheel = + 滚轮：{0} 米
 hud.menu = 工具菜单
+hud.radial = 工具轮盘
 
 # Floating text under the crosshair
 float.too_big = 太大
@@ -104,11 +109,15 @@ key.ctrl = Ctrl
 key.shift = Shift
 key.alt = Alt
 key.number = 按键 {0}
+key.mouse_middle = 鼠标中键
+key.mouse4 = 鼠标 4
+key.mouse5 = 鼠标 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = 按键
 menu.options = 选项
+menu.quick_keys = 快捷键
 menu.footer = 版本 {0}。按 Esc 或菜单键关闭菜单。
 menu.close = 关闭
 menu.cancel = 取消
@@ -118,6 +127,7 @@ menu.keys_help = 点击按键即可更改，保存在 BuildingTools.ini。
 menu.keys_waiting = 请按新的键，也可以加 Shift、Ctrl 或 Alt。Esc 取消，Delete 清除。
 menu.translation_note = 此翻译可能有错误，敬请谅解！欢迎提供修正（Nexus 或 GitHub）。
 menu.key_menu = Building Tools 菜单
+menu.key_radial = 工具轮盘（按住）
 menu.key_area = 区域模式 开 / 关
 menu.key_replace = 替换 开 / 关
 menu.key_style = 替换方式
@@ -128,6 +138,14 @@ menu.key_farther = 自由放置 更远
 menu.key_closer = 自由放置 更近
 menu.key_wheel = 距离（按住 + 鼠标滚轮）
 menu.key_off = 整个模组 关 / 开
+menu.key_style_full = 替换方式：整个形状
+menu.key_style_overlap = 替换方式：仅重叠部分
+menu.key_style_connected = 替换方式：相连
+menu.key_fill_solid = 区域填充：实心
+menu.key_fill_hollow = 区域填充：空心房间
+menu.key_fill_walls = 区域填充：仅墙壁
+menu.key_creative = 创造建造 开 / 关
+menu.quick_help = 直接设置某个选项的按键。点击按键进行设置。
 
 # Options tab
 option.off = 关
@@ -145,5 +163,9 @@ option.fill_solid = 实心
 option.fill_hollow = 空心房间
 option.fill_walls = 仅墙壁
 option.free = 自由放置
+option.creative = 创造建造
 option.language = 语言
 option.language_game = 与游戏相同
+
+# Tools wheel (hold its key)
+wheel.hint = 点击或松开按键以选择

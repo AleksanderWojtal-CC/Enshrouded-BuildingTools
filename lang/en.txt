@@ -28,6 +28,9 @@ msg.fill_walls = Area fill: walls only
 msg.free_on = Free placement ON (no surface snapping)
 msg.free_off = Free placement OFF
 msg.free_distance = Free placement distance {0} m
+msg.creative_on = Creative building ON (building costs nothing)
+msg.creative_off = Creative building OFF
+msg.creative_server = Creative building is set on the server (its BuildingTools.ini)
 msg.corners_cleared = Corners cleared
 msg.build_corner = Build corner {0} of {1} set
 msg.replace_corner = Replace corner {0} of {1} set
@@ -97,6 +100,7 @@ hud.free_on = Free placement: on
 hud.free_off = Free placement: off
 hud.wheel = + wheel: {0} m
 hud.menu = Tools menu
+hud.radial = Tools wheel
 
 # Floating text under the crosshair
 float.too_big = too big
@@ -107,11 +111,15 @@ key.ctrl = Ctrl
 key.shift = Shift
 key.alt = Alt
 key.number = key {0}
+key.mouse_middle = Middle mouse
+key.mouse4 = Mouse 4
+key.mouse5 = Mouse 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = Keys
 menu.options = Options
+menu.quick_keys = Quick keys
 menu.footer = Version {0}. Esc or the menu key closes the menu.
 menu.close = Close
 menu.cancel = Cancel
@@ -122,6 +130,7 @@ menu.keys_waiting = Press the new key, also with Shift, Ctrl or Alt. Esc cancels
 # shown at the bottom of the menu while a translation is unreviewed; empty = not shown
 menu.translation_note = 
 menu.key_menu = Building Tools menu
+menu.key_radial = Tools wheel (hold)
 menu.key_area = Area mode on / off
 menu.key_replace = Replace on / off
 menu.key_style = Replace style
@@ -132,6 +141,14 @@ menu.key_farther = Free placement farther
 menu.key_closer = Free placement closer
 menu.key_wheel = Distance (hold + mouse wheel)
 menu.key_off = Whole mod off / on
+menu.key_style_full = Replace style: full shape
+menu.key_style_overlap = Replace style: overlap only
+menu.key_style_connected = Replace style: connected
+menu.key_fill_solid = Area fill: solid
+menu.key_fill_hollow = Area fill: hollow room
+menu.key_fill_walls = Area fill: walls only
+menu.key_creative = Creative building on / off
+menu.quick_help = Keys that set an option directly. Click a key to set it.
 
 # Options tab
 option.off = Off
@@ -149,5 +166,9 @@ option.fill_solid = Solid
 option.fill_hollow = Hollow room
 option.fill_walls = Walls only
 option.free = Free placement
+option.creative = Creative building
 option.language = Language
 option.language_game = Same as the game
+
+# Tools wheel (hold its key)
+wheel.hint = Click or let go of the key to pick

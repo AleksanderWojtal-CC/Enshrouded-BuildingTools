@@ -4,6 +4,7 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -27,6 +28,9 @@ msg.fill_walls = Remplissage de zone : murs seulement
 msg.free_on = Placement libre ACTIVÉ (sans aimantation aux surfaces)
 msg.free_off = Placement libre DÉSACTIVÉ
 msg.free_distance = Distance du placement libre : {0} m
+msg.creative_on = Construction créative ACTIVÉE (construire ne coûte rien)
+msg.creative_off = Construction créative DÉSACTIVÉE
+msg.creative_server = La construction créative est réglée par le serveur (son BuildingTools.ini)
 msg.corners_cleared = Coins effacés
 msg.build_corner = Construire : coin {0} sur {1} placé
 msg.replace_corner = Remplacer : coin {0} sur {1} placé
@@ -94,6 +98,7 @@ hud.free_on = Placement libre : oui
 hud.free_off = Placement libre : non
 hud.wheel = + molette : {0} m
 hud.menu = Menu des outils
+hud.radial = Roue d'outils
 
 # Floating text under the crosshair
 float.too_big = trop grand
@@ -104,11 +109,15 @@ key.ctrl = Ctrl
 key.shift = Maj
 key.alt = Alt
 key.number = touche {0}
+key.mouse_middle = Bouton central de la souris
+key.mouse4 = Souris 4
+key.mouse5 = Souris 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = Touches
 menu.options = Options
+menu.quick_keys = Raccourcis
 menu.footer = Version {0}. Échap ou la touche du menu ferme le menu.
 menu.close = Fermer
 menu.cancel = Annuler
@@ -118,6 +127,7 @@ menu.keys_help = Cliquez sur une touche pour la changer. Enregistré dans Buildi
 menu.keys_waiting = Appuyez sur la nouvelle touche, aussi avec Maj, Ctrl ou Alt. Échap annule, Suppr l'efface.
 menu.translation_note = Cette traduction peut contenir des erreurs, désolé ! Les corrections sont les bienvenues (Nexus ou GitHub).
 menu.key_menu = Menu Building Tools
+menu.key_radial = Roue d'outils (maintenir)
 menu.key_area = Mode zone oui / non
 menu.key_replace = Remplacement oui / non
 menu.key_style = Style de remplacement
@@ -128,6 +138,14 @@ menu.key_farther = Placement libre plus loin
 menu.key_closer = Placement libre plus près
 menu.key_wheel = Distance (maintenir + molette)
 menu.key_off = Tout le mod non / oui
+menu.key_style_full = Style de remplacement : forme entière
+menu.key_style_overlap = Style de remplacement : chevauchement seul
+menu.key_style_connected = Style de remplacement : connecté
+menu.key_fill_solid = Remplissage : plein
+menu.key_fill_hollow = Remplissage : pièce creuse
+menu.key_fill_walls = Remplissage : murs seuls
+menu.key_creative = Construction créative activée / désactivée
+menu.quick_help = Touches qui règlent directement une option. Cliquez sur une touche pour la définir.
 
 # Options tab
 option.off = Désactivé
@@ -145,5 +163,9 @@ option.fill_solid = Plein
 option.fill_hollow = Pièce creuse
 option.fill_walls = Murs seulement
 option.free = Placement libre
+option.creative = Construction créative
 option.language = Langue
 option.language_game = Comme le jeu
+
+# Tools wheel (hold its key)
+wheel.hint = Cliquez ou relâchez la touche pour choisir

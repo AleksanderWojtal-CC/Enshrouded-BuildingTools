@@ -26,6 +26,9 @@
     X(S_FREE_ON, "msg.free_on", "Free placement ON (no surface snapping)") \
     X(S_FREE_OFF, "msg.free_off", "Free placement OFF") \
     X(S_FREE_DISTANCE, "msg.free_distance", "Free placement distance {0} m") \
+    X(S_CREATIVE_ON, "msg.creative_on", "Creative building ON (building costs nothing)") \
+    X(S_CREATIVE_OFF, "msg.creative_off", "Creative building OFF") \
+    X(S_CREATIVE_SERVER, "msg.creative_server", "Creative building is set on the server (its BuildingTools.ini)") \
     X(S_CORNERS_CLEARED, "msg.corners_cleared", "Corners cleared") \
     X(S_BUILD_CORNER, "msg.build_corner", "Build corner {0} of {1} set") \
     X(S_REPLACE_CORNER, "msg.replace_corner", "Replace corner {0} of {1} set") \
@@ -91,6 +94,7 @@
     X(S_HUD_FREE_OFF, "hud.free_off", "Free placement: off") \
     X(S_HUD_WHEEL, "hud.wheel", "+ wheel: {0} m") \
     X(S_HUD_MENU, "hud.menu", "Tools menu") \
+    X(S_HUD_RADIAL, "hud.radial", "Tools wheel") \
     /* floating text under the crosshair */ \
     X(S_FLOAT_TOO_BIG, "float.too_big", "too big") \
     X(S_FLOAT_SIZE, "float.size", "{0} x {1}, h {2} = {3}") \
@@ -99,10 +103,14 @@
     X(S_KEY_SHIFT, "key.shift", "Shift") \
     X(S_KEY_ALT, "key.alt", "Alt") \
     X(S_KEY_NUMBER, "key.number", "key {0}") \
+    X(S_KEY_MOUSE_MIDDLE, "key.mouse_middle", "Middle mouse") \
+    X(S_KEY_MOUSE4, "key.mouse4", "Mouse 4") \
+    X(S_KEY_MOUSE5, "key.mouse5", "Mouse 5") \
     /* menu */ \
     X(S_MENU_TITLE, "menu.title", "Building Tools") \
     X(S_MENU_KEYS, "menu.keys", "Keys") \
     X(S_MENU_OPTIONS, "menu.options", "Options") \
+    X(S_MENU_QUICK_KEYS, "menu.quick_keys", "Quick keys") \
     X(S_MENU_FOOTER, "menu.footer", "Version {0}. Esc or the menu key closes the menu.") \
     X(S_MENU_CLOSE, "menu.close", "Close") \
     X(S_MENU_CANCEL, "menu.cancel", "Cancel") \
@@ -112,6 +120,7 @@
     X(S_MENU_KEYS_WAITING, "menu.keys_waiting", "Press the new key, also with Shift, Ctrl or Alt. Esc cancels, Delete clears it.") \
     X(S_MENU_TRANSLATION_NOTE, "menu.translation_note", "") \
     X(S_ACT_MENU, "menu.key_menu", "Building Tools menu") \
+    X(S_ACT_RADIAL, "menu.key_radial", "Tools wheel (hold)") \
     X(S_ACT_AREA, "menu.key_area", "Area mode on / off") \
     X(S_ACT_REPLACE, "menu.key_replace", "Replace on / off") \
     X(S_ACT_STYLE, "menu.key_style", "Replace style") \
@@ -122,6 +131,14 @@
     X(S_ACT_CLOSER, "menu.key_closer", "Free placement closer") \
     X(S_ACT_WHEEL, "menu.key_wheel", "Distance (hold + mouse wheel)") \
     X(S_ACT_OFF, "menu.key_off", "Whole mod off / on") \
+    X(S_ACT_STYLE_FULL, "menu.key_style_full", "Replace style: full shape") \
+    X(S_ACT_STYLE_OVERLAP, "menu.key_style_overlap", "Replace style: overlap only") \
+    X(S_ACT_STYLE_CONNECTED, "menu.key_style_connected", "Replace style: connected") \
+    X(S_ACT_FILL_SOLID, "menu.key_fill_solid", "Area fill: solid") \
+    X(S_ACT_FILL_HOLLOW, "menu.key_fill_hollow", "Area fill: hollow room") \
+    X(S_ACT_FILL_WALLS, "menu.key_fill_walls", "Area fill: walls only") \
+    X(S_ACT_CREATIVE, "menu.key_creative", "Creative building on / off") \
+    X(S_MENU_QUICK_HELP, "menu.quick_help", "Keys that set an option directly. Click a key to set it.") \
     X(S_OPT_OFF, "option.off", "Off") \
     X(S_OPT_ON, "option.on", "On") \
     X(S_OPT_MODE, "option.mode", "Mode") \
@@ -137,8 +154,11 @@
     X(S_OPT_FILL_HOLLOW, "option.fill_hollow", "Hollow room") \
     X(S_OPT_FILL_WALLS, "option.fill_walls", "Walls only") \
     X(S_OPT_FREE, "option.free", "Free placement") \
+    X(S_OPT_CREATIVE, "option.creative", "Creative building") \
     X(S_OPT_LANGUAGE, "option.language", "Language") \
-    X(S_OPT_LANGUAGE_GAME, "option.language_game", "Same as the game")
+    X(S_OPT_LANGUAGE_GAME, "option.language_game", "Same as the game") \
+    /* tools wheel */ \
+    X(S_WHEEL_HINT, "wheel.hint", "Click or let go of the key to pick")
 
 enum Str {
 #define BT_STR_ID(id, key, en) id,

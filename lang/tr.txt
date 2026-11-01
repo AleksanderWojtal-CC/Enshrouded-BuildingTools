@@ -4,6 +4,7 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -27,6 +28,9 @@ msg.fill_walls = Alan dolgusu: yalnızca duvarlar
 msg.free_on = Serbest yerleştirme AÇIK (yüzeye yapışma yok)
 msg.free_off = Serbest yerleştirme KAPALI
 msg.free_distance = Serbest yerleştirme mesafesi: {0} m
+msg.creative_on = Yaratıcı inşa AÇIK (inşa etmek ücretsiz)
+msg.creative_off = Yaratıcı inşa KAPALI
+msg.creative_server = Yaratıcı inşayı sunucu belirler (onun BuildingTools.ini dosyası)
 msg.corners_cleared = Köşeler temizlendi
 msg.build_corner = İnşa: köşe {0}/{1} ayarlandı
 msg.replace_corner = Değiştirme: köşe {0}/{1} ayarlandı
@@ -94,6 +98,7 @@ hud.free_on = Serbest yerleştirme: açık
 hud.free_off = Serbest yerleştirme: kapalı
 hud.wheel = + tekerlek: {0} m
 hud.menu = Araçlar menüsü
+hud.radial = Araç çarkı
 
 # Floating text under the crosshair
 float.too_big = çok büyük
@@ -104,11 +109,15 @@ key.ctrl = Ctrl
 key.shift = Shift
 key.alt = Alt
 key.number = tuş {0}
+key.mouse_middle = Orta fare tuşu
+key.mouse4 = Fare 4
+key.mouse5 = Fare 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = Tuşlar
 menu.options = Seçenekler
+menu.quick_keys = Hızlı tuşlar
 menu.footer = Sürüm {0}. Esc veya menü tuşu menüyü kapatır.
 menu.close = Kapat
 menu.cancel = İptal
@@ -118,6 +127,7 @@ menu.keys_help = Değiştirmek için bir tuşa tıkla. BuildingTools.ini dosyas�
 menu.keys_waiting = Yeni tuşa bas, Shift, Ctrl veya Alt ile de olur. Esc iptal eder, Delete temizler.
 menu.translation_note = Bu çeviri hatalar içerebilir, özür dileriz! Düzeltmeler memnuniyetle karşılanır (Nexus veya GitHub).
 menu.key_menu = Building Tools menüsü
+menu.key_radial = Araç çarkı (basılı tut)
 menu.key_area = Alan modu açık / kapalı
 menu.key_replace = Değiştirme açık / kapalı
 menu.key_style = Değiştirme stili
@@ -128,6 +138,14 @@ menu.key_farther = Serbest yerleştirme daha uzak
 menu.key_closer = Serbest yerleştirme daha yakın
 menu.key_wheel = Mesafe (basılı tut + fare tekerleği)
 menu.key_off = Tüm mod kapalı / açık
+menu.key_style_full = Değiştirme stili: tüm şekil
+menu.key_style_overlap = Değiştirme stili: yalnızca çakışma
+menu.key_style_connected = Değiştirme stili: bağlantılı
+menu.key_fill_solid = Alan dolgusu: dolu
+menu.key_fill_hollow = Alan dolgusu: içi boş oda
+menu.key_fill_walls = Alan dolgusu: yalnızca duvarlar
+menu.key_creative = Yaratıcı inşa aç / kapat
+menu.quick_help = Bir seçeneği doğrudan ayarlayan tuşlar. Ayarlamak için bir tuşa tıklayın.
 
 # Options tab
 option.off = Kapalı
@@ -145,5 +163,9 @@ option.fill_solid = Dolu
 option.fill_hollow = Boş oda
 option.fill_walls = Yalnızca duvarlar
 option.free = Serbest yerleştirme
+option.creative = Yaratıcı inşa
 option.language = Dil
 option.language_game = Oyunla aynı
+
+# Tools wheel (hold its key)
+wheel.hint = Seçmek için tıklayın veya tuşu bırakın

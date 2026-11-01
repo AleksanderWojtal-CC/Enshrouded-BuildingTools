@@ -4,6 +4,7 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -27,6 +28,9 @@ msg.fill_walls = Заполнение области: только стены
 msg.free_on = Свободная установка ВКЛ. (без привязки к поверхности)
 msg.free_off = Свободная установка ВЫКЛ.
 msg.free_distance = Расстояние свободной установки: {0} м
+msg.creative_on = Творческое строительство ВКЛ. (строительство бесплатно)
+msg.creative_off = Творческое строительство ВЫКЛ.
+msg.creative_server = Творческое строительство задаёт сервер (его BuildingTools.ini)
 msg.corners_cleared = Углы сброшены
 msg.build_corner = Строительство: угол {0} из {1} задан
 msg.replace_corner = Замена: угол {0} из {1} задан
@@ -94,6 +98,7 @@ hud.free_on = Свободная установка: вкл.
 hud.free_off = Свободная установка: выкл.
 hud.wheel = + колесо: {0} м
 hud.menu = Меню инструментов
+hud.radial = Колесо инструментов
 
 # Floating text under the crosshair
 float.too_big = слишком много
@@ -104,11 +109,15 @@ key.ctrl = Ctrl
 key.shift = Shift
 key.alt = Alt
 key.number = клавиша {0}
+key.mouse_middle = Средняя кнопка мыши
+key.mouse4 = Мышь 4
+key.mouse5 = Мышь 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = Клавиши
 menu.options = Настройки
+menu.quick_keys = Быстрые клавиши
 menu.footer = Версия {0}. Esc или клавиша меню закрывает меню.
 menu.close = Закрыть
 menu.cancel = Отмена
@@ -118,6 +127,7 @@ menu.keys_help = Нажмите на клавишу, чтобы изменить
 menu.keys_waiting = Нажмите новую клавишу, можно с Shift, Ctrl или Alt. Esc отменяет, Delete очищает.
 menu.translation_note = В этом переводе могут быть ошибки, простите! Исправления приветствуются (Nexus или GitHub).
 menu.key_menu = Меню Building Tools
+menu.key_radial = Колесо инструментов (удерживать)
 menu.key_area = Режим области вкл. / выкл.
 menu.key_replace = Замена вкл. / выкл.
 menu.key_style = Стиль замены
@@ -128,6 +138,14 @@ menu.key_farther = Свободная установка дальше
 menu.key_closer = Свободная установка ближе
 menu.key_wheel = Расстояние (удерживать + колесо мыши)
 menu.key_off = Весь мод выкл. / вкл.
+menu.key_style_full = Стиль замены: вся форма
+menu.key_style_overlap = Стиль замены: только пересечение
+menu.key_style_connected = Стиль замены: связанные
+menu.key_fill_solid = Заполнение: сплошное
+menu.key_fill_hollow = Заполнение: пустая комната
+menu.key_fill_walls = Заполнение: только стены
+menu.key_creative = Творческое строительство вкл. / выкл.
+menu.quick_help = Клавиши, которые сразу задают параметр. Нажмите на клавишу, чтобы назначить её.
 
 # Options tab
 option.off = Выкл.
@@ -145,5 +163,9 @@ option.fill_solid = Сплошное
 option.fill_hollow = Пустая комната
 option.fill_walls = Только стены
 option.free = Свободная установка
+option.creative = Творческое строительство
 option.language = Язык
 option.language_game = Как в игре
+
+# Tools wheel (hold its key)
+wheel.hint = Щёлкните или отпустите клавишу, чтобы выбрать

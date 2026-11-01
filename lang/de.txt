@@ -4,6 +4,7 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -27,6 +28,9 @@ msg.fill_walls = Bereichsfüllung: nur Wände
 msg.free_on = Freies Platzieren AN (kein Einrasten an Oberflächen)
 msg.free_off = Freies Platzieren AUS
 msg.free_distance = Abstand beim freien Platzieren: {0} m
+msg.creative_on = Kreatives Bauen AN (Bauen kostet nichts)
+msg.creative_off = Kreatives Bauen AUS
+msg.creative_server = Kreatives Bauen legt der Server fest (seine BuildingTools.ini)
 msg.corners_cleared = Ecken gelöscht
 msg.build_corner = Bauen: Ecke {0} von {1} gesetzt
 msg.replace_corner = Ersetzen: Ecke {0} von {1} gesetzt
@@ -94,6 +98,7 @@ hud.free_on = Freies Platzieren: an
 hud.free_off = Freies Platzieren: aus
 hud.wheel = + Mausrad: {0} m
 hud.menu = Werkzeugmenü
+hud.radial = Werkzeugrad
 
 # Floating text under the crosshair
 float.too_big = zu groß
@@ -104,11 +109,15 @@ key.ctrl = Strg
 key.shift = Umschalt
 key.alt = Alt
 key.number = Taste {0}
+key.mouse_middle = Mittlere Maustaste
+key.mouse4 = Maus 4
+key.mouse5 = Maus 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = Tasten
 menu.options = Optionen
+menu.quick_keys = Schnelltasten
 menu.footer = Version {0}. Esc oder die Menütaste schließt das Menü.
 menu.close = Schließen
 menu.cancel = Abbrechen
@@ -118,6 +127,7 @@ menu.keys_help = Klicke auf eine Taste, um sie zu ändern. Gespeichert in Buildi
 menu.keys_waiting = Drücke die neue Taste, auch mit Umschalt, Strg oder Alt. Esc bricht ab, Entf löscht sie.
 menu.translation_note = Diese Übersetzung kann Fehler enthalten, entschuldige! Korrekturen sind willkommen (Nexus oder GitHub).
 menu.key_menu = Building-Tools-Menü
+menu.key_radial = Werkzeugrad (halten)
 menu.key_area = Bereichsmodus an / aus
 menu.key_replace = Ersetzen an / aus
 menu.key_style = Ersetzungsstil
@@ -128,6 +138,14 @@ menu.key_farther = Freies Platzieren weiter weg
 menu.key_closer = Freies Platzieren näher
 menu.key_wheel = Abstand (halten + Mausrad)
 menu.key_off = Ganzer Mod aus / an
+menu.key_style_full = Ersetzungsstil: ganze Form
+menu.key_style_overlap = Ersetzungsstil: nur Überlappung
+menu.key_style_connected = Ersetzungsstil: verbunden
+menu.key_fill_solid = Bereichsfüllung: massiv
+menu.key_fill_hollow = Bereichsfüllung: hohler Raum
+menu.key_fill_walls = Bereichsfüllung: nur Wände
+menu.key_creative = Kreatives Bauen an / aus
+menu.quick_help = Tasten, die eine Option direkt setzen. Klicke auf eine Taste, um sie festzulegen.
 
 # Options tab
 option.off = Aus
@@ -145,5 +163,9 @@ option.fill_solid = Massiv
 option.fill_hollow = Hohler Raum
 option.fill_walls = Nur Wände
 option.free = Freies Platzieren
+option.creative = Kreatives Bauen
 option.language = Sprache
 option.language_game = Wie im Spiel
+
+# Tools wheel (hold its key)
+wheel.hint = Klicken oder Taste loslassen zum Auswählen

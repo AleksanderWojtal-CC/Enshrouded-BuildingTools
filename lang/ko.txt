@@ -4,6 +4,7 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
+# Numbers
 
 # Numbers
 num.decimal = .
@@ -27,6 +28,9 @@ msg.fill_walls = 영역 채우기: 벽만
 msg.free_on = 자유 배치 켜짐 (표면에 붙지 않음)
 msg.free_off = 자유 배치 꺼짐
 msg.free_distance = 자유 배치 거리: {0} m
+msg.creative_on = 창작 건축 켜짐 (건축 비용 없음)
+msg.creative_off = 창작 건축 꺼짐
+msg.creative_server = 창작 건축은 서버가 설정합니다 (서버의 BuildingTools.ini)
 msg.corners_cleared = 모서리 지움
 msg.build_corner = 건축: 모서리 {0}/{1} 설정
 msg.replace_corner = 교체: 모서리 {0}/{1} 설정
@@ -94,6 +98,7 @@ hud.free_on = 자유 배치: 켜짐
 hud.free_off = 자유 배치: 꺼짐
 hud.wheel = + 휠: {0} m
 hud.menu = 도구 메뉴
+hud.radial = 도구 휠
 
 # Floating text under the crosshair
 float.too_big = 너무 큼
@@ -104,11 +109,15 @@ key.ctrl = Ctrl
 key.shift = Shift
 key.alt = Alt
 key.number = 키 {0}
+key.mouse_middle = 마우스 가운데 버튼
+key.mouse4 = 마우스 4
+key.mouse5 = 마우스 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = 키
 menu.options = 옵션
+menu.quick_keys = 빠른 키
 menu.footer = 버전 {0}. Esc 또는 메뉴 키로 메뉴를 닫습니다.
 menu.close = 닫기
 menu.cancel = 취소
@@ -118,6 +127,7 @@ menu.keys_help = 키를 클릭하면 바꿀 수 있습니다. BuildingTools.ini�
 menu.keys_waiting = 새 키를 누르세요. Shift, Ctrl, Alt 조합도 됩니다. Esc는 취소, Delete는 지우기.
 menu.translation_note = 이 번역에는 오류가 있을 수 있습니다. 죄송합니다! 수정 제안을 환영합니다 (Nexus 또는 GitHub).
 menu.key_menu = Building Tools 메뉴
+menu.key_radial = 도구 휠 (누르고 있기)
 menu.key_area = 영역 모드 켜기 / 끄기
 menu.key_replace = 교체 켜기 / 끄기
 menu.key_style = 교체 방식
@@ -128,6 +138,14 @@ menu.key_farther = 자유 배치 멀리
 menu.key_closer = 자유 배치 가까이
 menu.key_wheel = 거리 (누른 채 마우스 휠)
 menu.key_off = 모드 전체 끄기 / 켜기
+menu.key_style_full = 교체 방식: 전체 모양
+menu.key_style_overlap = 교체 방식: 겹친 부분만
+menu.key_style_connected = 교체 방식: 연결됨
+menu.key_fill_solid = 영역 채우기: 꽉 채움
+menu.key_fill_hollow = 영역 채우기: 빈 방
+menu.key_fill_walls = 영역 채우기: 벽만
+menu.key_creative = 창작 건축 켜기 / 끄기
+menu.quick_help = 옵션을 바로 설정하는 키입니다. 키를 클릭해 지정하세요.
 
 # Options tab
 option.off = 끔
@@ -145,5 +163,9 @@ option.fill_solid = 꽉 채움
 option.fill_hollow = 빈 방
 option.fill_walls = 벽만
 option.free = 자유 배치
+option.creative = 창작 건축
 option.language = 언어
 option.language_game = 게임과 같게
+
+# Tools wheel (hold its key)
+wheel.hint = 클릭하거나 키를 놓아 선택

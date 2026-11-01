@@ -4,6 +4,7 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
+# Numbers
 
 # Numbers
 num.decimal = .
@@ -27,6 +28,9 @@ msg.fill_walls = 範囲の埋め方：壁のみ
 msg.free_on = 自由配置 オン（面に吸着しない）
 msg.free_off = 自由配置 オフ
 msg.free_distance = 自由配置の距離：{0} m
+msg.creative_on = クリエイティブ建築 オン（建築は無料）
+msg.creative_off = クリエイティブ建築 オフ
+msg.creative_server = クリエイティブ建築はサーバーが設定します（サーバーの BuildingTools.ini）
 msg.corners_cleared = 角をクリアしました
 msg.build_corner = 建築：角 {0}/{1} を設定
 msg.replace_corner = 置き換え：角 {0}/{1} を設定
@@ -94,6 +98,7 @@ hud.free_on = 自由配置：オン
 hud.free_off = 自由配置：オフ
 hud.wheel = + ホイール：{0} m
 hud.menu = ツールメニュー
+hud.radial = ツールホイール
 
 # Floating text under the crosshair
 float.too_big = 大きすぎ
@@ -104,11 +109,15 @@ key.ctrl = Ctrl
 key.shift = Shift
 key.alt = Alt
 key.number = キー {0}
+key.mouse_middle = マウス中ボタン
+key.mouse4 = マウス 4
+key.mouse5 = マウス 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = キー
 menu.options = オプション
+menu.quick_keys = クイックキー
 menu.footer = バージョン {0}。Esc またはメニューキーで閉じます。
 menu.close = 閉じる
 menu.cancel = キャンセル
@@ -118,6 +127,7 @@ menu.keys_help = キーをクリックすると変更できます。BuildingTool
 menu.keys_waiting = 新しいキーを押してください（Shift、Ctrl、Alt との組み合わせも可）。Esc でキャンセル、Delete で解除。
 menu.translation_note = この翻訳には誤りがあるかもしれません。申し訳ありません！修正のご提案を歓迎します（Nexus または GitHub）。
 menu.key_menu = Building Tools メニュー
+menu.key_radial = ツールホイール（長押し）
 menu.key_area = 範囲モード オン / オフ
 menu.key_replace = 置き換え オン / オフ
 menu.key_style = 置き換え方式
@@ -128,6 +138,14 @@ menu.key_farther = 自由配置 遠くへ
 menu.key_closer = 自由配置 近くへ
 menu.key_wheel = 距離（押しながらマウスホイール）
 menu.key_off = MOD 全体 オフ / オン
+menu.key_style_full = 置換スタイル: 形状全体
+menu.key_style_overlap = 置換スタイル: 重なりのみ
+menu.key_style_connected = 置換スタイル: 連結
+menu.key_fill_solid = 範囲の塗りつぶし: 中身あり
+menu.key_fill_hollow = 範囲の塗りつぶし: 中空の部屋
+menu.key_fill_walls = 範囲の塗りつぶし: 壁のみ
+menu.key_creative = クリエイティブ建築 オン / オフ
+menu.quick_help = オプションを直接設定するキーです。キーをクリックして設定します。
 
 # Options tab
 option.off = オフ
@@ -145,5 +163,9 @@ option.fill_solid = 中まで埋める
 option.fill_hollow = 空洞の部屋
 option.fill_walls = 壁のみ
 option.free = 自由配置
+option.creative = クリエイティブ建築
 option.language = 言語
 option.language_game = ゲームと同じ
+
+# Tools wheel (hold its key)
+wheel.hint = クリックまたはキーを離して選択
