@@ -72,7 +72,8 @@ Area mode (2 corners)
   (line / plane / box, shapes along each side, height, total), and the edges
   of the area light up with the hammer's block highlight. The highlight shows
   on block surfaces (and inside blocks when removing), not in open air.
-  Turn it off with [Area] Preview=0. Corner clicks
+  Turn it off with [Area] Preview=0. Preview=2 shows the area with the flame
+  altar's base-area box instead, Preview=3 shows both. Corner clicks
   build or remove nothing. Switching between left and right click starts over.
   Build charges per shape as usual; Replace works as in Prefab mode (F9 style);
   Remove refunds like normal removal.

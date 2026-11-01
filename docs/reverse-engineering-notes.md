@@ -704,3 +704,30 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   widths 24/24/24/20. beginScroll `a31640`(state 0x4e0, 1, &persistent float offset, 0,
   &params); node = state+8; scroll speed `d3aff0`(state) stored at state+0x464 (flag +0x468);
   endScroll `a33780`(state).
+
+## 0.23.0: area preview shapes
+
+- Debug draw is compiled out: the `draw_buildzones` system (32eeb0) is a bare `ret`.
+- Build-zone borders: ZoneVisualizationSdfRenderingShaderData (flags: IsValid, DrawBuildZoneBorder
+  = 2) with a preview box (previewBuildZoneBoundingSphere, previewBuildZone {halfSize, type},
+  previewBuildZoneBorderColor). Source: client world singleton BuildZoneVisualizationState at
+  world+0xffc0 (getter 3a4620 = `lea rax,[rcx+0xffc0]; ret`, one caller 856157 in the renderer):
+  byte +0 draw borders, +0x10 min / +0x20 max (float4, world metres), byte +0x30 preview valid.
+  `client_cursor_entity` (2919b0) fills the preview only for the flame altar (item hash
+  0xebb93c94, size from the build zone balancing, x/z + 0.25). The SDF only shades surfaces
+  near the box faces, so in open air nothing shows. 0.23.0 redirects the getter call (Preview=2).
+- Live preview corner on a wall was 0.5 m off: corner 1's centre - cursor offset depends on the
+  cursor rotation (ground: (+0.25,+0.25,+0.25); wall with rot (0.707,0,0,0.707): (+0.25,-0.25,+0.25)).
+  Fixed by rotating the offset into the shape frame (corner 1 rot) and out with the live rot.
+- Tried and dropped (dev builds): `client_cursor_entity`'s entity transform write (component lookup
+  9b3cb0 at 292596, WorldTransform with float3 scale) is not the blue block ghost; overriding it
+  showed nothing. Looped effects with a full transform: start 29d3a0(sys, time, &guid, &WorldTransform,
+  &params), move 29cd90, float param 298f00(sys, handle, hash, f), vec3 param 298fc0, stop 29d420.
+  All effect starts go through 29bbe0/29be20/29c160/29c2e0/29c410/29c520 (each calls 29b5f0).
+  Starting a prefab-preview effect (9183293c-4fa853c0-d0ed4f84-2d8b98e1) at the area crashed in
+  game+0x896580 (probably needs the prefab's resources loaded).
+- VfxTerraformingCursorInstance {boxSize, sphereRadius, position, isBox, orientation, ring/fill
+  alpha} is a see-through box/sphere render effect (RenderEffectId TerraformingCursor); which VFX
+  asset uses it was not found.
+- The renderer is Vulkan (vulkan-1.dll, DXGI swap chain interop): drawing the mod's own geometry
+  would mean hooking it.

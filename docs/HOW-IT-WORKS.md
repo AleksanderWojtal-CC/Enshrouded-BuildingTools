@@ -78,6 +78,17 @@ up. Up to 256 voxels are used, thinned evenly. The effect is drawn on block surf
 so edges in open air stay invisible. The game's own blue ghost block is a tinted model
 render, which the mod does not reuse.
 
+The live corner is the live cursor position plus corner 1's offset from cursor to shape
+centre. Where the cursor sits inside the shape depends on its rotation (it follows the
+aimed face), so the offset is turned into the shape's frame with corner 1's rotation and
+back out with the live cursor's.
+
+**Base-area box** (`Preview=2`). The renderer of the build-zone borders reads the client
+world's BuildZoneVisualizationState (world+0xffc0) through a getter once per frame; the
+flame altar cursor fills its preview box there (min/max in metres, valid flag). The mod
+redirects that one getter call and returns a copy of the state with the area's box, so
+the game's state is never written.
+
 **Partial actions.** Before an area or connected action is paid, the mod checks whether
 the whole cost list is affordable, using the material counts of the picker's lists
 (`updateInventoryStocks`, noted every frame: backpack plus magic chests, all bases with
