@@ -169,6 +169,3 @@ option.free = Free placement
 option.creative = Creative building
 option.language = Language
 option.language_game = Same as the game
-
-# Tools wheel (hold its key)
-wheel.hint = Click or let go of the key to pick

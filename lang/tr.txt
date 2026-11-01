@@ -5,6 +5,7 @@
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -166,6 +167,3 @@ option.free = Serbest yerleştirme
 option.creative = Yaratıcı inşa
 option.language = Dil
 option.language_game = Oyunla aynı
-
-# Tools wheel (hold its key)
-wheel.hint = Seçmek için tıklayın veya tuşu bırakın

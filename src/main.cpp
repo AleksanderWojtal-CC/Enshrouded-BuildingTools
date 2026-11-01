@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.22.0-dev2"
+#define MOD_VERSION "0.22.0-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -4229,7 +4229,9 @@ static void draw_float_info() {
 // darkened disc (blur + 25% black, cut round by the wheel's blur mask), the centre disc,
 // the direction pointer at the highlighted slot and a dot per slot; the option names in
 // small windows around it (the highlighted one on the game's soft backdrop).
-static const float kWheelSize = 640.f;           // layout units, as the emote wheel's 600
+static const float kWheelSize = 900.f;           // layout units (the emote wheel: 600)
+static const float kWheelDisc = 0.28f;           // centre disc, part of the size (emote wheel: 0.4)
+static const float kWheelLabels = 0.31f;         // label distance from the centre, part of the size
 static volatile LONG g_wheelShown = 0;            // slots in the labels below (input thread fills)
 static char g_wheelName[kWheelSlots][96], g_wheelValue[kWheelSlots][96];
 static uint32_t ui_image(uint8_t* bundle, uint32_t off) {
@@ -4254,10 +4256,7 @@ static void wheel_text_window(int id, float dx, float dy, const char* a, const c
     *(UiVec2*)(n + 0x70) = UiVec2{ dx, dy };
     const float pad[4] = { 12, 4, 12, 4 };
     ui.setPadding(n, pad);
-    if (ui.nineSlice && ui.passObj) {                       // the game's soft backdrop; twice = darker for the highlight
-        soft_backdrop((const float*)(n + 0x114));
-        if (backdrop) soft_backdrop((const float*)(n + 0x114));
-    }
+    if (backdrop && ui.nineSlice && ui.passObj) soft_backdrop((const float*)(n + 0x114));   // the highlight
     if (a && *a) ui_text(a, STYLE_BODY);
     if (b && *b) ui_text(b, STYLE_BODY);
     ui.endBox(box);
@@ -4288,17 +4287,17 @@ static void draw_radial() {
         ui.boxBlend(wheel, 3);
         ui.drawRect(wheel, big, ui_image(bundle, 0xdbe0), white); // itemWheel.blurredBackgroundMask
         ui.boxBlend(wheel, 0);
-        const float cd[4] = { x + w * 0.3f, y + h * 0.3f, w * 0.4f, h * 0.4f };
+        const float cd[4] = { x + w * (0.5f - kWheelDisc * 0.5f), y + h * (0.5f - kWheelDisc * 0.5f), w * kWheelDisc, h * kWheelDisc };
         ui.drawRect(wheel, cd, ui_image(bundle, 0xdb80), *(uint64_t*)(bundle + 0xdb78));   // background, previewCenterColor
         uint64_t accent = *(uint64_t*)(bundle + 0xd4c0);
         float cx = x + w * 0.5f, cy = y + h * 0.5f;
         LONG sel = g_radialSel;
         if (sel >= 0 && sel < count) {                    // itemWheel.direction, turned to the slot
-            float s = w * 0.4f * 1.16f;
+            float s = w * kWheelDisc * 1.16f;
             const float ar[4] = { cx - s * 0.5f, cy - s * 0.5f, s, s };
             ui.drawRotated(wheel, ar, slot_angle(sel, count), ui_image(bundle, 0xdb90), accent);
         }
-        float rd = w * 0.4f * 0.62f;
+        float rd = w * kWheelDisc * 0.62f;
         uint32_t dot = ui_image(bundle, 0xb9e8);
         for (int k = 0; k < count; k++) {
             const float dr[4] = { cx + g_slotCos[k] * rd - 12.f, cy + g_slotSin[k] * rd - 12.f, 24.f, 24.f };
@@ -4309,12 +4308,11 @@ static void draw_radial() {
     ui.endBox(wheel);
     ui.endBox(root);
     ui.endWindow(win);
-    float rl = kWheelSize * 0.5f * 0.7f;
+    float rl = kWheelSize * kWheelLabels;
     LONG sel = g_radialSel;
     for (int k = 0; k < count; k++)
         wheel_text_window(k, g_slotCos[k] * rl, g_slotSin[k] * rl, g_wheelName[k], g_wheelValue[k], k == sel);
-    wheel_text_window(kWheelSlots, 0, 0, T(S_MENU_TITLE), nullptr, false);   // centre and hint get the backdrop too
-    wheel_text_window(kWheelSlots + 1, 0, kWheelSize * 0.5f + 40.f, T(S_WHEEL_HINT), nullptr, false);
+    wheel_text_window(kWheelSlots, 0, 0, T(S_MENU_TITLE), nullptr, false);
 }
 
 static void hud_finish_hook(void* box) {

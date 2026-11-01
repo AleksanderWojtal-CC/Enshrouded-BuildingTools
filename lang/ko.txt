@@ -5,6 +5,7 @@
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = .
@@ -166,6 +167,3 @@ option.free = 자유 배치
 option.creative = 창작 건축
 option.language = 언어
 option.language_game = 게임과 같게
-
-# Tools wheel (hold its key)
-wheel.hint = 클릭하거나 키를 놓아 선택
