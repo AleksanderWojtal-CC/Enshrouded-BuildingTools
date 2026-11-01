@@ -2488,13 +2488,17 @@ static void net_watch(uint8_t* input) {
 }
 // One building hook call on the dedicated server: the clicking player's settings and
 // corners are put into the mod's state, and the corners are saved back afterwards.
-// The building context holds the player's PlayerInput at +0x58 (blueprint and
-// dismantle systems alike). A player without the mod (or with it off) builds vanilla.
+// The dismantle context holds the player's PlayerInput at +0x58. The blueprint system
+// fills that field only after PlaceShape, so a place click finds PlayerInput in the
+// caller's frame instead (rbp-0x58, the cursor component it read the transform from).
+// A player without the mod (or with it off) builds vanilla.
 struct NetScope {
     NetPlayer* p = nullptr;
-    explicit NetScope(void* ctx) {
+    static uint8_t* ctx_input(void* ctx) {
+        return ctx && readable((uint8_t*)ctx + 0x58, 8) ? *(uint8_t**)((uint8_t*)ctx + 0x58) : nullptr;
+    }
+    explicit NetScope(uint8_t* input) {
         EnterCriticalSection(&g_stateLock);
-        uint8_t* input = ctx && readable((uint8_t*)ctx + 0x58, 8) ? *(uint8_t**)((uint8_t*)ctx + 0x58) : nullptr;
         uint32_t s = 0;
         g_netInput = input;
         g_mode = MODE_PREFAB; g_replace = 0; g_cancelReq = 0;
@@ -2640,7 +2644,7 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
 static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* xfp, void* filter, uint8_t check) {
     if (!g_dedicated || g_ownRemoveTid == GetCurrentThreadId() || !is_server_ctx(ctx))
         return remove_hook_body(list, ctx, state, box, xfp, filter, check);
-    NetScope ns(ctx);
+    NetScope ns(NetScope::ctx_input(ctx));
     return remove_hook_body(list, ctx, state, box, xfp, filter, check);
 }
 static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, void* xfp, void* filter, uint8_t check) {
@@ -2774,7 +2778,14 @@ static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
 static uint8_t place_hook_body(CostList* list, void* ctx, void* state, void* pdata, CursorXf* xf);
 static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, CursorXf* xf) {
     if (!g_dedicated) return place_hook_body(list, ctx, state, pdata, xf);
-    NetScope ns(ctx);
+    // ctx+0x58 is still empty here (filled after PlaceShape returns)
+    uint8_t* input = nullptr;
+    if (g_cursorLayoutOk) {
+        uint8_t** slot = (uint8_t**)((uint8_t*)xf - 0x118);
+        if (readable(slot, 8)) input = *slot;
+    }
+    if (!input) input = NetScope::ctx_input(ctx);
+    NetScope ns(input);
     return place_hook_body(list, ctx, state, pdata, xf);
 }
 static uint8_t place_hook_body(CostList* list, void* ctx, void* state, void* pdata, CursorXf* xf) {
