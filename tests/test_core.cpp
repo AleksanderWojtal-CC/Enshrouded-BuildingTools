@@ -57,8 +57,11 @@ static void binary_checks(const char* exe) {
         {"SIG_SERVER_CHECK", 0x2d36f2}, {"SIG_PAY", 0x48eeb0},
         {"SIG_PLACE_COMMIT", 0x487270}, {"SIG_REMOVE_COMMIT", 0x487af0}, {"SIG_MATERIAL_ITEM", 0xe75240}, {"SIG_REFUND_BUILD", 0x48ae10}, {"SIG_BLIT_CHECK", 0xa81327}, {"SIG_POP_UNDO", 0x492480}, {"SIG_HUD_UPDATE", 0xb25350}, {"SIG_UI_SOUND", 0xb26b8f}, {"SIG_CURSOR_XF", 0x28bc80}, {"SIG_SYS_DEPS", 0x9bc1a0}, {"SIG_HOVER_FX", 0x28e2f0}, {"SIG_DISM_DEPS", 0x2d3c99}, {"SIG_INPUT_ENCODE", 0x3a5640},
         {"SIG_PAY_PLACE", 0x2d39ab}, {"SIG_PAY_REMOVE", 0x2d46b0}, {"SIG_PAY_REMOVE_PREFAB", 0x2d4b5a}, {"SIG_PAY_UNDO", 0x2d6040}, {"SIG_MISSING_CALL", 0x2975f2}, {"SIG_STOCKS", 0x4076b0}, {"SIG_PICK_CALL", 0x2afa47},
+        {"SIG_UI_DRAW_RECT", 0x118ca30}, {"SIG_UI_DRAW_ROTATED", 0x118d030}, {"SIG_UI_BOX_BLEND", 0x11ae3e0},
     };
-    CHECK(sigs.size() == expect.size(), "all signatures extracted");
+    bool allThere = true;
+    for (auto& e : expect) allThere &= sigs.count(e.first) == 1;
+    CHECK(allThere, "every checked signature is in main.cpp");
     for (auto& [name, rva] : expect) {
         const uint8_t* hits[4];
         int n = core::scan(&img[textVa], textSz, sigs[name].c_str(), hits, 4);

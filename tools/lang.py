@@ -16,7 +16,8 @@ SECTIONS = {'num': 'Numbers', 'msg': 'Messages (shown for a few seconds)',
             'bar': 'Info bar at the bottom of the screen (short words)',
             'hud': "Rows in the game's building box, bottom right (narrow: keep them short)",
             'float': 'Floating text under the crosshair', 'key': 'Key names',
-            'menu': 'Building Tools menu', 'option': 'Options tab'}
+            'menu': 'Building Tools menu', 'option': 'Options tab',
+            'wheel': 'Tools wheel (hold its key)'}
 
 
 NOTES = {

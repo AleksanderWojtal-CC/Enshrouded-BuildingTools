@@ -4,6 +4,7 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
+# Numbers
 
 # Numbers
 num.decimal = .
@@ -27,6 +28,9 @@ msg.fill_walls = การเติมพื้นที่: เฉพาะผ�
 msg.free_on = วางอิสระ เปิด (ไม่ยึดกับพื้นผิว)
 msg.free_off = วางอิสระ ปิด
 msg.free_distance = ระยะวางอิสระ: {0} ม.
+msg.creative_on = การสร้างแบบสร้างสรรค์ เปิด (สร้างฟรี)
+msg.creative_off = การสร้างแบบสร้างสรรค์ ปิด
+msg.creative_server = เซิร์ฟเวอร์เป็นผู้ตั้งค่าการสร้างแบบสร้างสรรค์ (BuildingTools.ini ของเซิร์ฟเวอร์)
 msg.corners_cleared = ล้างมุมแล้ว
 msg.build_corner = สร้าง: ตั้งมุม {0}/{1} แล้ว
 msg.replace_corner = แทนที่: ตั้งมุม {0}/{1} แล้ว
@@ -94,6 +98,7 @@ hud.free_on = วางอิสระ: เปิด
 hud.free_off = วางอิสระ: ปิด
 hud.wheel = + ล้อเมาส์: {0} ม.
 hud.menu = เมนูเครื่องมือ
+hud.radial = วงล้อเครื่องมือ
 
 # Floating text under the crosshair
 float.too_big = ใหญ่เกินไป
@@ -104,11 +109,15 @@ key.ctrl = Ctrl
 key.shift = Shift
 key.alt = Alt
 key.number = ปุ่ม {0}
+key.mouse_middle = ปุ่มกลางเมาส์
+key.mouse4 = เมาส์ 4
+key.mouse5 = เมาส์ 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = ปุ่ม
 menu.options = ตัวเลือก
+menu.quick_keys = ปุ่มลัด
 menu.footer = เวอร์ชัน {0} กด Esc หรือปุ่มเมนูเพื่อปิดเมนู
 menu.close = ปิด
 menu.cancel = ยกเลิก
@@ -118,6 +127,7 @@ menu.keys_help = คลิกที่ปุ่มเพื่อเปลี่
 menu.keys_waiting = กดปุ่มใหม่ ใช้ร่วมกับ Shift, Ctrl หรือ Alt ได้ Esc ยกเลิก Delete ล้างปุ่ม
 menu.translation_note = คำแปลนี้อาจมีข้อผิดพลาด ขออภัย! ยินดีรับการแก้ไข (Nexus หรือ GitHub)
 menu.key_menu = เมนู Building Tools
+menu.key_radial = วงล้อเครื่องมือ (กดค้าง)
 menu.key_area = โหมดพื้นที่ เปิด / ปิด
 menu.key_replace = แทนที่ เปิด / ปิด
 menu.key_style = รูปแบบการแทนที่
@@ -128,6 +138,14 @@ menu.key_farther = วางอิสระ ไกลขึ้น
 menu.key_closer = วางอิสระ ใกล้ขึ้น
 menu.key_wheel = ระยะ (กดค้าง + ล้อเมาส์)
 menu.key_off = ม็อดทั้งหมด ปิด / เปิด
+menu.key_style_full = รูปแบบการแทนที่: ทั้งรูปทรง
+menu.key_style_overlap = รูปแบบการแทนที่: เฉพาะส่วนทับซ้อน
+menu.key_style_connected = รูปแบบการแทนที่: ที่เชื่อมต่อกัน
+menu.key_fill_solid = การเติมพื้นที่: ทึบ
+menu.key_fill_hollow = การเติมพื้นที่: ห้องกลวง
+menu.key_fill_walls = การเติมพื้นที่: เฉพาะผนัง
+menu.key_creative = การสร้างแบบสร้างสรรค์ เปิด / ปิด
+menu.quick_help = ปุ่มที่ตั้งค่าตัวเลือกโดยตรง คลิกปุ่มเพื่อกำหนด
 
 # Options tab
 option.off = ปิด
@@ -145,5 +163,9 @@ option.fill_solid = ทึบ
 option.fill_hollow = ห้องกลวง
 option.fill_walls = เฉพาะผนัง
 option.free = วางอิสระ
+option.creative = การสร้างแบบสร้างสรรค์
 option.language = ภาษา
 option.language_game = เหมือนในเกม
+
+# Tools wheel (hold its key)
+wheel.hint = คลิกหรือปล่อยปุ่มเพื่อเลือก

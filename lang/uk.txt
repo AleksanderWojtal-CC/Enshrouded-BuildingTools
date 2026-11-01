@@ -4,6 +4,7 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -27,6 +28,9 @@ msg.fill_walls = Заповнення області: лише стіни
 msg.free_on = Вільне розміщення УВІМК. (без прив'язки до поверхні)
 msg.free_off = Вільне розміщення ВИМК.
 msg.free_distance = Відстань вільного розміщення: {0} м
+msg.creative_on = Творче будівництво УВІМК. (будівництво безкоштовне)
+msg.creative_off = Творче будівництво ВИМК.
+msg.creative_server = Творче будівництво задає сервер (його BuildingTools.ini)
 msg.corners_cleared = Кути скинуто
 msg.build_corner = Будівництво: кут {0} з {1} задано
 msg.replace_corner = Заміна: кут {0} з {1} задано
@@ -94,6 +98,7 @@ hud.free_on = Вільне розміщення: увімк.
 hud.free_off = Вільне розміщення: вимк.
 hud.wheel = + коліщатко: {0} м
 hud.menu = Меню інструментів
+hud.radial = Колесо інструментів
 
 # Floating text under the crosshair
 float.too_big = забагато
@@ -104,11 +109,15 @@ key.ctrl = Ctrl
 key.shift = Shift
 key.alt = Alt
 key.number = клавіша {0}
+key.mouse_middle = Середня кнопка миші
+key.mouse4 = Миша 4
+key.mouse5 = Миша 5
 
 # Building Tools menu
 menu.title = Building Tools
 menu.keys = Клавіші
 menu.options = Налаштування
+menu.quick_keys = Швидкі клавіші
 menu.footer = Версія {0}. Esc або клавіша меню закриває меню.
 menu.close = Закрити
 menu.cancel = Скасувати
@@ -118,6 +127,7 @@ menu.keys_help = Клацніть на клавішу, щоб змінити ї�
 menu.keys_waiting = Натисніть нову клавішу, можна з Shift, Ctrl або Alt. Esc скасовує, Delete очищає.
 menu.translation_note = У цьому перекладі можуть бути помилки, вибачте! Виправлення вітаються (Nexus або GitHub).
 menu.key_menu = Меню Building Tools
+menu.key_radial = Колесо інструментів (утримувати)
 menu.key_area = Режим області увімк. / вимк.
 menu.key_replace = Заміна увімк. / вимк.
 menu.key_style = Стиль заміни
@@ -128,6 +138,14 @@ menu.key_farther = Вільне розміщення далі
 menu.key_closer = Вільне розміщення ближче
 menu.key_wheel = Відстань (утримувати + коліщатко миші)
 menu.key_off = Увесь мод вимк. / увімк.
+menu.key_style_full = Стиль заміни: уся форма
+menu.key_style_overlap = Стиль заміни: лише перетин
+menu.key_style_connected = Стиль заміни: зʼєднані
+menu.key_fill_solid = Заповнення: суцільне
+menu.key_fill_hollow = Заповнення: порожня кімната
+menu.key_fill_walls = Заповнення: лише стіни
+menu.key_creative = Творче будівництво увімк. / вимк.
+menu.quick_help = Клавіші, що одразу задають параметр. Натисніть на клавішу, щоб призначити її.
 
 # Options tab
 option.off = Вимк.
@@ -145,5 +163,9 @@ option.fill_solid = Суцільне
 option.fill_hollow = Порожня кімната
 option.fill_walls = Лише стіни
 option.free = Вільне розміщення
+option.creative = Творче будівництво
 option.language = Мова
 option.language_game = Як у грі
+
+# Tools wheel (hold its key)
+wheel.hint = Клацніть або відпустіть клавішу, щоб вибрати
