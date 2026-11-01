@@ -29,6 +29,9 @@ A mod for **Enshrouded 1.0** (single player and dedicated servers) that extends 
   not only the one you stand in, also outside a base. The material picker, the red
   "missing materials" ghost and the crafting menus count them too. Chests of the base you
   are in are used first; the loot deposit still only fills local chests.
+- **Tools wheel** (hold Caps Lock): a blurred wheel drawn with the game's own wheel;
+  point the mouse at an option and let go. It shows only what applies right now
+  (Replace style while Replace is on, fill and corners in Area mode).
 - **Menu in the game's own UI** (Home): change keys (also Shift / Ctrl / Alt combinations)
   and options in a full-screen menu with the game's tabs. While you build, the mod's keys
   sit in the game's building box with the game's key icons and on/off switches, and the
@@ -62,6 +65,7 @@ which is also shipped in the zip.
 
 | Key | Action |
 |---|---|
+| Caps Lock (hold) | Tools wheel: point at an option, let go (or click) to pick it |
 | Home | Building Tools menu: change keys and options in the game's own UI |
 | F6 | Prefab mode (vanilla) / Area mode |
 | F7 | Replace on/off |
@@ -71,7 +75,9 @@ which is also shipped in the zip.
 | F11 | Area fill: solid / hollow room / walls only |
 | F5 | Whole mod off / on (off = vanilla game) |
 
-All keys can be changed in the menu (Keys tab), also to Shift, Ctrl or Alt combinations.
+All keys can be changed in the menu (Keys tab), also to Shift, Ctrl or Alt combinations
+and to the middle or side mouse buttons. The Quick keys tab adds keys that set one option
+directly (each replace style, each area fill, creative building).
 
 What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
