@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.23.0-dev1"
+#define MOD_VERSION "0.23.0-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -2279,6 +2279,29 @@ static void reset_corners() { g_sc = 0; g_corners = 0; }
 static float g_scStep[3] = { 1.f, 1.f, 1.f };
 static volatile LONG g_scCursorOff = 0x300;
 static int64_t g_scOff[3];       // corner 1: shape centre - cursor position (live size readout)
+// Corner 1's cursor rotation. Where the cursor position sits inside the shape depends on
+// the rotation (it follows the aimed face), so g_scOff is turned into the shape's own
+// frame with it and back out with the live cursor's rotation (corner on a wall after a
+// corner on the ground was one block off in the preview).
+static float g_scRot[4] = { 0.f, 0.f, 0.f, 1.f };
+static bool g_scRotOk = false;
+static bool quat_ok(const float* q) {
+    float n = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+    return n > 0.98f && n < 1.02f;
+}
+static void set_sc_rot(const float* q) {
+    g_scRotOk = q && quat_ok(q);
+    if (g_scRotOk) memcpy(g_scRot, q, 16);
+}
+// v rotated by q (x, y, z, w); inverse = rotate by the conjugate.
+static void quat_rot(const float* q, bool inverse, const double v[3], double out[3]) {
+    double x = q[0], y = q[1], z = q[2], w = q[3];
+    if (inverse) { x = -x; y = -y; z = -z; }
+    double tx = 2 * (y * v[2] - z * v[1]), ty = 2 * (z * v[0] - x * v[2]), tz = 2 * (x * v[1] - y * v[0]);
+    out[0] = v[0] + w * tx + (y * tz - z * ty);
+    out[1] = v[1] + w * ty + (z * tx - x * tz);
+    out[2] = v[2] + w * tz + (x * ty - y * tx);
+}
 
 // ---- aim hand-off
 // Only client worlds hold the live "aimed at" cursor (+0x338); the server copy is
@@ -2749,8 +2772,10 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
         for (int a = 0; a < 3; a++) g_scStep[a] = bx->mx[a] - bx->mn[a];
         g_scCursorOff = 0x338;
         uint8_t* cc = live_cc();
-        if (cc && readable(cc + 0x338, 0x18)) for (int a = 0; a < 3; a++) g_scOff[a] = xf->pos[a] - ((int64_t*)(cc + 0x338))[a];
-        else for (int a = 0; a < 3; a++) g_scOff[a] = 0;
+        if (cc && readable(cc + 0x338, 0x28)) {
+            for (int a = 0; a < 3; a++) g_scOff[a] = xf->pos[a] - ((int64_t*)(cc + 0x338))[a];
+            set_sc_rot((const float*)(cc + 0x338 + 0x18));
+        } else { for (int a = 0; a < 3; a++) g_scOff[a] = 0; g_scRotOk = false; }
     }
     if (n < g_cfg.corners - 1) {
         g_sc = n + 1; g_corners = g_sc;
@@ -2936,6 +2961,7 @@ static uint8_t place_hook_body(CostList* list, void* ctx, void* state, void* pda
             for (int a = 0; a < 3; a++) g_scStep[a] = box.mx[a] - box.mn[a];
             g_scCursorOff = replace ? 0x338 : 0x300;
             g_scOff[0] = g_scPos[0].x - target.pos[0]; g_scOff[1] = g_scPos[0].y - target.pos[1]; g_scOff[2] = g_scPos[0].z - target.pos[2];
+            set_sc_rot(target.rot);
         }
         LOG(.str("  corner centre (").fix(g_scPos[n].x).c(',').fix(g_scPos[n].y).c(',').fix(g_scPos[n].z).c(')'));
     }
@@ -3005,6 +3031,7 @@ static void remote_corner(LONG op, uint8_t* item, const CursorXf* place, const C
         for (int a = 0; a < 3; a++) g_scStep[a] = step[a];
         g_scCursorOff = op == OP_REMOVE || replace ? 0x338 : 0x300;
         g_scOff[0] = g_scPos[0].x - target.pos[0]; g_scOff[1] = g_scPos[0].y - target.pos[1]; g_scOff[2] = g_scPos[0].z - target.pos[2];
+        set_sc_rot(target.rot);
     }
     LOG(.str("remote area click ").i(g_netSeq).str(": corner ").i(n + 1).str(op == OP_REMOVE ? " (remove)" : replace ? " (replace)" : " (build)")
         .str(" centre (").fix(g_scPos[n].x).c(',').fix(g_scPos[n].y).c(',').fix(g_scPos[n].z).c(')'));
@@ -3189,7 +3216,15 @@ static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
         live = I3{ c[0], c[1], c[2] };
     } else {
         if (!p[0] && !p[1] && !p[2]) return false;
-        live = I3{ p[0] + g_scOff[0], p[1] + g_scOff[1], p[2] + g_scOff[2] };
+        int64_t o[3] = { g_scOff[0], g_scOff[1], g_scOff[2] };
+        const float* rot = (const float*)(cc + off + 0x18);
+        if (g_scRotOk && readable(rot, 16) && quat_ok(rot)) {
+            double v[3] = { (double)o[0], (double)o[1], (double)o[2] }, l[3], w[3];
+            quat_rot(g_scRot, true, v, l);                  // corner 1's offset in the shape's frame
+            quat_rot(rot, false, l, w);                     // ... placed with the live rotation
+            for (int a = 0; a < 3; a++) o[a] = (int64_t)(w[a] < 0 ? w[a] - 0.5 : w[a] + 0.5);
+        }
+        live = I3{ p[0] + o[0], p[1] + o[1], p[2] + o[2] };
     }
     I3 c[3];
     const int64_t tol = (int64_t)(0.1 * core::kFix);
