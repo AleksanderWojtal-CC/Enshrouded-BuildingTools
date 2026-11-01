@@ -2973,6 +2973,37 @@ static void remote_corner(LONG op, uint8_t* item, const CursorXf* place, const C
     flash(b.z()); beep(ok ? MB_ICONASTERISK : MB_ICONHAND);
 }
 
+// The building item in hand. Near the character the client's blueprint system reads
+// the cursor every frame (g_liveItemTick). With the free camera far away it stops, but
+// the cursor system still casts the building ray every frame (g_cxSeen): the item is the
+// last one the blueprint system read.
+static bool ray_live() {
+    LONG k = g_cxLast;
+    return k >= 0 && k <= 3 && g_cxSeen[k].valid && GetTickCount() - g_cxSeen[k].tick < 250;
+}
+static uint8_t* building_item() {
+    uint8_t* item = g_liveItem;
+    if (!item) return nullptr;
+    return GetTickCount() - g_liveItemTick < 500 || ray_live() ? item : nullptr;
+}
+// Far from the character the client's cursor component keeps old values, so the aim it
+// sends (secondary transform, src+0x330) is stale while the place cursor (src+0x2f8)
+// is live. The aim is then derived from this frame's ray hit, as aim_lookup does in
+// single player: the place cursor moved by one cell into the aimed face.
+static bool freecam_aim(uint8_t* src, uint8_t* item, CursorXf* aim) {
+    if (GetTickCount() - g_liveItemTick < 500) return false;          // cursor component is live
+    const CursorXf* place = (const CursorXf*)(src + 0x2f8);
+    if (zero_pos(*place)) return false;
+    int64_t qp[3], qa[3], st[3];
+    if (!query_cursor(qp, qa, st)) return false;
+    *aim = *place;
+    if (!small_item(item)) return true;                               // big shapes aim at the place
+    const int64_t q = (int64_t)1 << 30;
+    for (int a = 0; a < 3; a++) { int64_t dd = place->pos[a] - qp[a]; if (dd != q && dd != -q) return false; }
+    if (!(st[0] | st[1] | st[2])) return false;
+    for (int a = 0; a < 3; a++) aim->pos[a] += st[a];
+    return true;
+}
 static void remote_clicks(uint8_t* src, uint8_t flags) {
     const uint64_t d = *(uint64_t*)(src + 0x3a8);      // PlayerDigitalInput: bit 0 MainhandAction, bit 4 SecondaryBuildingAction
     const uint64_t rise = d & ~g_prevDigital;
@@ -2984,21 +3015,29 @@ static void remote_clicks(uint8_t* src, uint8_t flags) {
         LeaveCriticalSection(&g_stateLock);
     }
     if (!(rise & 0x11) || g_modOff || g_mode != MODE_AREA || !(flags & 1)) return;
-    uint8_t* item = g_liveItem;
-    if (!item || GetTickCount() - g_liveItemTick > 500) return;      // no building item in hand
+    uint8_t* item = building_item();
+    if (!item) return;                                 // no building item in hand
     remote_corner(rise & 1 ? OP_BUILD : OP_REMOVE, item, (const CursorXf*)(src + 0x2f8), (const CursorXf*)(src + 0x330));
 }
 
 static uint64_t input_encode_hook(uint8_t* out, uint8_t* src, uint8_t* flags, uint64_t a4) {
-    if (flags && (*flags & 1) && !g_modOff && GetTickCount() - g_liveItemTick < 500) *flags |= 2;   // building item in hand
+    uint8_t* item = flags && (*flags & 1) && !g_modOff && src ? building_item() : nullptr;
+    CursorXf saved, aim;
+    const bool patch = item && freecam_aim(src, item, &aim);
+    if (item) *flags |= 2;                              // send the aim too
+    if (patch) { saved = *(CursorXf*)(src + 0x330); *(CursorXf*)(src + 0x330) = aim; }
     uint64_t r = g_inputEncodeOrig(out, src, flags, a4);
     if (out && src) {
+        const uint64_t prev = g_prevDigital;
         remote_clicks(src, flags ? *flags : 0);         // first: this packet carries the click's result
+        if (patch && (*(uint64_t*)(src + 0x3a8) & ~prev & 0x11))
+            LOG(.str("free camera aim sent: (").fix(aim.pos[0]).c(',').fix(aim.pos[1]).c(',').fix(aim.pos[2]).c(')'));
         EnterCriticalSection(&g_stateLock);
         const uint32_t st = net_client_state();
         LeaveCriticalSection(&g_stateLock);
         core::net_pack(st, (int64_t*)out);
     }
+    if (patch) *(CursorXf*)(src + 0x330) = saved;
     return r;
 }
 
