@@ -731,3 +731,29 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   asset uses it was not found.
 - The renderer is Vulkan (vulkan-1.dll, DXGI swap chain interop): drawing the mod's own geometry
   would mean hooking it.
+
+## 0.24.0: drawn 3D area box (Vulkan)
+
+- Vulkan comes in through `GetProcAddress(vulkan-1, "vkGetInstanceProcAddr")` (the exe's only
+  import of it): patching that IAT entry lets the mod wrap instance/device proc address lookups.
+- Render facts: world at render resolution (DLSS, e.g. 2560x1440) with dynamic rendering, GPU
+  driven (few draws); scene depth D32_SFLOAT, reversed Z (near 0.01 / far 10000), HDR colour
+  R16G16B16A16_SFLOAT; UI layers 3968x2288 R8G8B8A8 composited into the swapchain
+  (A2B10G10R10). Scene depth = depth attachment of the last vkCmdBeginRendering pass >= 640 px
+  wide with an R16G16B16A16F colour target and SAMPLED usage; its layout from the last barrier.
+- Camera: cursor system sys+0x640 int64[3] position (2^32 per metre), +0x658 quaternion,
+  +0x678 distance to the look-at point (character), +0x680 aspect, +0x684 near, +0x688 far.
+  Runs about twice per frame (identical entries). The render frame function 13d910 has a
+  ClientCamera copy at arg3+0xad0 (fovY 1.1345 rad) but it lags about 3 frames; the cursor
+  camera with -0.25 frame prediction and fov 60 matched best on screen.
+- Blocked-voxel query a8a290 (called by the hover fn 28e2f0 at +0x2ff with
+  rdx = [world], r8 = [world+8], world = ctx+0x130):
+  `a8a290(list*, w0, w1, query*) -> byte` (1 = nothing in the way).
+  List {data* +0, count +8, cap +0x10, grow fn +0x18 (null: entries past cap are dropped), +0x20 0};
+  entries int32[3] voxel coords of taken voxels.
+  Query (built by 48bd50 from a blueprint item): +0 data*, +8 count, +0x10 byte bit-packed,
+  +0x14 size uint3, +0x20 pos int3, +0x2c rotated size, +0x38 orientation (axis index dwords
+  +0x38/+0x3c/+0x40, "positive" flag bytes +0x44..+0x46), +0x48 ptr (unused by the query).
+  Per voxel (a83ac0): blueprint voxel set and world voxel byte >= 0x80 -> taken.
+  a8d280 (the other branch) is `xor al,al; ret`.
+

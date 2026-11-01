@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.23.0"
+#define MOD_VERSION "0.24.0"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -112,6 +112,11 @@ struct Config {
     int keyFill      = VK_F11;     // area fill: solid / hollow / walls
     int keyMenu      = VK_HOME;    // in-game menu (native game UI, experimental)
     int refundPopup  = 1;          // show the game's item pop-up for refunds
+    int drawBox      = 1;          // own see-through 3D box over the area (Vulkan)
+    int drawBoxFov   = 60;         // vertical field of view the box is drawn with (degrees)
+    int drawBoxCells = 1;          // the blocks the action will touch, inside the drawn box
+    int drawBoxDepth = 1;          // game's depth: 1 reversed, 2 normal, 0 off (parts behind the world drawn dimmer)
+    int drawBoxDelay = -25;        // hundredths of a frame the picture on screen is behind the game thread (negative: ahead)
     int preview      = 1;          // area preview: 1 = edge highlights, 2 = base-area box, 3 = both, 0 = off
     int hoverDist10  = 40;         // free placement distance in tenths of a metre
     int panelScale   = 100;        // info panel size in percent
@@ -191,6 +196,12 @@ static void write_full_ini(const Config& c) {
      .t("; Free placement start distance in tenths of a metre (40 = 4 m)\r\nFreePlacementDistance=").i(c.hoverDist10).t("\r\n")
      .t("; Show the area being set up: 1 = highlights along the edges on surfaces,\r\n")
      .t(";     2 = the flame altar's base-area box, 3 = both, 0 = off\r\nPreview=").i(c.preview).t("\r\n")
+     .t("; 1 = draw a see-through 3D box over the area (replaces the edge highlights while it works)\r\nDrawBox=").i(c.drawBox).t("\r\n")
+     .t("; Inside the box, the blocks the action will touch (1 = on, 0 = off)\r\nDrawBoxBlocks=").i(c.drawBoxCells).t("\r\n")
+     .t("; Parts hidden by the world drawn dimmer: 1 = on, 0 = off (2 = for other depth setups)\r\nDrawBoxDepth=").i(c.drawBoxDepth).t("\r\n")
+     .t("; Field of view the box is drawn with, degrees; frame timing in hundredths of a frame\r\n")
+     .t(";     (lower = earlier). Change only if the box drifts from the blocks when the camera moves.\r\n")
+     .t("DrawBoxFov=").i(c.drawBoxFov).t("\r\nDrawBoxDelay100=").i(c.drawBoxDelay).t("\r\n")
      .t("\r\n[Limits]\r\n")
      .t("; Most shapes one area action may build, replace or remove (max 20000)\r\nMaxShapes=").i(c.maxShapes).t("\r\n")
      .t("; Most shapes one connected replace (fill bucket) repaints (max = MaxShapes)\r\nFillLimit=").i(c.fillLimit).t("\r\n")
@@ -230,6 +241,11 @@ static void load_config() {
     g_cfg.keyMenu      = ini_int(L"Keys", L"Menu", VK_HOME);
     g_cfg.refundPopup  = ini_int(L"Interface", L"RefundPopup", 1);
     g_cfg.preview      = ini_int(L"Area", L"Preview", 1);
+    g_cfg.drawBox      = ini_int(L"Area", L"DrawBox", 1);
+    g_cfg.drawBoxFov   = ini_int(L"Area", L"DrawBoxFov", 60);
+    g_cfg.drawBoxDelay = ini_int(L"Area", L"DrawBoxDelay100", -25);
+    g_cfg.drawBoxDepth = ini_int(L"Area", L"DrawBoxDepth", 1);
+    g_cfg.drawBoxCells = ini_int(L"Area", L"DrawBoxBlocks", 1);
     g_cfg.hoverDist10  = ini_int(L"Area", L"FreePlacementDistance", 40);
     g_cfg.panelScale   = ini_int(L"Interface", L"PanelScale", 100);
     if (g_cfg.panelScale < 50) g_cfg.panelScale = 50;
@@ -275,7 +291,8 @@ static void load_config() {
         ini_int(L"Area", L"Preview", -1) == -1 || ini_int(L"Creative", L"CreativeBuilding", -1) == -1 ||
         ini_int(L"Keys", L"ToggleMod", -1) == -1 || ini_int(L"Limits", L"FillLimit", -1) == -1 ||
         ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1 || noLanguage ||
-        ini_int(L"Keys", L"RadialMenu", -1) == -1 || ini_int(L"Keys", L"HoldReplace", -1) == -1)
+        ini_int(L"Keys", L"RadialMenu", -1) == -1 || ini_int(L"Keys", L"HoldReplace", -1) == -1 ||
+        ini_int(L"Area", L"DrawBoxBlocks", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -821,8 +838,29 @@ static volatile DWORD g_buildTick = 0;   // last frame the hammer's place cursor
 // The last place cursor each cursor system computed: the raw ray hit (not yet on the
 // 0.5 m grid), camera and view direction. Far from the character (free camera) the
 // client stops updating its cursor component, but this still runs every frame.
-struct CxSeen { uint8_t* sys; DWORD tick; int64_t cam[3]; int64_t pos[3]; float fwd[3]; float rot[4]; uint8_t valid; };
+struct CxSeen { uint8_t* sys; DWORD tick; int64_t cam[3]; int64_t pos[3]; float fwd[3]; float rot[4]; float camRot[4]; uint8_t valid; };
 static CxSeen g_cxSeen[4];
+// Camera of each game frame (for the drawn 3D box): the frame shown on screen is a frame
+// or two behind the game thread, so the box uses an older entry (DrawBoxDelay).
+struct CamSnap { volatile LONG seq; int64_t cam[3]; float rot[4]; };
+static CamSnap g_camRing[16];
+static volatile LONG g_camN = 0;
+static volatile float g_camDist = 0.f;
+static uint8_t* g_camSys = nullptr; static DWORD g_camSysTick = 0;
+static void cam_ring_push(uint8_t* sys, const int64_t* cam, const float* rot, DWORD now) {
+    if (g_camSys != sys) { if (g_camSys && now - g_camSysTick < 1000) return; g_camSys = sys; }   // one cursor system only
+    g_camSysTick = now;
+    LONG n = g_camN;
+    if (n > 0) {   // the same camera again (the cursor runs more than once a frame): not a new frame
+        const CamSnap& last = g_camRing[(n - 1) & 15];
+        if (!memcmp(last.cam, cam, 24) && !memcmp(last.rot, rot, 16)) return;
+    }
+    CamSnap& c = g_camRing[n & 15];
+    InterlockedIncrement(&c.seq);
+    memcpy(c.cam, cam, 24); memcpy(c.rot, rot, 16);
+    InterlockedIncrement(&c.seq);
+    g_camN = n + 1;
+}
 static volatile LONG g_cxLast = -1;
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
     uint8_t* r = g_cxOrig(out, sys, q, ray);
@@ -836,6 +874,9 @@ static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* 
         e.sys = sys; e.tick = g_buildTick; e.valid = out[0x28];
         memcpy(e.cam, sys + 0x640, 24); memcpy(e.pos, out, 24); memcpy(e.rot, out + 0x18, 16);
         const float* cq = (const float*)(sys + 0x658);
+        memcpy(e.camRot, cq, 16);
+        cam_ring_push(sys, (const int64_t*)(sys + 0x640), cq, g_buildTick);
+        { float dd = *(const float*)(sys + 0x678); g_camDist = dd >= 0.f && dd < 50.f ? dd : 0.f; }   // camera to its look-at point (the character)
         float x = cq[0], y = cq[1], z = cq[2], w = cq[3];
         e.fwd[0] = 2.f * (x * z + w * y); e.fwd[1] = 2.f * (y * z - w * x); e.fwd[2] = 1.f - 2.f * (x * x + y * y);
         g_cxLast = k;
@@ -3282,7 +3323,11 @@ static float g_boxMin[3], g_boxMax[3];
 static volatile DWORD g_boxTick = 0;            // last time the box was set (0 = none)
 static volatile LONG g_boxFrames = 0;
 static bool preview_box_on() { return g_zoneVisOrig && (g_cfg.preview & 2); }
-static bool preview_edges_on() { return (g_cfg.preview & 1) || (g_cfg.preview == 2 && !g_zoneVisOrig); }
+// 1 while the mod's own Vulkan drawing works (set by vk_draw in vkdraw.h); the drawn box then
+// replaces the edge highlights, otherwise they stay as the fallback.
+static volatile LONG g_vkDrawOk = 0;
+static bool preview_edges_on() { if (g_cfg.drawBox && g_vkDrawOk) return false;
+    return (g_cfg.preview & 1) || (g_cfg.preview == 2 && !g_zoneVisOrig); }
 
 static uint8_t* zone_vis_hook(uint8_t* world) {
     uint8_t* st = g_zoneVisOrig(world);
@@ -3322,9 +3367,15 @@ static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     return true;
 }
 
+#include "vkdraw.h"
+
 static void update_preview_box() {
     int64_t lo[3], hi[3];
-    if (!preview_box_on() || !area_box_live(lo, hi)) { g_boxTick = 0; return; }
+    bool live = area_box_live(lo, hi);
+    if (live) for (int a = 0; a < 3; a++) g_cellStep[a] = g_scStep[a];
+    set_draw_box(live && draw_box_on(), lo, hi);
+    vk_diag();
+    if (!preview_box_on() || !live) { g_boxTick = 0; return; }
     InterlockedIncrement(&g_boxSeq);
     for (int a = 0; a < 3; a++) { g_boxMin[a] = (float)((double)lo[a] * kInv); g_boxMax[a] = (float)((double)hi[a] * kInv); }
     InterlockedIncrement(&g_boxSeq);
@@ -3366,11 +3417,119 @@ static int preview_voxels(uint32_t out[][3], int cap) {
     return n;
 }
 
+// ---- Which cells of the area already hold blocks (drawn blocks for remove / replace overlap).
+// The hover function's own "is this blueprint blocked" query (client world, same thread):
+// fn(out list of blocked voxels, world[0], world[8], query) -> 1 when nothing is in the way.
+// The query is a blueprint of one region of the area with every voxel set; the list gets the
+// coordinates of every taken voxel in it (cap = region voxels, no grow function).
+typedef uint8_t (*VoxQueryFn)(void* list, void* w0, void* w1, void* query);
+static VoxQueryFn g_voxQuery = nullptr;
+struct VoxList { void* data; uint64_t count, cap; void* grow; uint64_t zero; };
+struct VoxQuery {                       // see docs/reverse-engineering-notes.md
+    const uint8_t* data; uint64_t count; uint8_t bits; uint8_t pad[3];
+    uint32_t size[3]; int32_t pos[3]; uint32_t rsize[3];
+    uint32_t axis[3]; uint8_t pos3[4];  // orientation: axis order and "positive" flags
+    void* extra;
+};
+static_assert(sizeof(VoxQuery) == 0x50, "query layout");
+static const int kOccReg = 16;                                      // region edge, voxels
+static uint8_t g_voxOnes[kOccReg * kOccReg * kOccReg];
+static int32_t g_voxHits[kOccReg * kOccReg * kOccReg][3];
+static int32_t g_occV0[3]; static int g_occN[3], g_occStepV[3], g_occCpr[3], g_occRegN[3], g_occNext = 0;
+static bool g_occValid = false;
+static LONG g_occCalls = 0, g_occHitsTot = 0, g_occPasses = 0;
+static int64_t g_occTicks = 0;
+static bool occ_wanted() {
+    LONG op = g_scOp == OP_REMOVE ? 2 : g_replace ? 1 : 0;
+    return g_voxQuery && g_cfg.drawBoxCells && draw_box_on() && (op == 2 || (op == 1 && g_replaceStyle != STYLE_FULL));
+}
+static void occ_update(uint8_t* ctx) {
+    if (!occ_wanted() || !g_dbTick) { g_occReady = 0; g_occValid = false; return; }
+    void* world = *(void**)(ctx + 0x130);
+    if (!world || readable_len(world, 16) < 16) return;
+    void* w0 = ((void**)world)[0]; void* w1 = ((void**)world)[1];
+    if (!w0 || !w1) return;
+    // the area grid, the same way the drawing splits it
+    int32_t v0[3]; int n[3], st[3];
+    int64_t cells = 1;
+    for (int a = 0; a < 3; a++) {
+        float size = (float)((double)(g_dbHi[a] - g_dbLo[a]) / 4294967296.0);
+        float step = g_cellStep[a];
+        if (!(step > 0.f)) { g_occReady = 0; return; }
+        n[a] = (int)(size / step + 0.5f); if (n[a] < 1) n[a] = 1;
+        st[a] = (int)(step * 2.f + 0.5f);
+        v0[a] = (int32_t)((g_dbLo[a] + (1ll << 30)) >> 31);
+        cells *= n[a];
+        if (st[a] < 1 || st[a] > kOccReg || v0[a] < 0) { g_occReady = 0; return; }
+    }
+    if (cells > 40000) { g_occReady = 0; return; }
+    if (!g_occValid || memcmp(v0, g_occV0, 12) || memcmp(n, g_occN, 12) || memcmp(st, g_occStepV, 12)) {
+        g_occReady = 0;
+        memset((void*)g_occBits, 0, sizeof(g_occBits));
+        memcpy(g_occV0, v0, 12); memcpy(g_occN, n, 12); memcpy(g_occStepV, st, 12);
+        for (int a = 0; a < 3; a++) { g_occCpr[a] = kOccReg / st[a]; g_occRegN[a] = (n[a] + g_occCpr[a] - 1) / g_occCpr[a]; }
+        g_occNext = 0; g_occValid = true;
+        if (!g_voxOnes[0]) memset(g_voxOnes, 1, sizeof(g_voxOnes));
+    }
+    int regs = g_occRegN[0] * g_occRegN[1] * g_occRegN[2];
+    LARGE_INTEGER f, t0, t1;
+    QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t0);
+    const int64_t budget = f.QuadPart / 667;                       // 1.5 ms a frame
+    for (int done = 0; done < regs; done++) {
+        int r = g_occNext;
+        int rc[3] = { r % g_occRegN[0], (r / g_occRegN[0]) % g_occRegN[1], r / (g_occRegN[0] * g_occRegN[1]) };
+        int c0[3], cn[3];
+        VoxQuery q = {};
+        for (int a = 0; a < 3; a++) {
+            c0[a] = rc[a] * g_occCpr[a];
+            cn[a] = n[a] - c0[a] < g_occCpr[a] ? n[a] - c0[a] : g_occCpr[a];
+            q.size[a] = q.rsize[a] = (uint32_t)(cn[a] * st[a]);
+            q.pos[a] = v0[a] + c0[a] * st[a];
+            q.axis[a] = (uint32_t)a; q.pos3[a] = 1;
+        }
+        uint32_t vox = q.size[0] * q.size[1] * q.size[2];
+        q.data = g_voxOnes; q.count = vox; q.bits = 0;
+        VoxList list = { g_voxHits, 0, vox, nullptr, 0 };
+        g_voxQuery(&list, w0, w1, &q);
+        uint64_t hits = list.count < vox ? list.count : vox;
+        g_occCalls++; g_occHitsTot += (LONG)hits;
+        // this region's cells: taken when any of their voxels is
+        static uint8_t taken[kOccReg * kOccReg * kOccReg];
+        memset(taken, 0, (size_t)cn[0] * cn[1] * cn[2]);
+        for (uint64_t h = 0; h < hits; h++) {
+            int lc[3]; bool in = true;
+            for (int a = 0; a < 3; a++) {
+                int d = g_voxHits[h][a] - q.pos[a];
+                if (d < 0 || d >= (int)q.size[a]) { in = false; break; }
+                lc[a] = d / st[a];
+            }
+            if (in) taken[lc[0] + cn[0] * (lc[1] + cn[1] * lc[2])] = 1;
+        }
+        for (int z = 0; z < cn[2]; z++) for (int y = 0; y < cn[1]; y++) for (int x = 0; x < cn[0]; x++) {
+            int id = (c0[0] + x) + n[0] * ((c0[1] + y) + n[1] * (c0[2] + z));
+            uint32_t bit = 1u << (id & 31);
+            if (taken[x + cn[0] * (y + cn[1] * z)]) g_occBits[id >> 5] |= bit; else g_occBits[id >> 5] &= ~bit;
+        }
+        if (++g_occNext >= regs) { g_occNext = 0; g_occReady = 1; g_occPasses++; }
+        QueryPerformanceCounter(&t1);
+        if (t1.QuadPart - t0.QuadPart > budget) break;
+    }
+    QueryPerformanceCounter(&t1);
+    g_occTicks += t1.QuadPart - t0.QuadPart;
+    static DWORD next = 0;
+    if (g_cfg.log && GetTickCount() > next) {
+        next = GetTickCount() + 3000;
+        LOG(.str("block bits: ").i(n[0]).c('x').i(n[1]).c('x').i(n[2]).str(" cells, ").i(regs).str(" regions, passes ").i(g_occPasses)
+            .str(", calls ").i(g_occCalls).str(", taken voxels ").i(g_occHitsTot).str(", ms total ").i((int)(g_occTicks * 1000 / f.QuadPart)));
+    }
+}
+
 volatile DWORD g_hoverTick = 0;
 static void hover_fx_hook(uint8_t* ctx, void* b, void* c) {
     g_hoverFxOrig(ctx, b, c);
     g_hoverTick = GetTickCount();
     update_preview_box();
+    if (ctx) occ_update(ctx);
     if (!ctx || !g_vfxStart || !g_vfxStop || !g_gameTime) return;
     void* world = *(void**)ctx;
     void* sys = *(void**)(ctx + 0x168);
@@ -5076,6 +5235,15 @@ static DWORD WINAPI init_thread(void*) {
             g_vfxStart = (VfxStartFn)rel(hfx + 0x607);
             g_vfxGlobal = hfx + 0x5e7 + 7 + *(int32_t*)(hfx + 0x5e7 + 3);
             g_hoverFxOrig = (HoverFxFn)hook(hfx, 5, (void*)&hover_fx_hook);
+            // its blocked-voxels query (+0x2ff), after "mov rcx, [rsi+0x130]" (+0x2d0)
+            uint8_t* qc = hfx + 0x2ff;
+            if (!memcmp(hfx + 0x2d0, "\x48\x8B\x8E\x30\x01\x00\x00", 7) && qc[0] == 0xE8) {
+                uint8_t* fn = rel(qc);
+                if (!memcmp(fn, "\x48\x8B\xC4\x48\x89\x58\x10\x48\x89\x70\x18\x55\x57\x41\x54\x41\x56\x41\x57", 19) &&
+                    !memcmp(fn + 0x21, "\xF2\x41\x0F\x10\x41\x2C", 6))
+                    g_voxQuery = (VoxQueryFn)fn;
+            }
+            LOG(.str("block query: ").str(g_voxQuery ? "available" : "not available"));
         }
     }
     if (g_hoverFxOrig) {
@@ -5156,6 +5324,7 @@ extern "C" BOOL WINAPI DllMainCRTStartup(HINSTANCE self, DWORD reason, LPVOID) {
     g_selfSize = image_size(self); g_gameSize = image_size(g_base);
     AddVectoredExceptionHandler(0, crash_handler);
     CreateThread(nullptr, 0, init_thread, nullptr, 0, nullptr);
+    if (!g_dedicated && g_cfg.drawBox) install_vk_hooks();
     if (g_dedicated) return TRUE;        // no keys, window or sounds on a server: the players' games send their settings
     CreateThread(nullptr, 0, input_thread, nullptr, 0, nullptr);
     if (g_cfg.overlay) CreateThread(nullptr, 0, overlay_thread, nullptr, 0, nullptr);

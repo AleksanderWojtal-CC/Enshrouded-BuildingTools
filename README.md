@@ -85,7 +85,7 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 ## Build
 
 ```sh
-sudo apt install clang lld mingw-w64-x86-64-dev zip   # Ubuntu/Debian
+sudo apt install clang lld mingw-w64-x86-64-dev libvulkan-dev zip   # Ubuntu/Debian
 ./build.sh            # -> build/dinput8.dll
 ./build.sh test       # + unit tests
 ./build.sh package    # + dist/EnshroudedBuildingTools-<version>.zip

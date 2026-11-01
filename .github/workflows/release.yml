@@ -57,7 +57,7 @@ jobs:
         if: steps.v.outputs.skip != '1'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang lld mingw-w64-x86-64-dev zip
+          sudo apt-get install -y --no-install-recommends clang lld mingw-w64-x86-64-dev libvulkan-dev zip
       - name: Build, test and package
         if: steps.v.outputs.skip != '1'
         run: ./build.sh package

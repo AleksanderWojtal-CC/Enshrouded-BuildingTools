@@ -10,20 +10,26 @@ Ubuntu.
 |---|---|---|
 | Compiler | `clang` (16+), `lld` | MSYS2, *CLANG64* shell |
 | Windows headers + import libs | `mingw-w64-x86-64-dev` | included in the toolchain |
+| Vulkan headers | `libvulkan-dev` | `mingw-w64-clang-x86_64-vulkan-headers` |
 | Packaging | `zip` | `zip` |
 
 ```sh
 # Ubuntu / Debian
-sudo apt install clang lld mingw-w64-x86-64-dev zip
+sudo apt install clang lld mingw-w64-x86-64-dev libvulkan-dev zip
 
 # Windows: install MSYS2 (https://www.msys2.org), open "MSYS2 CLANG64", then
-pacman -S mingw-w64-clang-x86_64-toolchain zip
+pacman -S mingw-w64-clang-x86_64-toolchain mingw-w64-clang-x86_64-vulkan-headers zip
 ```
 
 `build.sh` looks for the MinGW-w64 headers in `/usr/x86_64-w64-mingw32`,
 `/usr/local/x86_64-w64-mingw32` and `~/winsdk`. Set `WINSDK=/path` to use another
 directory containing `include/` and `lib/`. In the MSYS2 CLANG64 shell, nothing needs to be
 set.
+
+The shaders in `src/shaders/` are compiled into the `src/*_vert.h` / `src/*_frag*.h` headers,
+which are checked in. After changing a shader, regenerate them with `glslangValidator`, e.g.
+`glslangValidator -V --vn kCellsVert -o src/cells_vert.h src/shaders/cells.vert` (fragment
+shaders twice, the second time with `-DDEPTH` and a `Depth` name).
 
 ## Commands
 
