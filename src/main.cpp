@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.20.3"
+#define MOD_VERSION "0.21.0"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -606,6 +606,9 @@ static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55
 static const char* SIG_PICK_CALL = "E8 ?? ?? ?? ?? 80 7D 00 00 75 59 48 8B CE E8 ?? ?? ?? ?? 48 8B 4D C0 44 8B F0";
 // The build preview's missing-materials check, called from the cursor systems
 static const char* SIG_MISSING_CALL = "E8 ?? ?? ?? ?? 8B 13 8B CA 0F BA F1 0C 0F BA EA 0C 84 C0 0F 44 D1 89 13";
+// The client's input packet builder: copies ClientPlayerInputData into the network
+// layout (camera first). Client only; the dedicated server has no such code.
+static const char* SIG_INPUT_ENCODE = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 41 56 48 83 EC 20 0F 10 42 20 41 8B F1 48 8B FA 48 8B D9 0F 11 01";
 // Item id of a building material (used to price a shape).
 static const char* SIG_MATERIAL_ITEM = "48 83 EC 28 44 0F B6 DA 41 8D 43 FF 3C 7E 77 74 4C 8B 49 38 4D 85 C9 74 3B";
 
@@ -693,6 +696,8 @@ static volatile LONG g_replace = 0;
 static volatile LONG g_corners = 0;      // corners captured so far (0..2)
 static volatile LONG g_cancelReq = 0;
 static volatile LONG g_active = 0;       // hooks installed
+static bool g_dedicated = false;         // loaded by the dedicated server (enshrouded_server.exe)
+static volatile DWORD g_serverWorldTick = 0;   // last time this process's own server world read a building cursor
 static volatile DWORD g_flashUntil = 0;  // overlay transient message
 static char g_flash[512];
 
@@ -717,7 +722,7 @@ static const uint32_t kSndOffset[SND_COUNT] = {
     0x12310,    // menu.tabChange
 };
 static void beep(UINT type) {
-    if (!g_cfg.sound) return;
+    if (!g_cfg.sound || g_dedicated) return;
     int k = type == MB_ICONHAND ? SND_FAIL : type == MB_ICONASTERISK ? SND_DONE : type == MB_ICONQUESTION ? SND_TOGGLE : SND_CORNER;
     if (g_cfg.sound == 1 && g_playUiSound && GetTickCount() - g_hudTick < 2000) { g_sndTick[k] = GetTickCount(); InterlockedExchange(&g_sndQueue[k], 1); return; }
     MessageBeep(type);
@@ -2245,6 +2250,7 @@ static volatile DWORD g_frameCCTick[4] = {};        // last frame each one was r
 static volatile LONG g_frameCCNext = 0;
 static uint8_t* live_cc() { uint8_t* c = g_clientCC; return c ? c : g_frameCC[(g_frameCCNext - 1) & 3]; }
 
+static uint8_t* volatile g_netInput = nullptr;     // dedicated server: PlayerInput of the player whose click runs
 static int aim_candidates(uint8_t* out[5]) {
     int n = 0;
     auto add = [&](uint8_t* c) {
@@ -2252,6 +2258,9 @@ static int aim_candidates(uint8_t* out[5]) {
         for (int k = 0; k < n; k++) if (out[k] == c) return;
         out[n++] = c;
     };
+    // The dedicated server has no client world: the player's own input holds the place
+    // cursor (+0x300) and, sent by the player's Building Tools every frame, the aim (+0x338).
+    if (g_dedicated) { add(g_netInput); return n; }
     add(g_clientCC);
     for (int k = 0; k < 4; k++) add(g_frameCC[k]);
     return n;
@@ -2397,16 +2406,135 @@ static bool aim_lookup(const CursorXf* place, void* state, CursorXf* out, const 
 // rbp+0x50 is the undo storage, which only the server world has.
 typedef uint8_t* (*CursorGetFn)(uint8_t* out, uint8_t* player, uint8_t* cc);
 static CursorGetFn g_cursorGetOrig = nullptr;
-static uint8_t* cursor_get_hook(uint8_t* out, uint8_t* player, uint8_t* cc) {
+static void net_watch(uint8_t* input);
+// The building item (PlaceShape's shape state) is in rbx at the cursor read (checked at
+// install): cursor_get_thunk passes it as a 4th argument. The client uses it to measure
+// the selected shape for its own copy of the area corners when the server is remote.
+static bool g_cursorItemOk = false;
+static uint8_t* volatile g_liveItem = nullptr;
+static volatile DWORD g_liveItemTick = 0;
+extern "C" uint8_t* bt_cursor_get(uint8_t* out, uint8_t* player, uint8_t* cc, uint8_t* item) {
     uint8_t* r = g_cursorGetOrig(out, player, cc);
     uint8_t* frame = out - 0xf8;
-    if (!cc || !readable(frame + 0x50, 8) || *(void**)(frame + 0x50)) return r;     // server world
+    if (!cc || !readable(frame + 0x50, 8)) return r;
+    if (*(void**)(frame + 0x50)) {                       // server world
+        g_serverWorldTick = GetTickCount();
+        if (g_dedicated) net_watch(cc);
+        return r;
+    }
+    g_liveItem = g_cursorItemOk ? item : nullptr;
+    g_liveItemTick = GetTickCount();
     for (int k = 0; k < 4; k++) if (g_frameCC[k] == cc) { g_frameCCTick[k] = GetTickCount(); return r; }
     LONG k = InterlockedIncrement(&g_frameCCNext) - 1;      // a new world (load) replaces the oldest
     g_frameCC[k & 3] = cc;
     g_frameCCTick[k & 3] = GetTickCount();
     LOG(.str("client cursor ").i(k + 1).str(" found"));
     return r;
+}
+extern "C" uint8_t cursor_get_thunk[];
+asm(".text\n"
+    ".globl cursor_get_thunk\n"
+    "cursor_get_thunk:\n"
+    "    mov %rbx, %r9\n"
+    "    jmp bt_cursor_get\n");
+
+// ---- dedicated server: every player's own settings
+// The players' clients send their mod settings with their input every frame (see
+// core::net_pack and input_encode_hook). The server keeps each player's area corners
+// apart and, for each click, loads that player's settings and corners into the mod's
+// state (NetScope); the rest of the building code is the same as in single player.
+struct NetPlayer { uint8_t* input; DWORD seen; uint32_t state; bool valid; LONG sc; I3 scPos[3]; LONG scOp; int lastSeq; };
+static const int kNetPlayers = 32;
+static NetPlayer g_netPlayers[kNetPlayers];
+static NetPlayer* volatile g_netCur = nullptr;      // the player whose click runs (under g_stateLock)
+static uint32_t g_netCurState = 0;
+
+static bool net_state_of(uint8_t* input, uint32_t* s) {
+    return input && readable(input + 0x28, 0x18) && core::net_unpack((const int64_t*)(input + 0x28), s);
+}
+// under g_stateLock
+static NetPlayer* net_player(uint8_t* input) {
+    NetPlayer* slot = nullptr;
+    for (auto& p : g_netPlayers) {
+        if (p.input == input) return &p;
+        if (!slot || (slot->input && (!p.input || p.seen < slot->seen))) slot = &p;   // free, else least recently seen
+    }
+    memset(slot, 0, sizeof(*slot));
+    slot->input = input; slot->lastSeq = -1;
+    return slot;
+}
+static void net_log_state(const char* what, uint8_t* input, uint32_t s) {
+    static const char* styles[] = { "?", "overlap", "full", "connected" };
+    static const char* fills[] = { "solid", "hollow", "walls", "?" };
+    LOG(.str(what).str(" player ").x((uint64_t)(uintptr_t)input).str(": ").str(s & core::NET_ON ? "on" : "off (vanilla)")
+        .str(", ").str(s & core::NET_AREA ? "area" : "prefab").str(", replace ").i((s & core::NET_REPLACE) != 0)
+        .str(" (").str(styles[core::net_field(s, core::NET_STYLE_SHIFT, 2)]).str("), fill ").str(fills[core::net_field(s, core::NET_FILL_SHIFT, 2)])
+        .str(", corners ").i(s & core::NET_CORNERS3 ? 3 : 2));
+}
+// every frame, for every player holding the hammer: log when a player's settings change
+static void net_watch(uint8_t* input) {
+    uint32_t s = 0;
+    const bool ok = net_state_of(input, &s);
+    EnterCriticalSection(&g_stateLock);
+    NetPlayer* p = net_player(input);
+    p->seen = GetTickCount();
+    const uint32_t settings = 0xffff;                 // count and click number change with every click
+    if (ok != p->valid || (ok && ((s ^ p->state) & settings))) {
+        if (ok) net_log_state("settings from", input, s);
+        else LOG(.str("player ").x((uint64_t)(uintptr_t)input).str(": no Building Tools settings from this player's game (vanilla building)"));
+    }
+    p->valid = ok; if (ok) p->state = s;
+    LeaveCriticalSection(&g_stateLock);
+}
+// One building hook call on the dedicated server: the clicking player's settings and
+// corners are put into the mod's state, and the corners are saved back afterwards.
+// The building context holds the player's PlayerInput at +0x58 (blueprint and
+// dismantle systems alike). A player without the mod (or with it off) builds vanilla.
+struct NetScope {
+    NetPlayer* p = nullptr;
+    explicit NetScope(void* ctx) {
+        EnterCriticalSection(&g_stateLock);
+        uint8_t* input = ctx && readable((uint8_t*)ctx + 0x58, 8) ? *(uint8_t**)((uint8_t*)ctx + 0x58) : nullptr;
+        uint32_t s = 0;
+        g_netInput = input;
+        g_mode = MODE_PREFAB; g_replace = 0; g_cancelReq = 0;
+        if (!net_state_of(input, &s) || !(s & core::NET_ON)) return;
+        p = net_player(input);
+        p->seen = GetTickCount();
+        g_netCur = p; g_netCurState = s;
+        g_mode = s & core::NET_AREA ? MODE_AREA : MODE_PREFAB;
+        g_replace = s & core::NET_REPLACE ? 1 : 0;
+        LONG st = (LONG)core::net_field(s, core::NET_STYLE_SHIFT, 2);
+        g_replaceStyle = st >= STYLE_OVERLAP && st <= STYLE_CONNECTED ? st : STYLE_FULL;
+        LONG f = (LONG)core::net_field(s, core::NET_FILL_SHIFT, 2);
+        g_fill = f < core::FILL_COUNT ? f : core::FILL_SOLID;
+        g_cfg.corners = s & core::NET_CORNERS3 ? 3 : 2;
+        g_sc = p->sc; g_corners = p->sc; g_scOp = p->scOp;
+        memcpy(g_scPos, p->scPos, sizeof(g_scPos));
+    }
+    ~NetScope() {
+        if (p) { p->sc = g_sc; p->scOp = g_scOp; memcpy(p->scPos, g_scPos, sizeof(g_scPos)); }
+        g_netCur = nullptr; g_netInput = nullptr;
+        LeaveCriticalSection(&g_stateLock);
+    }
+};
+// Area click on the dedicated server (under NetScope): stays in step with the corners
+// the player's game counted (core::net_corner_index). false = a repeat of a click
+// already handled, which does nothing.
+static bool net_area_click(LONG op) {
+    NetPlayer* p = g_netCur;
+    if (!g_dedicated || !p) return true;
+    if (g_scOp != op) { reset_corners(); g_scOp = op; }
+    const uint32_t s = g_netCurState;
+    const int seq = (int)core::net_field(s, core::NET_SEQ_SHIFT, 3), count = (int)core::net_field(s, core::NET_COUNT_SHIFT, 2);
+    const int k = core::net_corner_index(g_sc, p->lastSeq, seq, count, g_cfg.corners);
+    if (k < 0) { LOG(.str("  area click ").i(seq).str(" again (repeat): ignored")); return false; }
+    if (k != g_sc)
+        LOG(.str("  corners out of step: server had ").i(g_sc).str(", player's game has ").i(count)
+            .str(" after this click; starting over with this click as corner 1"));
+    p->lastSeq = seq;
+    g_sc = k; g_corners = k;
+    return true;
 }
 
 // ---- area removal (right click in Area mode)
@@ -2508,7 +2636,14 @@ static uint8_t connected_remove(CostList* list, void* ctx, void* state, Aabb* bx
     return any;
 }
 
+static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, void* xfp, void* filter, uint8_t check);
 static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* xfp, void* filter, uint8_t check) {
+    if (!g_dedicated || g_ownRemoveTid == GetCurrentThreadId() || !is_server_ctx(ctx))
+        return remove_hook_body(list, ctx, state, box, xfp, filter, check);
+    NetScope ns(ctx);
+    return remove_hook_body(list, ctx, state, box, xfp, filter, check);
+}
+static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, void* xfp, void* filter, uint8_t check) {
     piece_target_restore();
     if (g_ownRemoveTid == GetCurrentThreadId() || !is_server_ctx(ctx) || !box || !xfp)
         return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
@@ -2541,6 +2676,11 @@ static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* 
     if (InterlockedExchange(&g_cancelReq, 0)) reset_corners();
     if (g_scOp != OP_REMOVE) { reset_corners(); g_scOp = OP_REMOVE; }
     g_rpend.ctx = ctx; g_rpend.tid = GetCurrentThreadId(); g_rpend.tick = GetTickCount(); g_rpend.n = 0; g_rpend.only = 0;
+    if (!net_area_click(OP_REMOVE)) {
+        g_rpend.suppress = true;
+        LeaveCriticalSection(&g_stateLock);
+        return 0;
+    }
     LONG n = g_sc;
     if (n < 0 || n > g_cfg.corners - 1) n = 0;
     g_scPos[n] = I3{ xf->pos[0], xf->pos[1], xf->pos[2] };      // removal transforms are shape centres
@@ -2631,7 +2771,13 @@ static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     return any;
 }
 
+static uint8_t place_hook_body(CostList* list, void* ctx, void* state, void* pdata, CursorXf* xf);
 static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, CursorXf* xf) {
+    if (!g_dedicated) return place_hook_body(list, ctx, state, pdata, xf);
+    NetScope ns(ctx);
+    return place_hook_body(list, ctx, state, pdata, xf);
+}
+static uint8_t place_hook_body(CostList* list, void* ctx, void* state, void* pdata, CursorXf* xf) {
     const bool replace = g_replace != 0 && item_kind(state) != ITEM_PIECE;     // pieces place as in the game
     if (g_replace) log_item("click", state);
     const LONG mode = g_mode;
@@ -2712,6 +2858,7 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
     }
 
     // ---- area mode (build / replace)
+    if (!net_area_click(OP_BUILD)) { LeaveCriticalSection(&g_stateLock); return 0; }
     if (g_scOp != OP_BUILD) { reset_corners(); g_scOp = OP_BUILD; }
     LONG n = g_sc;
     if (n < 0 || n > g_cfg.corners - 1) n = 0;
@@ -2738,6 +2885,109 @@ static uint8_t place_hook(CostList* list, void* ctx, void* state, void* pdata, C
     r = structure_fill(list, ctx, state, pdata, target, corners, replace);
     LeaveCriticalSection(&g_stateLock);
     beep(MB_ICONASTERISK);
+    return r;
+}
+
+// ---- client: settings to the server, corners when the server is remote
+// The game sends the player's input to the server every frame; 3a5640 copies
+// ClientPlayerInputData into the network packet (camera first, at +0). The hook puts
+// the mod's settings into the low bits of the camera position there (core::net_pack),
+// so a dedicated server with Building Tools builds with this player's settings. The
+// aimed cursor (secondaryTransform) normally only goes out while the right button is
+// held (flag bit 1); the hook sends it whenever the place cursor goes out (bit 0), so
+// the server knows the aimed block of every click, as the client does.
+typedef uint64_t (*InputEncodeFn)(uint8_t* out, uint8_t* src, uint8_t* flags, uint64_t a4);
+static InputEncodeFn g_inputEncodeOrig = nullptr;
+static uint64_t g_prevDigital = 0;
+static volatile LONG g_netSeq = 0;            // area clicks so far (3 bits are sent)
+
+// No in-process server world (single player / own hosted game) for two seconds: the
+// game is connected to a server elsewhere, which builds; this game keeps its own copy
+// of the area corners for the HUD, the size readout and the preview.
+static bool remote_session() { return !g_dedicated && GetTickCount() - g_serverWorldTick > 2000; }
+
+static uint32_t net_client_state() {
+    uint32_t s = core::NET_TAG | ((uint32_t)core::NET_VERSION << core::NET_VERSION_SHIFT);
+    if (!g_modOff) s |= core::NET_ON;
+    if (g_mode == MODE_AREA) s |= core::NET_AREA;
+    if (g_replace) s |= core::NET_REPLACE;
+    s |= ((uint32_t)g_replaceStyle & 3) << core::NET_STYLE_SHIFT;
+    s |= ((uint32_t)g_fill & 3) << core::NET_FILL_SHIFT;
+    if (g_cfg.corners == 3) s |= core::NET_CORNERS3;
+    s |= ((uint32_t)g_sc & 3) << core::NET_COUNT_SHIFT;
+    if (g_scOp == OP_REMOVE) s |= core::NET_OP_REMOVE;
+    s |= ((uint32_t)g_netSeq & 7) << core::NET_SEQ_SHIFT;
+    return s;
+}
+
+// A new area click (left = build / replace, right = remove) while the server is remote:
+// the same corner bookkeeping the server does, from the same cursor transforms.
+static void remote_corner(LONG op, uint8_t* item, const CursorXf* place, const CursorXf* aim) {
+    const bool replace = op == OP_BUILD && g_replace && item_kind(item) != ITEM_PIECE;
+    const CursorXf& target = op == OP_REMOVE || replace ? *aim : *place;
+    if (zero_pos(target) || !g_bounds) return;
+    Aabb box; shape_bounds(item, &target, &box);
+    float step[3] = { box.mx[0] - box.mn[0], box.mx[1] - box.mn[1], box.mx[2] - box.mn[2] };
+    EnterCriticalSection(&g_stateLock);
+    if (g_scOp != op) { reset_corners(); g_scOp = op; }
+    LONG n = g_sc;
+    if (n < 0 || n > g_cfg.corners - 1) n = 0;
+    g_netSeq = (g_netSeq + 1) & 7;
+    g_scPos[n] = box_centre(box);
+    if (n == 0) {
+        for (int a = 0; a < 3; a++) g_scStep[a] = step[a];
+        g_scCursorOff = op == OP_REMOVE || replace ? 0x338 : 0x300;
+        g_scOff[0] = g_scPos[0].x - target.pos[0]; g_scOff[1] = g_scPos[0].y - target.pos[1]; g_scOff[2] = g_scPos[0].z - target.pos[2];
+    }
+    LOG(.str("remote area click ").i(g_netSeq).str(": corner ").i(n + 1).str(op == OP_REMOVE ? " (remove)" : replace ? " (replace)" : " (build)")
+        .str(" centre (").fix(g_scPos[n].x).c(',').fix(g_scPos[n].y).c(',').fix(g_scPos[n].z).c(')'));
+    if (n < g_cfg.corners - 1) {
+        g_sc = n + 1; g_corners = g_sc;
+        LeaveCriticalSection(&g_stateLock);
+        Buf b; b.fmt(T(op == OP_REMOVE ? S_REMOVE_CORNER : replace ? S_REPLACE_CORNER : S_BUILD_CORNER), num(n + 1).s, num(g_cfg.corners).s);
+        flash(b.z()); beep(MB_OK);
+        return;
+    }
+    // final corner: the server builds the area; show its size
+    g_sc = 0; g_corners = 0;
+    const int nc = g_cfg.corners;
+    I3 c[3] = { g_scPos[0], g_scPos[1], nc == 3 ? core::lock_third(g_scPos[0], g_scPos[1], g_scPos[2], (int64_t)(0.1 * core::kFix)) : g_scPos[1] };
+    core::Plan pl = {};
+    bool ok = core::plan_fill(c, nc, step, 50000000, &pl);
+    if (ok) { pl.total = core::fill_count(pl, g_fill); ok = pl.total <= g_cfg.maxShapes; }
+    LeaveCriticalSection(&g_stateLock);
+    LOG(.str("remote area: ").i(pl.count[0]).c('x').i(pl.count[1]).c('x').i(pl.count[2]).str(" total ").i(pl.total).str(ok ? " sent" : " too big"));
+    Buf b;
+    if (ok) b.fmt(T(S_AREA_SENT), num(pl.total).s); else b.fmt(T(S_TOO_BIG), num(pl.total).s, num(g_cfg.maxShapes).s);
+    flash(b.z()); beep(ok ? MB_ICONASTERISK : MB_ICONHAND);
+}
+
+static void remote_clicks(uint8_t* src, uint8_t flags) {
+    const uint64_t d = *(uint64_t*)(src + 0x3a8);      // PlayerDigitalInput: bit 0 MainhandAction, bit 4 SecondaryBuildingAction
+    const uint64_t rise = d & ~g_prevDigital;
+    g_prevDigital = d;
+    if (!remote_session()) return;
+    if (g_cancelReq) {                                 // F8, mode change: in single player the server world takes it
+        EnterCriticalSection(&g_stateLock);
+        if (InterlockedExchange(&g_cancelReq, 0)) reset_corners();
+        LeaveCriticalSection(&g_stateLock);
+    }
+    if (!(rise & 0x11) || g_modOff || g_mode != MODE_AREA || !(flags & 1)) return;
+    uint8_t* item = g_liveItem;
+    if (!item || GetTickCount() - g_liveItemTick > 500) return;      // no building item in hand
+    remote_corner(rise & 1 ? OP_BUILD : OP_REMOVE, item, (const CursorXf*)(src + 0x2f8), (const CursorXf*)(src + 0x330));
+}
+
+static uint64_t input_encode_hook(uint8_t* out, uint8_t* src, uint8_t* flags, uint64_t a4) {
+    if (flags && (*flags & 1) && !g_modOff && GetTickCount() - g_liveItemTick < 500) *flags |= 2;   // building item in hand
+    uint64_t r = g_inputEncodeOrig(out, src, flags, a4);
+    if (out && src) {
+        remote_clicks(src, flags ? *flags : 0);         // first: this packet carries the click's result
+        EnterCriticalSection(&g_stateLock);
+        const uint32_t st = net_client_state();
+        LeaveCriticalSection(&g_stateLock);
+        core::net_pack(st, (int64_t*)out);
+    }
     return r;
 }
 
@@ -4051,7 +4301,9 @@ static DWORD WINAPI init_thread(void*) {
     if (g_cursorLayoutOk && sc && sc - 0x6b > cc && !memcmp(sc - 0x6b, kUndoTest, 5)) {
         uint8_t* site = cc + 15;
         g_cursorGetOrig = (CursorGetFn)(site + 5 + *(int32_t*)(site + 1));
-        if (hook_calls((uint8_t*)g_cursorGetOrig, (void*)&cursor_get_hook, &site, 1) != 1) g_cursorGetOrig = nullptr;
+        // rbx = the building item (mov rbx, rax; test rax, rax; je after its lookup)
+        g_cursorItemOk = !memcmp(cc - 0x49, "\x48\x8B\xD8\x48\x85\xC0\x0F\x84", 8);
+        if (hook_calls((uint8_t*)g_cursorGetOrig, (void*)cursor_get_thunk, &site, 1) != 1) g_cursorGetOrig = nullptr;
         if (!g_cursorGetOrig) LOG(.str("cursor read hook not installed (aim only from clicks)"));
     }
     // the server/client branch must sit directly before the placement call
@@ -4244,6 +4496,15 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
+    if (g_dedicated) {
+        LOG(.str("dedicated server: every player builds with the settings of their own Building Tools (players without it build vanilla); ")
+            .str("aim from the players' input ").str(g_cursorGetOrig ? "yes" : "NO (cursor read hook missing)"));
+    } else {
+        uint8_t* enc = find_hookable("InputEncode", SIG_INPUT_ENCODE, 5);
+        if (enc) g_inputEncodeOrig = (InputEncodeFn)hook(enc, 5, (void*)&input_encode_hook);
+        LOG(.str("dedicated servers: ").str(g_inputEncodeOrig ? "settings sent with the input" : "not available (input code not found)")
+            .str(", building item at the cursor read ").str(g_cursorItemOk ? "yes" : "no"));
+    }
     install_menu();
     LOG(.str("partial area actions: ").str(g_stockFinalOrig ? "available" : "not available (picker counts not found)"));
     g_placeCommitOrig = (CommitFn)hook(pcommit, 5, (void*)&place_commit_hook);
@@ -4279,7 +4540,10 @@ extern "C" BOOL WINAPI DllMainCRTStartup(HINSTANCE self, DWORD reason, LPVOID) {
     DisableThreadLibraryCalls(self);
     g_base = (uint8_t*)GetModuleHandleW(nullptr);
     GetModuleFileNameW(nullptr, g_dir, MAX_PATH);
-    for (int i = lstrlenW(g_dir); i > 0; i--) if (g_dir[i - 1] == L'\\') { g_dir[i] = 0; break; }
+    for (int i = lstrlenW(g_dir); i > 0; i--) if (g_dir[i - 1] == L'\\') {
+        g_dedicated = lstrcmpiW(g_dir + i, L"enshrouded_server.exe") == 0;
+        g_dir[i] = 0; break;
+    }
     InitializeCriticalSection(&g_logLock);
     InitializeCriticalSection(&g_stateLock);
     load_config();
@@ -4293,6 +4557,7 @@ extern "C" BOOL WINAPI DllMainCRTStartup(HINSTANCE self, DWORD reason, LPVOID) {
     g_selfSize = image_size(self); g_gameSize = image_size(g_base);
     AddVectoredExceptionHandler(0, crash_handler);
     CreateThread(nullptr, 0, init_thread, nullptr, 0, nullptr);
+    if (g_dedicated) return TRUE;        // no keys, window or sounds on a server: the players' games send their settings
     CreateThread(nullptr, 0, input_thread, nullptr, 0, nullptr);
     if (g_cfg.overlay) CreateThread(nullptr, 0, overlay_thread, nullptr, 0, nullptr);
     CreateThread(nullptr, 0, wheel_thread, nullptr, 0, nullptr);

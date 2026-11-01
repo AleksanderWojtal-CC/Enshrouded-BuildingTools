@@ -36,6 +36,7 @@ msg.too_big = Grande demais: {0} formas (máx. {1})
 msg.placed = Formas colocadas: {0}
 msg.placed_partial = Formas colocadas: {0} de {1} (material insuficiente)
 msg.removed = Formas removidas: {0}
+msg.area_sent = Área enviada ao servidor: {0} formas
 msg.undo_covers = desfazer cobre {0}
 msg.not_enough = Material insuficiente para {0} formas (precisa de {1} itens)
 msg.undo_needs = Para desfazer, o material substituído precisa voltar ao inventário

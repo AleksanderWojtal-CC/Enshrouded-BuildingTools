@@ -38,6 +38,7 @@ msg.too_big = Too big: {0} shapes (max {1})
 msg.placed = Placed {0} shapes
 msg.placed_partial = Placed {0} of {1} shapes (not enough material)
 msg.removed = Removed {0} shapes
+msg.area_sent = Area sent to the server: {0} shapes
 msg.undo_covers = undo covers {0}
 msg.not_enough = Not enough material for {0} shapes (needs {1} items)
 msg.undo_needs = Undo needs the replaced material back in your inventory

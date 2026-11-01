@@ -36,6 +36,7 @@ msg.too_big = Trop grand : {0} formes (max {1})
 msg.placed = Formes placées : {0}
 msg.placed_partial = Formes placées : {0} sur {1} (pas assez de matériau)
 msg.removed = Formes retirées : {0}
+msg.area_sent = Zone envoyée au serveur : {0} formes
 msg.undo_covers = l'annulation couvre {0}
 msg.not_enough = Pas assez de matériau pour {0} formes (il faut {1} objets)
 msg.undo_needs = Pour annuler, le matériau remplacé doit être de retour dans l'inventaire

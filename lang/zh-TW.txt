@@ -36,6 +36,7 @@ msg.too_big = 太大：{0} 個形狀（最多 {1}）
 msg.placed = 已放置 {0} 個形狀
 msg.placed_partial = 已放置 {0}/{1} 個形狀（材料不足）
 msg.removed = 已移除 {0} 個形狀
+msg.area_sent = 已將區域傳送到伺服器：{0} 個形狀
 msg.undo_covers = 可復原 {0} 個
 msg.not_enough = 材料不足以建造 {0} 個形狀（需要 {1} 個物品）
 msg.undo_needs = 復原需要把被替換的材料放回背包
