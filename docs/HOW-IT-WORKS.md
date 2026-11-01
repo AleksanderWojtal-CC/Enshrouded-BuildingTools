@@ -83,6 +83,24 @@ centre. Where the cursor sits inside the shape depends on its rotation (it follo
 aimed face), so the offset is turned into the shape's frame with corner 1's rotation and
 back out with the live cursor's.
 
+**Drawn 3D box** (`DrawBox=1`, default; `src/vkdraw.h`). The game renders with Vulkan and
+gets `vkGetInstanceProcAddr` with GetProcAddress, so the mod patches that one import and
+hands out wrappers for the few Vulkan functions it needs. At each present it records its
+own small command buffer (own render pass, pipelines, fence and semaphore per swapchain
+image) that draws into the image being presented; the submit waits on the game's present
+semaphores and the present waits on the mod's. The camera is the client cursor system's
+(position and rotation each game frame), predicted a quarter frame ahead because the frame
+on screen is drawn from slightly newer data (`DrawBoxDelay100=-25`). The game's scene depth
+(the depth image of its last world pass with an HDR colour target) is sampled, so parts
+behind the world are drawn dimmer; points near the player's character (a capsule below the
+camera's look-at point) never count as in front. The blocks inside are one instanced draw
+(one instance per grid cell; only faces between a kept and a left-out cell are drawn). For
+delete and overlap replace the client world's own "is this blueprint blocked" query (the
+hover function's call at +0x2ff) is run over the area in 16-voxel regions, 1.5 ms per frame,
+and one bit per cell goes to the shader through a small host-visible buffer. If the GPU
+offers fewer than 144 bytes of push constants or anything fails, nothing is drawn and the
+edge highlights come back. Client only: the server never loads these hooks.
+
 **Base-area box** (`Preview=2`). The renderer of the build-zone borders reads the client
 world's BuildZoneVisualizationState (world+0xffc0) through a getter once per frame; the
 flame altar cursor fills its preview box there (min/max in metres, valid flag). The mod

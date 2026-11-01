@@ -44,6 +44,9 @@ or box. Left click builds (or replaces with Replace on), right click removes.
 Area remove (and connected delete) cuts building pieces such as foundations like blocks.
 Fill (F11): solid, hollow room (walls + floor + ceiling) or walls only.
 Floating text below the crosshair shows the live size and block count before you confirm.
+A see-through 3D box is drawn over the area while you set it up (dimmer where terrain or
+blocks hide it, red while you stand inside), with the blocks the action will touch shown
+inside it: blue to build, amber to replace, pink-red to remove (only blocks that exist).
 
 [b]Free placement[/b] (F10)
 The block ghost hovers in front of you instead of sticking to surfaces.

@@ -3,6 +3,21 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.24.0
+
+- **3D area preview.** While you set up an area, the mod draws its own see-through box
+  over it, in the game's building-ghost style: a soft pulsing fill, a 0.5 m grid and bright
+  edges. Parts hidden behind terrain or blocks stay visible, drawn dimmer with dashed edges,
+  so you can tell front from back. Your own character never hides it, and the box turns
+  red while you stand inside it.
+- Inside the box you see **the blocks the action will touch**, as one shaded solid: every
+  block for a solid fill, the shell for a hollow room, the walls for walls only. Blue
+  builds, amber replaces, pink-red removes. Delete and Replace (overlap or connected
+  style) show only the blocks that are already there.
+- It replaces the edge highlights. If the box can't be drawn on your PC, the edge
+  highlights come back by themselves. Turn it off with `[Area] DrawBox=0` in
+  `BuildingTools.ini`; `DrawBoxBlocks=0` hides the blocks and keeps the box.
+
 ## 0.23.0
 
 - Fix: **the area preview was one block off** when one corner was on the ground and the

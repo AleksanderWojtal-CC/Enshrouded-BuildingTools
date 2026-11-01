@@ -8,8 +8,8 @@
 #
 # Requirements: clang (C/C++ with x86_64-w64-mingw32 target), lld, and the
 # MinGW-w64 headers and import libraries (kernel32, user32, gdi32).
-#   Ubuntu/Debian:  sudo apt install clang lld mingw-w64-x86-64-dev zip
-#   Windows:        MSYS2 "CLANG64" shell: pacman -S mingw-w64-clang-x86_64-toolchain zip
+#   Ubuntu/Debian:  sudo apt install clang lld mingw-w64-x86-64-dev libvulkan-dev zip
+#   Windows:        MSYS2 "CLANG64" shell: pacman -S mingw-w64-clang-x86_64-toolchain mingw-w64-clang-x86_64-vulkan-headers zip
 # The MinGW-w64 location is found automatically; override with WINSDK=/path
 # (a directory with include/ and lib/).
 set -e
@@ -23,6 +23,16 @@ if [ -z "$WINSDK" ]; then
 fi
 SDKINC=""; SDKLIB=""
 if [ -n "$WINSDK" ]; then SDKINC="-isystem $WINSDK/include"; SDKLIB="-L $WINSDK/lib"; fi
+
+# Vulkan headers (only the headers: the game loads Vulkan itself). They are taken from
+# VKINC, the MinGW-w64 headers, or the host's /usr/include (Ubuntu: libvulkan-dev).
+if [ -z "$VKINC" ] && [ ! -f "$WINSDK/include/vulkan/vulkan.h" ] && [ -f /usr/include/vulkan/vulkan.h ]; then
+    mkdir -p build/vkinc
+    ln -sfn /usr/include/vulkan build/vkinc/vulkan
+    [ -d /usr/include/vk_video ] && ln -sfn /usr/include/vk_video build/vkinc/vk_video
+    VKINC=build/vkinc
+fi
+if [ -n "$VKINC" ]; then SDKINC="$SDKINC -isystem $VKINC"; fi
 
 TARGET="--target=x86_64-w64-mingw32"
 CXXFLAGS="-O2 -std=c++17 -ffreestanding -fno-exceptions -fno-rtti -fno-threadsafe-statics \

@@ -69,11 +69,17 @@ Area mode (2 corners)
     wall : two opposite corners in the same vertical plane
     box  : bottom corner and the opposite top corner
   After corner 1 the banner shows live what you would get if you clicked now
-  (line / plane / box, shapes along each side, height, total), and the edges
-  of the area light up with the hammer's block highlight. The highlight shows
-  on block surfaces (and inside blocks when removing), not in open air.
-  Turn it off with [Area] Preview=0. Preview=2 shows the area with the flame
-  altar's base-area box instead, Preview=3 shows both. Corner clicks
+  (line / plane / box, shapes along each side, height, total), and a
+  see-through 3D box is drawn over the area. Parts behind terrain or blocks
+  are drawn dimmer with dashed edges; the box turns red while you stand in
+  it. Inside it, the blocks the action will touch show as one shaded solid
+  (blue build, amber replace, pink-red remove; delete and overlap/connected
+  replace show only blocks that are already there). [Area] DrawBox=0 turns
+  the box off, DrawBoxBlocks=0 hides the blocks.
+  Without the box (DrawBox=0, or if it can't be drawn on your PC) the edges
+  of the area light up with the hammer's block highlight instead, on block
+  surfaces only. Turn that off with [Area] Preview=0. Preview=2 shows the
+  area with the flame altar's base-area box, Preview=3 shows both. Corner clicks
   build or remove nothing. Switching between left and right click starts over.
   Build charges per shape as usual; Replace works as in Prefab mode (F9 style);
   Remove refunds like normal removal.
