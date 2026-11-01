@@ -36,6 +36,7 @@ msg.too_big = Çok büyük: {0} şekil (en fazla {1})
 msg.placed = Yerleştirilen şekil: {0}
 msg.placed_partial = Yerleştirilen şekil: {0}/{1} (yeterli malzeme yok)
 msg.removed = Kaldırılan şekil: {0}
+msg.area_sent = Alan sunucuya gönderildi, şekil: {0}
 msg.undo_covers = geri alma kapsamı: {0}
 msg.not_enough = {0} şekil için yeterli malzeme yok ({1} eşya gerekli)
 msg.undo_needs = Geri almak için değiştirilen malzemenin envantere geri dönmesi gerekir

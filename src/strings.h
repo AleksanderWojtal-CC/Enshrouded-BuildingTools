@@ -35,6 +35,7 @@
     X(S_PLACED, "msg.placed", "Placed {0} shapes") \
     X(S_PLACED_PARTIAL, "msg.placed_partial", "Placed {0} of {1} shapes (not enough material)") \
     X(S_REMOVED, "msg.removed", "Removed {0} shapes") \
+    X(S_AREA_SENT, "msg.area_sent", "Area sent to the server: {0} shapes") \
     X(S_UNDO_COVERS, "msg.undo_covers", "undo covers {0}") \
     X(S_NOT_ENOUGH, "msg.not_enough", "Not enough material for {0} shapes (needs {1} items)") \
     X(S_UNDO_NEEDS, "msg.undo_needs", "Undo needs the replaced material back in your inventory") \

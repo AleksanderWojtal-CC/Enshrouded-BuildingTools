@@ -176,4 +176,60 @@ inline long fill_count(const Plan& p, int mode) {
     return cx * cy * cz;
 }
 
+// ------------------------------------------------------ client -> server state
+// On a dedicated server the mod's settings live on each player's client. The client
+// sends them in the lowest 16 bits of the camera position it sends to the server
+// every frame (ClientPlayerInputData.camera.position, int64 fixed point, so the
+// camera moves by less than 0.02 mm): x = state bits 0-15, y = bits 16-31,
+// z = a check of the state. Bits 0-7 are a fixed tag, so a camera position without
+// mod data (a client without the mod) is rejected (1 in 2^24 passes by chance).
+enum : uint32_t {
+    NET_TAG = 0xB7, NET_TAG_MASK = 0xff,
+    NET_ON = 1u << 8,            // the mod is on (not the vanilla switch)
+    NET_AREA = 1u << 9,          // Area mode
+    NET_REPLACE = 1u << 10,      // Replace on
+    NET_STYLE_SHIFT = 11,        // 2 bits: replace style (1 overlap, 2 full, 3 connected)
+    NET_FILL_SHIFT = 13,         // 2 bits: area fill (FILL_*)
+    NET_CORNERS3 = 1u << 15,     // 3 area corners (else 2)
+    NET_COUNT_SHIFT = 16,        // 2 bits: corners the client holds after its latest area click
+    NET_OP_REMOVE = 1u << 18,    // those corners are for a removal
+    NET_SEQ_SHIFT = 19,          // 3 bits: area clicks so far (wraps), tells a new click from a repeat
+    NET_VERSION_SHIFT = 22,      // 2 bits: format version
+    NET_VERSION = 1,
+};
+inline uint32_t net_field(uint32_t s, int shift, uint32_t bits) { return (s >> shift) & ((1u << bits) - 1); }
+inline uint16_t net_check(uint32_t s) {
+    uint32_t h = s * 0x9E3779B1u;
+    h ^= h >> 15; h *= 0x85EBCA77u; h ^= h >> 13;
+    return (uint16_t)((h ^ (h >> 16)) ^ 0x5A17u);
+}
+inline void net_pack(uint32_t s, int64_t pos[3]) {
+    const uint64_t v[3] = { s & 0xffffu, s >> 16, net_check(s) };
+    for (int a = 0; a < 3; a++) pos[a] = (int64_t)(((uint64_t)pos[a] & ~(uint64_t)0xffff) | v[a]);
+}
+inline bool net_unpack(const int64_t pos[3], uint32_t* s) {
+    const uint32_t v = (uint32_t)((uint64_t)pos[0] & 0xffff) | (uint32_t)(((uint64_t)pos[1] & 0xffff) << 16);
+    if ((v & NET_TAG_MASK) != NET_TAG || net_field(v, NET_VERSION_SHIFT, 2) != NET_VERSION) return false;
+    if (((uint64_t)pos[2] & 0xffff) != net_check(v)) return false;
+    *s = v;
+    return true;
+}
+
+// Server side of an area click. The client counts its own corner clicks and sends,
+// with every frame, how many corners it holds after its latest area click (`count`,
+// 0 right after the final click) and a click counter (`seq`). The server keeps its
+// own corners (positions from the click it processes) and uses these to stay in step:
+//   - the same seq as the last click it handled: the game repeated the click, ignore it;
+//   - otherwise the corner this click sets is the one before `count` (the last one when
+//     count is 0); when the server holds a different number of corners (it missed a
+//     click, or the client counted one the server refused), it starts over with this
+//     click as corner 1.
+// Returns the corner index (0-based) the click sets, or -1 to ignore the click.
+inline int net_corner_index(int serverCount, int lastSeq, int seq, int count, int corners) {
+    if (lastSeq == seq) return -1;
+    int expect = count == 0 ? corners - 1 : count - 1;
+    if (expect < 0 || expect >= corners) return 0;
+    return serverCount == expect ? expect : 0;
+}
+
 } // namespace core

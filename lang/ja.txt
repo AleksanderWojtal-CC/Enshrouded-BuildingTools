@@ -36,6 +36,7 @@ msg.too_big = 大きすぎます：{0} 個（最大 {1}）
 msg.placed = {0} 個を配置しました
 msg.placed_partial = {1} 個中 {0} 個を配置しました（素材不足）
 msg.removed = {0} 個を撤去しました
+msg.area_sent = エリアをサーバーに送信しました：{0} 個
 msg.undo_covers = 元に戻せるのは {0} 個
 msg.not_enough = {0} 個分の素材が足りません（アイテム {1} 個が必要）
 msg.undo_needs = 元に戻すには、置き換えた素材がインベントリに戻っている必要があります

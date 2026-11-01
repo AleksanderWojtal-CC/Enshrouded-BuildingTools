@@ -55,7 +55,7 @@ static void binary_checks(const char* exe) {
         {"SIG_PLACE", 0x48a660}, {"SIG_REMOVE", 0x48b180}, {"SIG_BOUNDS", 0x48e8a0},
         {"SIG_CURSOR_CALL", 0x2d33fb}, {"SIG_PLACE_CALL", 0x2d3743},
         {"SIG_SERVER_CHECK", 0x2d36f2}, {"SIG_PAY", 0x48eeb0},
-        {"SIG_PLACE_COMMIT", 0x487270}, {"SIG_REMOVE_COMMIT", 0x487af0}, {"SIG_MATERIAL_ITEM", 0xe75240}, {"SIG_TEARDOWN_EVENT", 0x490540}, {"SIG_REFUND_BUILD", 0x48ae10}, {"SIG_BLIT_CHECK", 0xa81327}, {"SIG_WRITE_TABLE", 0x48f1c0}, {"SIG_BEGIN_UNDO", 0x4919a0}, {"SIG_POP_UNDO", 0x492480}, {"SIG_HUD_UPDATE", 0xb25350}, {"SIG_UI_SOUND", 0xb26b8f}, {"SIG_CURSOR_QUERY", 0x287b10}, {"SIG_CURSOR_XF", 0x28bc80}, {"SIG_SYS_DEPS", 0x9bc1a0}, {"SIG_HOVER_FX", 0x28e2f0}, {"SIG_DISM_DEPS", 0x2d3c99},
+        {"SIG_PLACE_COMMIT", 0x487270}, {"SIG_REMOVE_COMMIT", 0x487af0}, {"SIG_MATERIAL_ITEM", 0xe75240}, {"SIG_REFUND_BUILD", 0x48ae10}, {"SIG_BLIT_CHECK", 0xa81327}, {"SIG_POP_UNDO", 0x492480}, {"SIG_HUD_UPDATE", 0xb25350}, {"SIG_UI_SOUND", 0xb26b8f}, {"SIG_CURSOR_XF", 0x28bc80}, {"SIG_SYS_DEPS", 0x9bc1a0}, {"SIG_HOVER_FX", 0x28e2f0}, {"SIG_DISM_DEPS", 0x2d3c99}, {"SIG_INPUT_ENCODE", 0x3a5640},
         {"SIG_PAY_PLACE", 0x2d39ab}, {"SIG_PAY_REMOVE", 0x2d46b0}, {"SIG_PAY_REMOVE_PREFAB", 0x2d4b5a}, {"SIG_PAY_UNDO", 0x2d6040}, {"SIG_MISSING_CALL", 0x2975f2}, {"SIG_STOCKS", 0x4076b0}, {"SIG_PICK_CALL", 0x2afa47},
     };
     CHECK(sigs.size() == expect.size(), "all signatures extracted");
@@ -260,6 +260,42 @@ int main(int argc, char** argv) {
     uint8_t b[8], m[8];
     CHECK(core::parse_sig("48 ?? 8b ?", b, m, 8) == 4 && m[1] == 0 && m[3] == 0 && b[2] == 0x8b, "wildcards parse");
     CHECK(core::parse_sig("4G", b, m, 8) == -1, "bad hex rejected");
+
+    // ----------------------------------------------------- client -> server state
+    {
+        const uint32_t s = core::NET_TAG | core::NET_ON | core::NET_AREA | (3u << core::NET_STYLE_SHIFT) |
+                           (1u << core::NET_FILL_SHIFT) | (2u << core::NET_COUNT_SHIFT) | (5u << core::NET_SEQ_SHIFT) |
+                           ((uint32_t)core::NET_VERSION << core::NET_VERSION_SHIFT);
+        int64_t cam[3] = { 1234 * M + 987654321, -77 * M - 5, 3 * M };
+        const int64_t orig[3] = { cam[0], cam[1], cam[2] };
+        core::net_pack(s, cam);
+        bool small = true;
+        for (int a = 0; a < 3; a++) if (core::iabs64(cam[a] - orig[a]) >= 0x10000) small = false;
+        CHECK(small, "state moves the camera by less than 2^16 units (0.015 mm)");
+        uint32_t back = 0;
+        CHECK(core::net_unpack(cam, &back) && back == s, "state round trip (negative coordinates too)");
+        CHECK(core::net_field(back, core::NET_COUNT_SHIFT, 2) == 2 && core::net_field(back, core::NET_SEQ_SHIFT, 3) == 5 &&
+              core::net_field(back, core::NET_STYLE_SHIFT, 2) == 3, "state fields");
+        int64_t plain[3] = { orig[0], orig[1], orig[2] };
+        CHECK(!core::net_unpack(plain, &back), "camera without mod data is rejected");
+        int64_t bad[3] = { cam[0], cam[1], cam[2] ^ 1 };
+        CHECK(!core::net_unpack(bad, &back), "damaged state is rejected");
+        // random camera positions almost never pass
+        uint64_t x = 88172645463325252ull; int pass = 0;
+        for (int i = 0; i < 1000000; i++) {
+            int64_t r[3];
+            for (int a = 0; a < 3; a++) { x ^= x << 13; x ^= x >> 7; x ^= x << 17; r[a] = (int64_t)x; }
+            if (core::net_unpack(r, &back)) pass++;
+        }
+        CHECK(pass <= 2, "random camera positions are rejected");
+        // server corner index (2 corners)
+        CHECK(core::net_corner_index(0, -1, 1, 1, 2) == 0, "first corner");
+        CHECK(core::net_corner_index(1, 1, 2, 0, 2) == 1, "final corner");
+        CHECK(core::net_corner_index(1, 2, 2, 0, 2) == -1, "repeated click ignored");
+        CHECK(core::net_corner_index(0, 1, 2, 0, 2) == 0, "server missed corner 1: starts over");
+        CHECK(core::net_corner_index(1, 2, 3, 1, 2) == 0, "client started over (cancel): server starts over");
+        CHECK(core::net_corner_index(2, 2, 3, 0, 3) == 2, "3 corners: final");
+    }
 
     printf(fails ? "\n%d FAILED\n" : "\nall tests passed\n", fails);
     return fails ? 1 : 0;

@@ -36,6 +36,7 @@ msg.too_big = Obszar za duży (kształty: {0}, maks. {1})
 msg.placed = Zbudowano: {0}
 msg.placed_partial = Zbudowano: {0} z {1} (za mało materiału)
 msg.removed = Usunięto: {0}
+msg.area_sent = Obszar wysłany do serwera, kształtów: {0}
 msg.undo_covers = Cofnięto: {0}
 msg.not_enough = Za mało materiału (kształty: {0}, potrzebne: {1})
 msg.undo_needs = Żeby cofnąć potrzebny jest oryginalny materiał w ekwipunku

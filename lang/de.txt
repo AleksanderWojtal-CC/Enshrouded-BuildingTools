@@ -36,6 +36,7 @@ msg.too_big = Zu groß: {0} Formen (max. {1})
 msg.placed = {0} Formen platziert
 msg.placed_partial = {0} von {1} Formen platziert (nicht genug Material)
 msg.removed = {0} Formen entfernt
+msg.area_sent = Bereich an den Server gesendet: {0} Formen
 msg.undo_covers = Rückgängig umfasst {0}
 msg.not_enough = Nicht genug Material für {0} Formen (benötigt {1} Gegenstände)
 msg.undo_needs = Zum Rückgängigmachen muss das ersetzte Material wieder im Inventar sein
