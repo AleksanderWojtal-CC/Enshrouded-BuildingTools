@@ -5,7 +5,7 @@ changelog on Nexus Mods, so keep it short and written for players.
 
 ## 0.22.0
 
-- **Tools wheel.** Hold Caps Lock while building: a blurred wheel in the middle of the
+- **Tools wheel.** Hold Caps Lock with the hammer or a building material in hand: a blurred wheel in the middle of the
   screen, drawn with the game's own wheel. Move the mouse towards an option and let go
   of the key (or click it to change several things in one go; right click closes).
   It shows only what applies right now: mode, Replace, Free placement and the menu
