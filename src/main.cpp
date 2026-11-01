@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.22.0-dev7"
+#define MOD_VERSION "0.22.0-dev8"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -603,6 +603,13 @@ static const char* SIG_UI_SOFT_BACKDROP =
 static const char* SIG_UI_DRAW_RECT    = "48 8B 41 08 48 8B 48 50 48 8B 49 18 48 85 C9 74 12 83 79 08 04 75 0C 48 8B 89 E0 6C 00 00";
 static const char* SIG_UI_DRAW_ROTATED = "4C 8B DC 49 89 5B 18 49 89 6B 20 56 48 81 EC F0 00 00 00 48 8B 41 08 41 8B D9";
 static const char* SIG_UI_BOX_BLEND    = "48 8B 41 08 48 8B 48 50 4C 8B 41 18 4D 85 C0 74 5E 41 83 78 08 04 75 57";
+// Scrolling list (the settings menu cc49d0): default parameters a324d0(params 0x104,
+// GameUiScrollingLayoutParameterData), begin a31640(state 0x4e0, 1, &offset float, 0,
+// params), end a33780(state); mouse scroll speed d3aff0(state), stored at state+0x464.
+static const char* SIG_UI_SCROLL_PARAMS = "48 89 5C 24 10 55 48 8D 6C 24 A9 48 81 EC E0 00 00 00 48 8B D9 E8 ?? ?? ?? ??";
+static const char* SIG_UI_SCROLL_BEGIN  = "48 8B C4 55 57 41 54 41 55 41 57 48 8D A8 C8 FD FF FF 48 81 EC 10 03 00 00";
+static const char* SIG_UI_SCROLL_END    = "48 8B C4 55 53 56 57 41 56 41 57 48 8D A8 D8 FC FF FF 48 81 EC F8 03 00 00";
+static const char* SIG_UI_SCROLL_SPEED  = "48 89 5C 24 10 57 48 81 EC 50 01 00 00 48 8B F9 41 B8 90 2C 03 00 48 8B 0D ?? ?? ?? ??";
 static const char* SIG_UI_SIZE = "48 89 54 24 08 0F 57 C0 F3 0F 10 54 24 08 33 C0";
 static const char* SIG_HUD_ROW_CALL1 = "0F 29 85 B0 00 00 00 F2 0F 11 8D C0 00 00 00 E8 ?? ?? ?? ?? 48 8B 3D ?? ?? ?? ?? E9";
 static const char* SIG_HUD_ROW_CALL2 = "F2 0F 11 8D C0 00 00 00 0F 29 85 B0 00 00 00 E8 ?? ?? ?? ?? 80 7D 36 00";
@@ -3752,6 +3759,10 @@ static struct {
     void (*drawRect)(void* box, const float* rect, uint32_t image, uint64_t color);          // optional: the tools wheel
     void (*drawRotated)(void* box, const float* rect, float angle, uint32_t image, uint64_t color);
     void (*boxBlend)(void* box, uint8_t mode);
+    void (*scrollParams)(void* params);                      // optional: the scrolling key list
+    void (*beginScroll)(void* state, uint8_t, float* offset, void*, const void* params);
+    void (*endScroll)(void* state);
+    float (*scrollSpeed)(void* state);
 } ui;
 enum { STYLE_TITLE = 0x11b94, STYLE_BODY = 0x10a0c };   // text styles in the UI bundle
 
@@ -3838,7 +3849,7 @@ static void draw_tool_settings() {
 
 // Keys page: one row per action, the button shows its key; click it, then press the
 // new key (the input thread catches it). Esc cancels, Delete or Backspace clears.
-// Page 0 = Keys (the tools), page 1 = Quick keys (set one option directly).
+// Section 0 = the tools, section 1 = Quick keys (set one option directly).
 struct KeyAction { Str label; int* key; int page; };
 static KeyAction g_keyActions[] = {
     { S_ACT_MENU, &g_cfg.keyMenu, 0 },
@@ -3889,8 +3900,9 @@ static void draw_key_row(int k) {
     }
 }
 
-// Two columns side by side, so the list fits the screen.
-static void draw_keys(int page) {
+// The rows of one section (0 = tool keys, 1 = quick keys) in a column, or two columns
+// side by side when the list cannot scroll.
+static void draw_key_rows(int page, int columns) {
     alignas(16) uint8_t cols[0x40] = {}, col[2][0x40] = {};
     ui.beginBox(cols, 0);
     UiVec2 cgap{ 60, 0 };
@@ -3899,17 +3911,66 @@ static void draw_keys(int page) {
     ui.setLayout(ui_node(cols), &topLeft);
     int rows[kKeyActions], n = 0;
     for (int k = 0; k < kKeyActions; k++) if (g_keyActions[k].page == page) rows[n++] = k;
-    int half = (n + 1) / 2;
-    for (int c = 0; c < 2; c++) {
+    int per = (n + columns - 1) / columns;
+    for (int c = 0; c < columns; c++) {
         ui.beginBox(col[c], 0);
         UiVec2 rgap{ 0, 14 };
         ui.setSpacing(ui_node(col[c]), &rgap, 0);
         ui.setLayout(ui_node(col[c]), &topLeft);
-        for (int i = c * half; i < n && i < (c + 1) * half; i++) draw_key_row(rows[i]);
+        for (int i = c * per; i < n && i < (c + 1) * per; i++) draw_key_row(rows[i]);
         ui.endBox(col[c]);
     }
     ui.endBox(cols);
-    ui_text(T(g_bindWaiting >= 0 ? S_MENU_KEYS_WAITING : page == 1 ? S_MENU_QUICK_HELP : S_MENU_KEYS_HELP), STYLE_BODY);
+}
+
+// Keys page: the tool keys, then a "Quick keys" section, in a list that scrolls like the
+// game's settings (mouse wheel or the scroll bar). Without the scroll functions the two
+// sections are drawn in two columns each.
+static void draw_keys() {
+    ui_text(T(g_bindWaiting >= 0 ? S_MENU_KEYS_WAITING : S_MENU_KEYS_HELP), STYLE_BODY);
+    bool scroll = ui.scrollParams && ui.beginScroll && ui.endScroll;
+    alignas(16) static uint8_t st[0x500];
+    alignas(16) uint8_t prm[0x110] = {}, list[0x40] = {};
+    static float offset[4];                                 // the scroll position, kept between frames
+    uint16_t topLeft = 0x101;
+    if (scroll) {
+        uint8_t* bundle = *(uint8_t**)(*g_uiCtxGlobal + 0xc8);
+        memset(st, 0, sizeof st);
+        ui.scrollParams(prm);                               // as the settings menu sets them
+        prm[0x2b] = 1;                                      // enableScrollbar
+        prm[0x2f] = 1;                                      // centerChildren
+        prm[0x32] = 1;                                      // useGlobalFocus
+        prm[0x40] |= 0x18;                                  // scrolling hotkeys
+        *(float*)(prm + 0x3c) = 0;                          // spacing
+        float* pad = (float*)(prm + 0x18);
+        pad[0] = 0; pad[1] = 10; pad[2] = 0; pad[3] = 0;
+        uint8_t* bar = prm + 0x44;                          // GameUiScrollbarParameterData
+        memcpy(bar + 0x04, bundle + 0xf954, 8);             // range colour
+        memcpy(bar + 0x24, bundle + 0xf914, 0x20);          // range texture
+        memcpy(bar + 0x44, bundle + 0xf8d4, 0x20);          // slider texture
+        bar[0x7c] = 1;                                      // textured slider
+        float* w = (float*)(bar + 0x80);
+        w[0] = 24; w[1] = 24; w[2] = 24; w[3] = 20;
+        bar[0x90] = 1;
+        ui.beginScroll(st, 1, offset, nullptr, prm);
+        void* n = *(void**)(st + 8);
+        if (ui.scrollSpeed) { float sp = ui.scrollSpeed(st); if (!st[0x468]) st[0x468] = 1; *(float*)(st + 0x464) = sp; }
+        ui.setWidth(n, 960);
+        ui.setStretch(n, UiVec2{ 0, 1 });                   // the rest of the menu's height
+        ui.setSelfAlign(n, &topLeft);
+    }
+    ui.beginBox(list, 0);
+    UiVec2 gap{ 0, 22 };
+    ui.setSpacing(ui_node(list), &gap, 0);
+    ui.setLayout(ui_node(list), &topLeft);
+    ui.setStretch(ui_node(list), UiVec2{ 1, 0 });
+    draw_key_rows(0, scroll ? 1 : 2);
+    UiTextString h = ui_str(T(S_MENU_QUICK_KEYS));
+    ui.settingHeader(&h, 0);
+    ui_text(T(S_MENU_QUICK_HELP), STYLE_BODY);
+    draw_key_rows(1, scroll ? 1 : 2);
+    ui.endBox(list);
+    if (scroll) ui.endScroll(st);
 }
 
 // Called by the input thread with the key pressed while an action waits for one.
@@ -3949,9 +4010,9 @@ static void draw_hint_bar() {
 }
 
 // Full-screen like the game's own menus: blurred, darkened world, the menu on the left.
-static volatile LONG g_menuPage = 0;                 // 0 = keys, 1 = quick keys, 2 = options
-static const int kMenuPages = 3;
-static const Str g_pageNames[kMenuPages] = { S_MENU_KEYS, S_MENU_QUICK_KEYS, S_MENU_OPTIONS };
+static volatile LONG g_menuPage = 0;                 // 0 = keys, 1 = options
+static const int kMenuPages = 2;
+static const Str g_pageNames[kMenuPages] = { S_MENU_KEYS, S_MENU_OPTIONS };
 static bool g_modTabs = false;                       // the tab bar being drawn is the mod's
 
 // Tab list of the game's tab bar: the mod's pages while it draws its bar. A tab is 0x40
@@ -4031,7 +4092,7 @@ static void draw_mod_menu() {
     }
     UiTextString h = ui_str(T(g_pageNames[g_menuPage]));
     ui.settingHeader(&h, 0);
-    if (g_menuPage < 2) draw_keys(g_menuPage); else draw_tool_settings();
+    if (g_menuPage == 0) draw_keys(); else draw_tool_settings();
     { Buf f; f.fmt(T(S_MENU_FOOTER), MOD_VERSION); ui_text(f.z(), STYLE_BODY); }
     if (*T(S_MENU_TRANSLATION_NOTE)) ui_text(T(S_MENU_TRANSLATION_NOTE), STYLE_BODY);   // "may contain mistakes, corrections welcome"
 
@@ -4428,6 +4489,10 @@ static void install_menu() {
     ui.drawRect = (void (*)(void*, const float*, uint32_t, uint64_t))find_unique("UiDrawRect", SIG_UI_DRAW_RECT);
     ui.drawRotated = (void (*)(void*, const float*, float, uint32_t, uint64_t))find_unique("UiDrawRotated", SIG_UI_DRAW_ROTATED);
     ui.boxBlend = (void (*)(void*, uint8_t))find_unique("UiBoxBlend", SIG_UI_BOX_BLEND);
+    ui.scrollParams = (void (*)(void*))find_unique("UiScrollParams", SIG_UI_SCROLL_PARAMS);
+    ui.beginScroll = (void (*)(void*, uint8_t, float*, void*, const void*))find_unique("UiScrollBegin", SIG_UI_SCROLL_BEGIN);
+    ui.endScroll = (void (*)(void*))find_unique("UiScrollEnd", SIG_UI_SCROLL_END);
+    ui.scrollSpeed = (float (*)(void*))find_unique("UiScrollSpeed", SIG_UI_SCROLL_SPEED);
     g_radialReady = ui.drawRect && ui.drawRotated && ui.boxBlend && ui.setSize && ui.imageCtx && ui.resolveImage;
     LOG(.str(g_radialReady ? "tools wheel: available" : "tools wheel: not available (UI functions not found)"));
     {   // the game's tab bar for the pages; without it the menu shows plain buttons
