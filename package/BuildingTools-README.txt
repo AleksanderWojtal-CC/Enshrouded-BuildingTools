@@ -15,6 +15,7 @@ Dedicated server
   shape limits. Games hosted by a player don't support per-player settings yet.
 
 Keys (with the Construction Hammer)
+  Caps Lock (hold)  Tools wheel: point the mouse at an option, let go to pick it
   Home  Building Tools menu: change keys and options in the game's own UI
   F5  whole mod off / on (off = vanilla game, other mod keys do nothing)
   F6  switch Prefab mode (vanilla) <-> Area mode
@@ -98,12 +99,26 @@ Undo after area actions
   the banner) and gives back exactly their materials. Remove the rest with an
   area remove.
 
+Tools wheel (hold Caps Lock)
+  A blurred wheel in the middle of the screen, drawn with the game's own wheel.
+  Move the mouse towards an option and let go of the key to pick it. A left
+  click picks the option and keeps the wheel open (change several things at
+  once); a right click closes it without changes. The camera stays still and
+  clicks don't build while it is open. Only what applies right now is shown:
+  mode, Replace, free placement and the menu always; replace style while
+  Replace is on; area fill and clear corners in Area mode.
+  RadialMenu= in the ini (or the Keys tab) changes the key; 0 turns it off.
+
 Menu (Home)
   A full-screen menu like the game's own, also while holding the hammer. Switch
   tabs with Q / E or a click; Esc or Home closes it.
   Keys tab: click a key, then press the new one. Shift, Ctrl and Alt
   combinations work (Shift+K). Esc cancels, Delete clears. Saved at once.
-  Options tab: mode, Replace, replace style, area fill, free placement, language.
+  The middle mouse button and Mouse 4 / 5 can be bound too.
+  Quick keys tab: keys that set one option directly (each replace style, each
+  area fill, creative building on / off). They have no key until you set one.
+  Options tab: mode, Replace, replace style, area fill, free placement,
+  creative building (single player; on a server its ini decides), language.
 
 Building box and floating text
   While you build, the game's building box (bottom right) lists the mod's keys
@@ -131,7 +146,8 @@ Changing keys and settings
   Easier: change keys and options in the menu (Home), which saves the ini.
   Keys are Windows key codes: F1..F12 = 112..123, A..Z = 65..90, 0..9 = 48..57,
   Page Up 33, Page Down 34, Insert 45, Delete 46, Home 36, End 35,
-  Numpad 0..9 = 96..105. 0 turns a key off. Add 4096 for Shift, 8192 for
+  Numpad 0..9 = 96..105, Caps Lock 20, middle mouse 4, Mouse 4 = 5,
+  Mouse 5 = 6. 0 turns a key off. Add 4096 for Shift, 8192 for
   Ctrl, 16384 for Alt (Shift+K = 4096 + 75 = 4171). Example: to use F4 for Area mode,
   set ToggleAreaMode=115. The comments in the file explain each option.
   Delete the ini to get all defaults back.

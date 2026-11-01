@@ -3,6 +3,19 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.22.0
+
+- **Tools wheel.** Hold Caps Lock while building: a blurred wheel in the middle of the
+  screen, drawn with the game's own wheel. Move the mouse towards an option and let go
+  of the key (or click it to change several things in one go; right click closes).
+  It shows only what applies right now: mode, Replace, Free placement and the menu
+  always, Replace style while Replace is on, Area fill and Clear corners in Area mode.
+  The camera stays still and clicks don't build while it is open.
+- **Quick keys** (new menu tab): keys that set one option directly, each replace style,
+  each area fill and creative building on / off. They have no key until you set one.
+- Creative building can be switched in the menu (Options tab) in single player.
+- Middle mouse and the mouse side buttons (Mouse 4 / 5) can be bound to any action.
+
 ## 0.21.0
 
 - **Dedicated servers.** Put `dinput8.dll` next to `enshrouded_server.exe` as well as

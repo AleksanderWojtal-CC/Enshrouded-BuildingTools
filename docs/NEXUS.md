@@ -62,9 +62,15 @@ base. The material picker, the missing-materials ghost and the crafting menus co
 too. The loot deposit stays local. Chests of a base the game has not loaded (far away) may
 not count.
 
+[b]Tools wheel[/b] (hold Caps Lock)
+A blurred wheel in the middle of the screen, drawn with the game's own wheel: point the
+mouse at an option and let go (or click to change several). It shows only what applies
+right now: Replace style while Replace is on, area fill and clear corners in Area mode.
+
 [b]Menu in the game's own UI[/b] (Home)
 A full-screen menu that looks like the game's: Keys tab (click a key, press the new one,
-Shift/Ctrl/Alt combinations work) and Options tab. While you build, the mod's keys sit in
+Shift/Ctrl/Alt combinations and mouse side buttons work), Quick keys tab (keys that set one
+option directly) and Options tab. While you build, the mod's keys sit in
 the game's building box with the game's key icons and on/off switches.
 
 [b]In your language[/b]

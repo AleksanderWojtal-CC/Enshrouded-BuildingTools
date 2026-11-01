@@ -678,3 +678,21 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   hammer's ray (28bc80, q[3]==4) ran in the last 250 ms; while the cursor component is
   stale, src+0x330 is set for the encoder to the live place (src+0x2f8) moved by the
   ray-hit step (as aim_lookup's "ray hit") and restored after. Tested OK 2026-11-01.
+
+## 0.22.0: tools wheel (issue #25)
+- The game's wheels: `ds::WheelMenuType`, FbUiHUD.itemWheel (FbUiItemWheel, bundle+0xdb68:
+  slot colours +0/+8, previewCenterColor +0x10, background +0x18, direction +0x28, dots
+  +0x38/+0x48, ring +0x58/+0x68, blurredBackgroundMask +0x78, highlightColor +0x88).
+  Sounds FbUiSounds.itemWheel (bundle+0x12a10 open, +0x12a20 close, +0x12a30 changeHighlight).
+- Emote wheel `b93ad0` ("emoteWheel") calls the generic wheel `c04c50`(params): u8 kind
+  (0 action bar, 1 emote, 2 other), +4 size 600, +8 draw centre, +0xc centre part 0.4,
+  +0x10 start angle pi/2, +0x14 step, colours, +0x38 entries (FbUiEmoteEntry*, label is a loca
+  tag). Its state lives in hud+0x1cda (2 = emote wheel open) and picks trigger emotes, so the
+  mod draws its own wheel with the same calls instead.
+- Draw calls (box = beginBox struct, rect = {x, y, w, h} from node+0x114): `118ca30`(box, rect,
+  image u32 (0 = fill), colour u64); rotated `118d030`(box, rect, angle, image, colour);
+  blend `11ae3e0`(box, mode). c04c50: blurBehind on the rect +-30, 25% black fill, blend 3 +
+  the mask image, blend 0; centre disc; pointer turned to the slot angle (cos x, sin y); dot
+  texture bundle+0xb9e8 24x24 per slot. Images through resolveImage(imageCtx, &h, texture).
+- Mouse while open: the low-level mouse hook sums the moves (pt - GetCursorPos) and swallows
+  moves, wheel turns and left/right clicks, so the camera stays still and nothing is built.
