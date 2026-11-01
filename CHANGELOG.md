@@ -3,6 +3,15 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.23.0
+
+- Fix: **the area preview was one block off** when one corner was on the ground and the
+  other on a wall. The area built was right; the preview and the size readout now match it.
+- New option **base-area box preview**: `[Area] Preview=2` in `BuildingTools.ini` shows
+  the area being set up with the box the game draws for a flame altar's base area
+  (`Preview=3` shows it together with the edge highlights). Like the game's own, it
+  lights up where the box meets blocks and terrain.
+
 ## 0.22.0
 
 - **Tools wheel.** Hold Caps Lock with the hammer or a building material in hand: a
