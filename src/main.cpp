@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.23.0-dev3"
+#define MOD_VERSION "0.23.0-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -113,7 +113,6 @@ struct Config {
     int keyMenu      = VK_HOME;    // in-game menu (native game UI, experimental)
     int refundPopup  = 1;          // show the game's item pop-up for refunds
     int preview      = 1;          // area preview: 1 = 3D box, 2 = edge highlights, 3 = both, 0 = off
-    int ghost        = 1;          // stretch the game's ghost block over the area being set up
     int hoverDist10  = 40;         // free placement distance in tenths of a metre
     int panelScale   = 100;        // info panel size in percent
     int panelBottom  = 0;      // panel distance from the bottom edge (pixels at 1080p)
@@ -192,7 +191,6 @@ static void write_full_ini(const Config& c) {
      .t("; Free placement start distance in tenths of a metre (40 = 4 m)\r\nFreePlacementDistance=").i(c.hoverDist10).t("\r\n")
      .t("; Show the area being set up: 1 = 3D box (the flame altar's base-area preview),\r\n")
      .t(";     2 = highlights along the edges on surfaces, 3 = both, 0 = off\r\nPreview=").i(c.preview).t("\r\n")
-     .t("; Stretch the game's see-through ghost block over the whole area (1 = on)\r\nStretchGhost=").i(c.ghost).t("\r\n")
      .t("\r\n[Limits]\r\n")
      .t("; Most shapes one area action may build, replace or remove (max 20000)\r\nMaxShapes=").i(c.maxShapes).t("\r\n")
      .t("; Most shapes one connected replace (fill bucket) repaints (max = MaxShapes)\r\nFillLimit=").i(c.fillLimit).t("\r\n")
@@ -232,7 +230,6 @@ static void load_config() {
     g_cfg.keyMenu      = ini_int(L"Keys", L"Menu", VK_HOME);
     g_cfg.refundPopup  = ini_int(L"Interface", L"RefundPopup", 1);
     g_cfg.preview      = ini_int(L"Area", L"Preview", 1);
-    g_cfg.ghost        = ini_int(L"Area", L"StretchGhost", 1);
     g_cfg.hoverDist10  = ini_int(L"Area", L"FreePlacementDistance", 40);
     g_cfg.panelScale   = ini_int(L"Interface", L"PanelScale", 100);
     if (g_cfg.panelScale < 50) g_cfg.panelScale = 50;
@@ -656,9 +653,6 @@ static const char* SIG_PICK_CALL = "E8 ?? ?? ?? ?? 80 7D 00 00 75 59 48 8B CE E8
 // State: byte +0 = draw build zone borders, +0x10 min / +0x20 max (world metres, float4),
 // byte +0x30 = preview box valid (the flame altar's base-area preview, client_cursor_entity 2919b0).
 static const char* SIG_ZONE_VIS_CALL = "48 8B 8E E0 D4 47 00 E8 ?? ?? ?? ?? 0F 10 0D ?? ?? ?? ?? 45 33 F6 C6 85 A8 00 00 00 01";
-// client_cursor_entity (2919b0) copies the cursor's WorldTransform (r13+0x10, 0x38 bytes) into
-// the ghost entity's transform component, looked up by the generic component getter 9b3cb0.
-static const char* SIG_GHOST_XF_CALL = "E8 ?? ?? ?? ?? 48 8B 00 48 85 C0 74 25 41 0F 10 45 10 0F 11 00 41 0F 10 4D 20";
 static const char* SIG_MISSING_CALL = "E8 ?? ?? ?? ?? 8B 13 8B CA 0F BA F1 0C 0F BA EA 0C 84 C0 0F 44 D1 89 13";
 // The client's input packet builder: copies ClientPlayerInputData into the network
 // layout (camera first). Client only; the dedicated server has no such code.
@@ -3317,7 +3311,7 @@ got:
 // Area box (fixed point, whole shapes) of the area the next corner click would make.
 static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     core::Plan pl; float step[3]; bool ok = false;
-    if ((!g_cfg.preview && !g_cfg.ghost) || !area_plan_live(&pl, step, &ok) || !ok) return false;
+    if (!g_cfg.preview || !area_plan_live(&pl, step, &ok) || !ok) return false;
     if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return false;
     for (int a = 0; a < 3; a++) {
         int64_t e = pl.origin[a] + pl.stepFix[a] * (pl.count[a] - 1);
@@ -3328,46 +3322,9 @@ static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     return true;
 }
 
-// ---- stretched ghost block
-// The ghost entity's transform write in client_cursor_entity goes through a redirected
-// component lookup: while an area is set up, the mod writes a transform covering the area
-// (identity rotation, scale = area size / shape size, position = the area's low corner, the
-// ghost's pivot for an unrotated shape) and hands the game a dummy to write the cursor's into.
-struct GhostXf { int64_t pos[3]; float rot[4]; float scale[3]; float pad; };
-static_assert(sizeof(GhostXf) == 0x38, "world transform size");
-typedef void** (*CompLookupFn)(void* out, void* a, void* b, void* c, void* d, uint8_t e);
-static CompLookupFn g_compLookup = nullptr;
-static GhostXf g_ghostXf;
-static volatile DWORD g_ghostTick = 0;
-static volatile LONG g_ghostFrames = 0;
-static void** ghost_xf_hook(void* out, void* a, void* b, void* c, void* d, uint8_t e) {
-    void** r = g_compLookup(out, a, b, c, d, e);
-    DWORD t = g_ghostTick;
-    if (!r || !*r || !t || GetTickCount() - t > 250 || !g_cfg.ghost) return r;
-    memcpy(*r, &g_ghostXf, sizeof(GhostXf));
-    alignas(16) static uint8_t dummy[0x40];
-    static void* dummyPtr;
-    dummyPtr = dummy;
-    InterlockedIncrement(&g_ghostFrames);
-    return &dummyPtr;
-}
-
 static void update_preview_box() {
     int64_t lo[3], hi[3];
-    bool live = (preview_box_on() || (g_compLookup && g_cfg.ghost)) && area_box_live(lo, hi);
-    if (live && g_compLookup && g_cfg.ghost) {
-        GhostXf x = {};
-        x.rot[3] = 1.f;
-        for (int a = 0; a < 3; a++) {
-            x.pos[a] = lo[a];
-            float st = g_scStep[a] > 0.f ? g_scStep[a] : 0.5f;
-            x.scale[a] = (float)((double)(hi[a] - lo[a]) * kInv / st);
-        }
-        g_ghostXf = x;
-        DWORD t = GetTickCount();
-        g_ghostTick = t ? t : 1;
-    } else g_ghostTick = 0;
-    if (!live || !preview_box_on()) { g_boxTick = 0; return; }
+    if (!preview_box_on() || !area_box_live(lo, hi)) { g_boxTick = 0; return; }
     InterlockedIncrement(&g_boxSeq);
     for (int a = 0; a < 3; a++) { g_boxMin[a] = (float)((double)lo[a] * kInv); g_boxMax[a] = (float)((double)hi[a] * kInv); }
     InterlockedIncrement(&g_boxSeq);
@@ -3455,7 +3412,7 @@ static void preview_diag() {
     if (f == last) return;
     last = f;
     LOG(.str("preview: ").i(g_previewCount).str(" highlights, started ").i(g_pvStarted).str(", active frames ").i(f)
-        .str(", box frames ").i(g_boxFrames).str(", ghost frames ").i(g_ghostFrames));
+        .str(", box frames ").i(g_boxFrames));
 }
 
 static volatile DWORD g_floatTick = 0;              // last time the floating info text was drawn
@@ -5133,16 +5090,8 @@ static DWORD WINAPI init_thread(void*) {
             }
         }
     }
-    if (g_hoverFxOrig) {
-        uint8_t* gc = find_unique("GhostXfCall", SIG_GHOST_XF_CALL);
-        if (gc && gc[0] == 0xE8) {
-            uint8_t* fn = gc + 5 + *(int32_t*)(gc + 1);
-            g_compLookup = (CompLookupFn)fn;
-            if (hook_calls(fn, (void*)&ghost_xf_hook, &gc, 1) != 1) g_compLookup = nullptr;
-        }
-    }
     LOG(.str("area preview: ").str(g_hoverFxOrig ? "available" : "not available").str(", 3D box ")
-        .str(g_zoneVisOrig ? "available" : "not available").str(", stretched ghost ").str(g_compLookup ? "available" : "not available"));
+        .str(g_zoneVisOrig ? "available" : "not available"));
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
