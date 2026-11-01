@@ -5,6 +5,7 @@
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -166,6 +167,3 @@ option.free = Colocación libre
 option.creative = Construcción creativa
 option.language = Idioma
 option.language_game = Como el juego
-
-# Tools wheel (hold its key)
-wheel.hint = Haz clic o suelta la tecla para elegir

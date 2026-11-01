@@ -156,9 +156,7 @@
     X(S_OPT_FREE, "option.free", "Free placement") \
     X(S_OPT_CREATIVE, "option.creative", "Creative building") \
     X(S_OPT_LANGUAGE, "option.language", "Language") \
-    X(S_OPT_LANGUAGE_GAME, "option.language_game", "Same as the game") \
-    /* tools wheel */ \
-    X(S_WHEEL_HINT, "wheel.hint", "Click or let go of the key to pick")
+    X(S_OPT_LANGUAGE_GAME, "option.language_game", "Same as the game")
 
 enum Str {
 #define BT_STR_ID(id, key, en) id,
