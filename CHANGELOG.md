@@ -12,7 +12,8 @@ changelog on Nexus Mods, so keep it short and written for players.
   players without the mod build as usual. The server's `BuildingTools.ini` decides
   creative building, chests of all bases and the shape limits.
 - The area corners and guide lines show in your game while you play on a server, and
-  "Area sent to the server: N shapes" confirms the final corner.
+  "Area sent to the server: N shapes" confirms the final corner. This also works with
+  the free camera flown far from your character.
 
 ## 0.20.3
 
