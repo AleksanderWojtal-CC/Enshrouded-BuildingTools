@@ -6,6 +6,7 @@
 # been checked, menu.translation_note can be left empty.
 # Numbers
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = .
@@ -146,6 +147,11 @@ menu.key_fill_solid = 区域填充：实心
 menu.key_fill_hollow = 区域填充：空心房间
 menu.key_fill_walls = 区域填充：仅墙壁
 menu.key_creative = 创造建造 开 / 关
+menu.key_replace_hold = 替换（按住）
+menu.key_prefab = 普通模式（游戏原版）
+menu.key_area_on = 区域模式
+menu.key_replace_on = 替换 开
+menu.key_replace_off = 替换 关
 menu.quick_help = 直接设置某个选项的按键。点击按键进行设置。
 
 # Options tab

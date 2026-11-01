@@ -148,6 +148,11 @@ menu.key_fill_solid = Area fill: solid
 menu.key_fill_hollow = Area fill: hollow room
 menu.key_fill_walls = Area fill: walls only
 menu.key_creative = Creative building on / off
+menu.key_replace_hold = Replace while held
+menu.key_prefab = Prefab mode (vanilla)
+menu.key_area_on = Area mode
+menu.key_replace_on = Replace on
+menu.key_replace_off = Replace off
 menu.quick_help = Keys that set an option directly. Click a key to set it.
 
 # Options tab

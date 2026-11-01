@@ -6,6 +6,7 @@
 # been checked, menu.translation_note can be left empty.
 # Numbers
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -146,6 +147,11 @@ menu.key_fill_solid = Заполнение: сплошное
 menu.key_fill_hollow = Заполнение: пустая комната
 menu.key_fill_walls = Заполнение: только стены
 menu.key_creative = Творческое строительство вкл. / выкл.
+menu.key_replace_hold = Замена (удерживать)
+menu.key_prefab = Обычный режим (как в игре)
+menu.key_area_on = Режим области
+menu.key_replace_on = Замена вкл.
+menu.key_replace_off = Замена выкл.
 menu.quick_help = Клавиши, которые сразу задают параметр. Нажмите на клавишу, чтобы назначить её.
 
 # Options tab

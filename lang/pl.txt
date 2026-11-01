@@ -6,6 +6,7 @@
 # been checked, menu.translation_note can be left empty.
 # Numbers
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -146,6 +147,11 @@ menu.key_fill_solid = Wypełnienie obszaru: pełne
 menu.key_fill_hollow = Wypełnienie obszaru: pudełko
 menu.key_fill_walls = Wypełnienie obszaru: tylko ściany
 menu.key_creative = Tryb kreatywny wł. / wył.
+menu.key_replace_hold = Zastępowanie (przytrzymaj)
+menu.key_prefab = Tryb klasyczny
+menu.key_area_on = Tryb obszaru
+menu.key_replace_on = Zastępowanie wł.
+menu.key_replace_off = Zastępowanie wył.
 menu.quick_help = Klawisze, które od razu ustawiają opcję. Kliknij klawisz, aby go ustawić.
 
 # Options tab

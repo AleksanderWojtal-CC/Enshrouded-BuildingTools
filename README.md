@@ -76,8 +76,9 @@ which is also shipped in the zip.
 | F5 | Whole mod off / on (off = vanilla game) |
 
 All keys can be changed in the menu (Keys tab), also to Shift, Ctrl or Alt combinations
-and to the middle or side mouse buttons. The Quick keys tab adds keys that set one option
-directly (each replace style, each area fill, creative building).
+and to the middle or side mouse buttons. The Quick keys tab adds Replace while held and keys
+that set one option directly (Prefab or Area mode, Replace on or off, each replace style,
+each area fill, creative building).
 
 What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 

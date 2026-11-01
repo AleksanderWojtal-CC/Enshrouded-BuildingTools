@@ -6,6 +6,7 @@
 # been checked, menu.translation_note can be left empty.
 # Numbers
 # Numbers
+# Numbers
 
 # Numbers
 num.decimal = ,
@@ -146,6 +147,11 @@ menu.key_fill_solid = Alan dolgusu: dolu
 menu.key_fill_hollow = Alan dolgusu: içi boş oda
 menu.key_fill_walls = Alan dolgusu: yalnızca duvarlar
 menu.key_creative = Yaratıcı inşa aç / kapat
+menu.key_replace_hold = Değiştirme (basılı tut)
+menu.key_prefab = Normal mod (oyundaki gibi)
+menu.key_area_on = Alan modu
+menu.key_replace_on = Değiştirme açık
+menu.key_replace_off = Değiştirme kapalı
 menu.quick_help = Bir seçeneği doğrudan ayarlayan tuşlar. Ayarlamak için bir tuşa tıklayın.
 
 # Options tab
