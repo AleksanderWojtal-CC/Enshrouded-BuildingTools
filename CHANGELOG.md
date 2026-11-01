@@ -5,14 +5,14 @@ changelog on Nexus Mods, so keep it short and written for players.
 
 ## 0.22.0
 
-- **Tools wheel.** Hold Caps Lock with the hammer or a building material in hand: a blurred wheel in the middle of the
-  screen, drawn with the game's own wheel. Move the mouse towards an option and let go
+- **Tools wheel.** Hold Caps Lock with the hammer or a building material in hand: a
+  blurred wheel in the middle of the screen, drawn with the game's own wheel. Move the mouse towards an option and let go
   of the key (or click it to change several things in one go; right click closes).
   It shows only what applies right now: mode, Replace, Free placement and the menu
   always, Replace style while Replace is on, Area fill and Clear corners in Area mode.
   The camera stays still and clicks don't build while it is open.
-- **Quick keys** (a new section of the Keys tab, which now scrolls): Replace while a key is held (back as it was when you
-  let go), and keys that set one option directly: Prefab or Area mode, Replace on or
+- **Quick keys** (a new section of the Keys tab, which now scrolls): Replace while a
+  key is held (back as it was when you let go), and keys that set one option directly: Prefab or Area mode, Replace on or
   off, each replace style, each area fill, creative building on / off. They have no key
   until you set one.
 - Creative building can be switched in the menu (Options tab) in single player.
