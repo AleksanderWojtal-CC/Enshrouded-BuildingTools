@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.22.0-dev1"
+#define MOD_VERSION "0.22.0-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -4254,7 +4254,10 @@ static void wheel_text_window(int id, float dx, float dy, const char* a, const c
     *(UiVec2*)(n + 0x70) = UiVec2{ dx, dy };
     const float pad[4] = { 12, 4, 12, 4 };
     ui.setPadding(n, pad);
-    if (backdrop && ui.nineSlice && ui.passObj) soft_backdrop((const float*)(n + 0x114));
+    if (ui.nineSlice && ui.passObj) {                       // the game's soft backdrop; twice = darker for the highlight
+        soft_backdrop((const float*)(n + 0x114));
+        if (backdrop) soft_backdrop((const float*)(n + 0x114));
+    }
     if (a && *a) ui_text(a, STYLE_BODY);
     if (b && *b) ui_text(b, STYLE_BODY);
     ui.endBox(box);
@@ -4310,7 +4313,7 @@ static void draw_radial() {
     LONG sel = g_radialSel;
     for (int k = 0; k < count; k++)
         wheel_text_window(k, g_slotCos[k] * rl, g_slotSin[k] * rl, g_wheelName[k], g_wheelValue[k], k == sel);
-    wheel_text_window(kWheelSlots, 0, 0, T(S_MENU_TITLE), nullptr, false);
+    wheel_text_window(kWheelSlots, 0, 0, T(S_MENU_TITLE), nullptr, false);   // centre and hint get the backdrop too
     wheel_text_window(kWheelSlots + 1, 0, kWheelSize * 0.5f + 40.f, T(S_WHEEL_HINT), nullptr, false);
 }
 
@@ -4425,7 +4428,7 @@ static void install_menu() {
 }
 
 // The wheel's options: only those that apply now (Replace style while Replace is on, the
-// area fill and the corners in Area mode, creative building where this game decides it).
+// area fill and the corners in Area mode).
 static int wheel_entries(int* act) {
     int n = 0;
     act[n++] = ACT_AREA;
@@ -4433,7 +4436,6 @@ static int wheel_entries(int* act) {
     if (g_mode == MODE_AREA && g_corners > 0) act[n++] = ACT_CLEAR;
     act[n++] = ACT_FREE;
     act[n++] = ACT_MENU;
-    if (!remote_session()) act[n++] = ACT_CREATIVE;
     if (g_replace) act[n++] = ACT_STYLE;
     act[n++] = ACT_REPLACE;
     return n;
