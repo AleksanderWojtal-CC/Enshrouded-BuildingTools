@@ -672,3 +672,9 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   worked. dev2 takes PlayerInput from rbp-0x58 (xf-0x118, the cursor read's r8).
 - At the cursor read rbx = building item (`48 8B D8 48 85 C0 0F 84` at cc-0x49 in both exes).
 - dev2 test (Aleksander, 2026-11-01): single player and dedicated server work.
+- Free camera far away on a server (dev2): the client's blueprint cursor read stops, so
+  the client stopped counting area clicks (server: every later click "repeat") and sent
+  a stale secondary transform (src+0x330). dev3: "building item in hand" also when the
+  hammer's ray (28bc80, q[3]==4) ran in the last 250 ms; while the cursor component is
+  stale, src+0x330 is set for the encoder to the live place (src+0x2f8) moved by the
+  ray-hit step (as aim_lookup's "ray hit") and restored after. Tested OK 2026-11-01.
