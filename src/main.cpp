@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.22.0-dev5"
+#define MOD_VERSION "0.22.0-dev6"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -3674,6 +3674,8 @@ static uint8_t* hud_screen_byte() {
 
 static void draw_float_info();
 static void draw_radial();
+// the game, or the hammer's screens (29..37; the menu goes back to 29 when opened from there)
+static bool wheel_screen(LONG s) { return s == SCREEN_INGAME || (s >= 29 && s <= 37); }
 static volatile LONG g_hudScreen = 0;               // the HUD screen (UI thread -> input thread)
 static volatile DWORD g_hudScreenTick = 0;
 static void play_ui_hook(void* a, void* b, void* c, void* d) {
@@ -3697,7 +3699,7 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
     }
     g_playUiOrig(a, b, c, d);
     draw_float_info();
-    if (g_radialOpen && scr && *scr == SCREEN_INGAME) draw_radial();
+    if (g_radialOpen && scr && wheel_screen(*scr)) draw_radial();
 }
 
 // Screen 52: the mod's own window, built like the game's popups (reportSharedWorldPopup):
@@ -4506,7 +4508,7 @@ static void radial_keys(bool focus) {
     bool wasDown = prevDown;
     prevDown = down;
     if (!g_radialOpen) {
-        bool inGame = g_hudScreen == SCREEN_INGAME && GetTickCount() - g_hudScreenTick < 500;
+        bool inGame = wheel_screen(g_hudScreen) && GetTickCount() - g_hudScreenTick < 500;
         if (down && !wasDown && inGame && !g_menuOpen) {
             g_radialX = g_radialY = 0.f; g_radialSel = -1; g_radialClicks = 0; g_radialCancel = 0;
             g_radialPicked = false;
@@ -4518,7 +4520,7 @@ static void radial_keys(bool focus) {
         }
         return;
     }
-    if (!focus || g_menuOpen || g_hudScreen != SCREEN_INGAME || InterlockedExchange(&g_radialCancel, 0)) { radial_close(false); return; }
+    if (!focus || g_menuOpen || !wheel_screen(g_hudScreen) || InterlockedExchange(&g_radialCancel, 0)) { radial_close(false); return; }
     if (InterlockedExchange(&g_radialClicks, 0) && g_radialSel >= 0 && g_radialSel < g_wheelN) {
         do_act(g_wheelAct[g_radialSel]);
         g_radialPicked = true;
