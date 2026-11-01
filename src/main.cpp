@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.22.0-dev3"
+#define MOD_VERSION "0.22.0-dev4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -4228,7 +4228,7 @@ static void draw_float_info() {
 // ---- the tools wheel, drawn like the game's item wheel (emote wheel, c04c50): a blurred,
 // darkened disc (blur + 25% black, cut round by the wheel's blur mask), the centre disc,
 // the direction pointer at the highlighted slot and a dot per slot; the option names in
-// small windows around it (the highlighted one on the game's soft backdrop).
+// small windows around it, plain text on the wheel's blur.
 static const float kWheelSize = 900.f;           // layout units (the emote wheel: 600)
 static const float kWheelDisc = 0.28f;           // centre disc, part of the size (emote wheel: 0.4)
 static const float kWheelLabels = 0.31f;         // label distance from the centre, part of the size
@@ -4238,7 +4238,7 @@ static uint32_t ui_image(uint8_t* bundle, uint32_t off) {
     uint32_t h = 0;
     return *ui.resolveImage(ui.imageCtx(), &h, bundle + off);
 }
-static void wheel_text_window(int id, float dx, float dy, const char* a, const char* b, bool backdrop) {
+static void wheel_text_window(int id, float dx, float dy, const char* a, const char* b) {
     static const char* const names[kWheelSlots + 2] = { "btWheel0", "btWheel1", "btWheel2", "btWheel3", "btWheel4",
                                                          "btWheel5", "btWheel6", "btWheel7", "btWheelC", "btWheelH" };
     alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, box[0x40] = {};
@@ -4256,7 +4256,6 @@ static void wheel_text_window(int id, float dx, float dy, const char* a, const c
     *(UiVec2*)(n + 0x70) = UiVec2{ dx, dy };
     const float pad[4] = { 12, 4, 12, 4 };
     ui.setPadding(n, pad);
-    if (backdrop && ui.nineSlice && ui.passObj) soft_backdrop((const float*)(n + 0x114));   // the highlight
     if (a && *a) ui_text(a, STYLE_BODY);
     if (b && *b) ui_text(b, STYLE_BODY);
     ui.endBox(box);
@@ -4309,10 +4308,9 @@ static void draw_radial() {
     ui.endBox(root);
     ui.endWindow(win);
     float rl = kWheelSize * kWheelLabels;
-    LONG sel = g_radialSel;
     for (int k = 0; k < count; k++)
-        wheel_text_window(k, g_slotCos[k] * rl, g_slotSin[k] * rl, g_wheelName[k], g_wheelValue[k], k == sel);
-    wheel_text_window(kWheelSlots, 0, 0, T(S_MENU_TITLE), nullptr, false);
+        wheel_text_window(k, g_slotCos[k] * rl, g_slotSin[k] * rl, g_wheelName[k], g_wheelValue[k]);
+    wheel_text_window(kWheelSlots, 0, 0, T(S_MENU_TITLE), nullptr);
 }
 
 static void hud_finish_hook(void* box) {
