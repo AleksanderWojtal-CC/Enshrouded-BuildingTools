@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.23.0-dev2"
+#define MOD_VERSION "0.23.0-dev4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -653,6 +653,10 @@ static const char* SIG_PICK_CALL = "E8 ?? ?? ?? ?? 80 7D 00 00 75 59 48 8B CE E8
 // State: byte +0 = draw build zone borders, +0x10 min / +0x20 max (world metres, float4),
 // byte +0x30 = preview box valid (the flame altar's base-area preview, client_cursor_entity 2919b0).
 static const char* SIG_ZONE_VIS_CALL = "48 8B 8E E0 D4 47 00 E8 ?? ?? ?? ?? 0F 10 0D ?? ?? ?? ?? 45 33 F6 C6 85 A8 00 00 00 01";
+// VFX parameter setters (diagnostic log): float 298f00(sys, handle, hash, float), vector
+// 298fc0(sys, handle, hash, &float3), found through calls in client_cursor_entity.
+static const char* SIG_VFX_PARAM_F_CALL = "E8 ?? ?? ?? ?? F3 0F 10 9B CC 05 00 00 41 B8 15 36 D0 83 41 8B 95 CC 10 00 00";
+static const char* SIG_VFX_PARAM_V_CALL = "E8 ?? ?? ?? ?? 40 38 BD 70 03 00 00 74 12 41 0F 28 C5 41 0F 28 DD 41 0F 28 CD";
 static const char* SIG_MISSING_CALL = "E8 ?? ?? ?? ?? 8B 13 8B CA 0F BA F1 0C 0F BA EA 0C 84 C0 0F 44 D1 89 13";
 // The client's input packet builder: copies ClientPlayerInputData into the network
 // layout (camera first). Client only; the dedicated server has no such code.
@@ -3308,6 +3312,85 @@ got:
     return copy;
 }
 
+// ---- VFX diagnostic log (dev build): which effects the game starts and which named
+// parameters it sets, to find the terraforming cursor (a see-through box effect).
+// Every effect start goes through one of six functions that all call 29b5f0; each is
+// wrapped (all their E8 calls redirected) and logs (function, guid, caller) once.
+typedef uint64_t (*VfxAnyFn)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+static VfxAnyFn g_vfxFns[8];
+static volatile LONG g_vfxLogN = 0;
+static struct { uint32_t a, b; uint64_t c; } g_vfxSeen[600];
+static volatile LONG g_vfxSeenN = 0;
+static bool vfx_seen(uint32_t a, uint32_t b, uint64_t c) {
+    LONG n = g_vfxSeenN; if (n > 600) n = 600;
+    for (LONG i = 0; i < n; i++) if (g_vfxSeen[i].a == a && g_vfxSeen[i].b == b && g_vfxSeen[i].c == c) return true;
+    LONG k = InterlockedIncrement(&g_vfxSeenN) - 1;
+    if (k < 600) { g_vfxSeen[k].a = a; g_vfxSeen[k].b = b; g_vfxSeen[k].c = c; }
+    return k >= 600;
+}
+static uint64_t rva_of(void* ra) { return (uint64_t)((uint8_t*)ra - g_base); }
+template <int K>
+static uint64_t vfx_start_log(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7,
+                              uint64_t a8, uint64_t a9, uint64_t a10) {
+    uint64_t r = g_vfxFns[K](a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+    const uint32_t* g = (const uint32_t*)a3;
+    uint64_t ca = rva_of(__builtin_return_address(0));
+    if (g && readable(g, 16) && !vfx_seen(0x100 + K, g[0], ca))
+        LOG(.str("vfx start ").i(K).str(" guid ").u(g[0], 16, 8).c('-').u(g[1], 16, 8).c('-').u(g[2], 16, 8).c('-').u(g[3], 16, 8)
+            .str(" from ").x(ca).str(" handle ").x(r & 0xffffffff));
+    return r;
+}
+typedef void (*VfxParamFFn)(void*, uint32_t, uint32_t, float);
+typedef void (*VfxParamVFn)(void*, uint32_t, uint32_t, const float*);
+static VfxParamFFn g_vfxParamF = nullptr;
+static VfxParamVFn g_vfxParamV = nullptr;
+static void vfx_param_f_log(void* sys, uint32_t h, uint32_t hash, float v) {
+    g_vfxParamF(sys, h, hash, v);
+    uint64_t ca = rva_of(__builtin_return_address(0));
+    if (!vfx_seen(1, hash, ca)) LOG(.str("vfx param ").x(hash).str(" = ").f(v).str(" handle ").x(h).str(" from ").x(ca));
+}
+static void vfx_param_v_log(void* sys, uint32_t h, uint32_t hash, const float* v) {
+    g_vfxParamV(sys, h, hash, v);
+    uint64_t ca = rva_of(__builtin_return_address(0));
+    if (v && !vfx_seen(2, hash, ca))
+        LOG(.str("vfx param ").x(hash).str(" = (").f(v[0]).c(',').f(v[1]).c(',').f(v[2]).str(") handle ").x(h).str(" from ").x(ca));
+}
+static void install_vfx_log() {
+    if (!g_vfxStart || !g_textBase) return;
+    uint8_t* s0 = (uint8_t*)g_vfxStart;                     // 29d3d0: E8 -> 29c520 at +0x3a
+    if (s0[0x3a] != 0xE8) return;
+    uint8_t* inner = s0 + 0x3a + 5 + *(int32_t*)(s0 + 0x3b);
+    if (inner[0x38] != 0xE8) return;                        // 29c520: E8 -> 29b5f0 at +0x38
+    uint8_t* common = inner + 0x38 + 5 + *(int32_t*)(inner + 0x39);
+    uint8_t* fns[8]; int nf = 0;
+    uint8_t* end = g_textBase + g_textSize - 5;
+    for (uint8_t* p = g_textBase; p < end && nf < 8; p++) {
+        if (p[0] != 0xE8 || p + 5 + *(int32_t*)(p + 1) != common) continue;
+        DWORD64 base = 0;
+        PRUNTIME_FUNCTION rf = RtlLookupFunctionEntry((DWORD64)p, &base, nullptr);
+        if (!rf) continue;
+        uint8_t* f = (uint8_t*)(base + rf->BeginAddress);
+        bool dup = false; for (int k = 0; k < nf; k++) dup |= fns[k] == f;
+        if (!dup) fns[nf++] = f;
+    }
+    void* wraps[8] = { (void*)&vfx_start_log<0>, (void*)&vfx_start_log<1>, (void*)&vfx_start_log<2>, (void*)&vfx_start_log<3>,
+                       (void*)&vfx_start_log<4>, (void*)&vfx_start_log<5>, (void*)&vfx_start_log<6>, (void*)&vfx_start_log<7> };
+    int hooked = 0;
+    for (int k = 0; k < nf; k++) {
+        g_vfxFns[k] = (VfxAnyFn)fns[k];
+        int n = hook_calls(fns[k], wraps[k], nullptr, 0);
+        LOG(.str("vfx log: start function ").i(k).str(" at ").x(rva_of(fns[k])).str(", ").i(n).str(" calls"));
+        hooked += n > 0;
+    }
+    uint8_t* pf = find_unique("VfxParamF", SIG_VFX_PARAM_F_CALL);
+    uint8_t* pv = find_unique("VfxParamV", SIG_VFX_PARAM_V_CALL);
+    if (pf && pf[0] == 0xE8) { uint8_t* f = pf + 5 + *(int32_t*)(pf + 1); g_vfxParamF = (VfxParamFFn)f;
+        if (hook_calls(f, (void*)&vfx_param_f_log, nullptr, 0) <= 0) g_vfxParamF = nullptr; }
+    if (pv && pv[0] == 0xE8) { uint8_t* f = pv + 5 + *(int32_t*)(pv + 1); g_vfxParamV = (VfxParamVFn)f;
+        if (hook_calls(f, (void*)&vfx_param_v_log, nullptr, 0) <= 0) g_vfxParamV = nullptr; }
+    LOG(.str("vfx log: ").i(hooked).str("/").i(nf).str(" start functions, params ").str(g_vfxParamF ? "f" : "-").str(g_vfxParamV ? "v" : "-"));
+}
+
 // Area box (fixed point, whole shapes) of the area the next corner click would make.
 static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     core::Plan pl; float step[3]; bool ok = false;
@@ -5090,6 +5173,7 @@ static DWORD WINAPI init_thread(void*) {
             }
         }
     }
+    if (!g_dedicated) install_vfx_log();
     LOG(.str("area preview: ").str(g_hoverFxOrig ? "available" : "not available").str(", 3D box ")
         .str(g_zoneVisOrig ? "available" : "not available"));
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
