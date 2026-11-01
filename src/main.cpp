@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.22.0"
+#define MOD_VERSION "0.23.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -112,7 +112,7 @@ struct Config {
     int keyFill      = VK_F11;     // area fill: solid / hollow / walls
     int keyMenu      = VK_HOME;    // in-game menu (native game UI, experimental)
     int refundPopup  = 1;          // show the game's item pop-up for refunds
-    int preview      = 1;          // show the area with the game's ghost highlight
+    int preview      = 1;          // area preview: 1 = 3D box, 2 = edge highlights, 3 = both, 0 = off
     int hoverDist10  = 40;         // free placement distance in tenths of a metre
     int panelScale   = 100;        // info panel size in percent
     int panelBottom  = 0;      // panel distance from the bottom edge (pixels at 1080p)
@@ -189,7 +189,8 @@ static void write_full_ini(const Config& c) {
      .t("\r\n[Area]\r\n")
      .t("; 2 = two opposite corners, 3 = two base corners then the height\r\nCorners=").i(c.corners).t("\r\n")
      .t("; Free placement start distance in tenths of a metre (40 = 4 m)\r\nFreePlacementDistance=").i(c.hoverDist10).t("\r\n")
-     .t("; Show the area being set up with the game's ghost highlight (1 = on)\r\nPreview=").i(c.preview).t("\r\n")
+     .t("; Show the area being set up: 1 = 3D box (the flame altar's base-area preview),\r\n")
+     .t(";     2 = highlights along the edges on surfaces, 3 = both, 0 = off\r\nPreview=").i(c.preview).t("\r\n")
      .t("\r\n[Limits]\r\n")
      .t("; Most shapes one area action may build, replace or remove (max 20000)\r\nMaxShapes=").i(c.maxShapes).t("\r\n")
      .t("; Most shapes one connected replace (fill bucket) repaints (max = MaxShapes)\r\nFillLimit=").i(c.fillLimit).t("\r\n")
@@ -647,6 +648,11 @@ static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55
 // client_cycle_inventory_stock (it sends the chosen material like a scroll)
 static const char* SIG_PICK_CALL = "E8 ?? ?? ?? ?? 80 7D 00 00 75 59 48 8B CE E8 ?? ?? ?? ?? 48 8B 4D C0 44 8B F0";
 // The build preview's missing-materials check, called from the cursor systems
+// Zone visualization renderer (~856150): reads the client world's BuildZoneVisualizationState
+// (world+0xffc0) through a getter (3a4620: lea rax,[rcx+0xffc0]; ret) called once per frame.
+// State: byte +0 = draw build zone borders, +0x10 min / +0x20 max (world metres, float4),
+// byte +0x30 = preview box valid (the flame altar's base-area preview, client_cursor_entity 2919b0).
+static const char* SIG_ZONE_VIS_CALL = "48 8B 8E E0 D4 47 00 E8 ?? ?? ?? ?? 0F 10 0D ?? ?? ?? ?? 45 33 F6 C6 85 A8 00 00 00 01";
 static const char* SIG_MISSING_CALL = "E8 ?? ?? ?? ?? 8B 13 8B CA 0F BA F1 0C 0F BA EA 0C 84 C0 0F 44 D1 89 13";
 // The client's input packet builder: copies ClientPlayerInputData into the network
 // layout (camera first). Client only; the dedicated server has no such code.
@@ -3230,16 +3236,72 @@ static volatile LONG g_previewCount = 0;
 static volatile LONG g_pvStarted = 0, g_pvActiveFrames = 0;
 
 // voxels along the 12 edges of the area box (thinned evenly when they do not fit)
-static int preview_voxels(uint32_t out[][3], int cap) {
+// ---- 3D area box: the flame altar's base-area preview box
+// The zone renderer's call to the state getter is redirected to zone_vis_hook, which
+// returns a copy of the state with the area's box filled in (the game's state is never
+// written). The box is computed on the game thread (hover hook) and read by the renderer.
+typedef uint8_t* (*ZoneVisGetFn)(uint8_t* world);
+static ZoneVisGetFn g_zoneVisOrig = nullptr;
+static volatile LONG g_boxSeq = 0;              // odd while being written
+static float g_boxMin[3], g_boxMax[3];
+static volatile DWORD g_boxTick = 0;            // last time the box was set (0 = none)
+static volatile LONG g_boxFrames = 0;
+static bool preview_box_on() { return g_zoneVisOrig && (g_cfg.preview & 1); }
+static bool preview_edges_on() { return (g_cfg.preview & 2) || (g_cfg.preview == 1 && !g_zoneVisOrig); }
+
+static uint8_t* zone_vis_hook(uint8_t* world) {
+    uint8_t* st = g_zoneVisOrig(world);
+    DWORD t = g_boxTick;
+    if (!st || !t || GetTickCount() - t > 250 || !preview_box_on()) return st;
+    alignas(16) static uint8_t copy[0x40];
+    float mn[3], mx[3];
+    for (int tries = 0; tries < 4; tries++) {
+        LONG a = g_boxSeq;
+        if (a & 1) continue;
+        memcpy(mn, g_boxMin, 12); memcpy(mx, g_boxMax, 12);
+        if (g_boxSeq == a) goto got;
+    }
+    return st;
+got:
+    memcpy(copy, st, sizeof(copy));
+    copy[0] = 1;                                    // draw zone borders (as while placing an altar)
+    float* fmn = (float*)(copy + 0x10); float* fmx = (float*)(copy + 0x20);
+    for (int a = 0; a < 3; a++) { fmn[a] = mn[a]; fmx[a] = mx[a]; }
+    fmn[3] = fmx[3] = 0.f;
+    copy[0x30] = 1;                                 // preview box valid
+    InterlockedIncrement(&g_boxFrames);
+    return copy;
+}
+
+// Area box (fixed point, whole shapes) of the area the next corner click would make.
+static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     core::Plan pl; float step[3]; bool ok = false;
-    if (!g_cfg.preview || !area_plan_live(&pl, step, &ok) || !ok) return 0;
-    if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return 0;
-    int64_t v0[3], v1[3];
+    if (!g_cfg.preview || !area_plan_live(&pl, step, &ok) || !ok) return false;
+    if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return false;
     for (int a = 0; a < 3; a++) {
         int64_t e = pl.origin[a] + pl.stepFix[a] * (pl.count[a] - 1);
-        int64_t lo = e < pl.origin[a] ? e : pl.origin[a], hi = e < pl.origin[a] ? pl.origin[a] : e;
+        lo[a] = e < pl.origin[a] ? e : pl.origin[a]; hi[a] = e < pl.origin[a] ? pl.origin[a] : e;
         int64_t half = (int64_t)(step[a] * 0.5 * core::kFix);
-        lo -= half; hi += half;
+        lo[a] -= half; hi[a] += half;
+    }
+    return true;
+}
+
+static void update_preview_box() {
+    int64_t lo[3], hi[3];
+    if (!preview_box_on() || !area_box_live(lo, hi)) { g_boxTick = 0; return; }
+    InterlockedIncrement(&g_boxSeq);
+    for (int a = 0; a < 3; a++) { g_boxMin[a] = (float)((double)lo[a] * kInv); g_boxMax[a] = (float)((double)hi[a] * kInv); }
+    InterlockedIncrement(&g_boxSeq);
+    DWORD t = GetTickCount();
+    g_boxTick = t ? t : 1;
+}
+
+static int preview_voxels(uint32_t out[][3], int cap) {
+    int64_t v0[3], v1[3], lo3[3], hi3[3];
+    if (!preview_edges_on() || !area_box_live(lo3, hi3)) return 0;
+    for (int a = 0; a < 3; a++) {
+        int64_t lo = lo3[a], hi = hi3[a];
         v0[a] = lo >> 31;                                   // floor(m * 2)
         v1[a] = (hi - 1) >> 31;                             // last voxel inside
         if (v1[a] < v0[a]) v1[a] = v0[a];
@@ -3273,6 +3335,7 @@ volatile DWORD g_hoverTick = 0;
 static void hover_fx_hook(uint8_t* ctx, void* b, void* c) {
     g_hoverFxOrig(ctx, b, c);
     g_hoverTick = GetTickCount();
+    update_preview_box();
     if (!ctx || !g_vfxStart || !g_vfxStop || !g_gameTime) return;
     void* world = *(void**)ctx;
     void* sys = *(void**)(ctx + 0x168);
@@ -3313,7 +3376,8 @@ static void preview_diag() {
     LONG f = g_pvActiveFrames;
     if (f == last) return;
     last = f;
-    LOG(.str("preview: ").i(g_previewCount).str(" highlights, started ").i(g_pvStarted).str(", active frames ").i(f));
+    LOG(.str("preview: ").i(g_previewCount).str(" highlights, started ").i(g_pvStarted).str(", active frames ").i(f)
+        .str(", box frames ").i(g_boxFrames));
 }
 
 static volatile DWORD g_floatTick = 0;              // last time the floating info text was drawn
@@ -4979,7 +5043,20 @@ static DWORD WINAPI init_thread(void*) {
             g_hoverFxOrig = (HoverFxFn)hook(hfx, 5, (void*)&hover_fx_hook);
         }
     }
-    LOG(.str("area preview: ").str(g_hoverFxOrig ? "available" : "not available"));
+    if (g_hoverFxOrig) {
+        uint8_t* zc = find_unique("ZoneVisCall", SIG_ZONE_VIS_CALL);
+        if (zc && zc[7] == 0xE8) {
+            uint8_t* site = zc + 7;
+            uint8_t* fn = site + 5 + *(int32_t*)(site + 1);
+            // the getter must still be "lea rax, [rcx + 0xffc0]; ret"
+            if (memcmp(fn, "\x48\x8D\x81\xC0\xFF\x00\x00\xC3", 8) == 0) {
+                g_zoneVisOrig = (ZoneVisGetFn)fn;
+                if (hook_calls(fn, (void*)&zone_vis_hook, &site, 1) != 1) g_zoneVisOrig = nullptr;
+            }
+        }
+    }
+    LOG(.str("area preview: ").str(g_hoverFxOrig ? "available" : "not available").str(", 3D box ")
+        .str(g_zoneVisOrig ? "available" : "not available"));
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
