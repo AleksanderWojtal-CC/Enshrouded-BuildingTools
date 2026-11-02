@@ -178,10 +178,15 @@ inline I3 plan_pos(const Plan& p, int i, int j, int k) {
 // roof. Rooms, walls and roofs are `thick` shapes thick. A side too thin to have an inside
 // stays complete.
 enum { FILL_SOLID = 0, FILL_HOLLOW = 1, FILL_WALLS = 2, FILL_ROOF = 3, FILL_ROUND = 4, FILL_DIAG = 5, FILL_COUNT = 6 };
-enum { ROOF_GABLE = 0, ROOF_HIP = 1, ROOF_GAMBREL = 2, ROOF_MANSARD = 3, ROOF_SHED = 4, ROOF_COUNT = 5 };
+enum { ROOF_GABLE = 0, ROOF_HIP = 1, ROOF_GAMBREL = 2, ROOF_MANSARD = 3, ROOF_SHED = 4, ROOF_CONE = 5, ROOF_DOME = 6, ROOF_COUNT = 7 };
+// cone and dome: round roofs over the ellipse of the area (a circle in a square area), the
+// same outline as a full round fill of that area, so they sit on round walls
+inline bool roof_is_round(int shape) { return shape == ROOF_CONE || shape == ROOF_DOME; }
 // how many ways a roof shape can be turned (gable / gambrel: ridge along either side,
-// shed: rising toward each of the four sides; hip and mansard look the same every way)
-inline int roof_turns(int shape) { return shape == ROOF_SHED ? 4 : (shape == ROOF_HIP || shape == ROOF_MANSARD) ? 1 : 2; }
+// shed: rising toward each of the four sides; hip, mansard, cone and dome look the same every way)
+inline int roof_turns(int shape) {
+    return shape == ROOF_SHED ? 4 : (shape == ROOF_HIP || shape == ROOF_MANSARD || roof_is_round(shape)) ? 1 : 2;
+}
 
 enum { ROUND_FULL = 0, ROUND_HALF = 1, ROUND_QUARTER = 2, ROUND_COUNT = 3 };
 inline int round_turns(int shape) { return shape == ROUND_FULL ? 1 : 4; }
@@ -271,7 +276,7 @@ inline int roof_profile(int shape, int d, int D, int h) {
 inline void roof_dist(int shape, bool axisX, bool flip, int o, int x, int z, int nx, int nz, int* d, int* D) {
     int ox = nx - 2 * o, oz = nz - 2 * o;
     int dx = (x < nx - 1 - x ? x : nx - 1 - x) - o, dz = (z < nz - 1 - z ? z : nz - 1 - z) - o;
-    if (shape == ROOF_HIP || shape == ROOF_MANSARD) {
+    if (shape == ROOF_HIP || shape == ROOF_MANSARD || roof_is_round(shape)) {
         *d = dx < dz ? dx : dz; *D = ((ox < oz ? ox : oz) - 1) / 2;
     } else if (shape == ROOF_SHED) {
         int c = axisX ? x : z, n = axisX ? nx : nz;
@@ -280,17 +285,65 @@ inline void roof_dist(int shape, bool axisX, bool flip, int o, int x, int z, int
         *d = axisX ? dx : dz; *D = ((axisX ? ox : oz) - 1) / 2;
     }
 }
+// Round roofs. A cone falls in a straight line from its peak to the area's ellipse (45
+// degrees over a circle in a flat area, like the hip roof); a dome is the upper half of an
+// ellipsoid, steep at the eave. r = the column centre's distance from the middle, 1 at the
+// area's ellipse (the round fill's rule, round_inside). Over the overhang a cone's slope
+// carries on down and a dome gets a flat brim at the eave. Height in shapes above the eave
+// for any column (outside the overhang too: neighbour tests); -1 past a dome's brim.
+inline float core_sqrt(float x) {
+    if (x <= 0.f) return 0.f;
+#if defined(__x86_64__) || defined(_M_X64)
+    float r; __asm__("sqrtss %1, %0" : "=x"(r) : "x"(x)); return r;
+#else
+    return __builtin_sqrtf(x);
+#endif
+}
+inline int round_half_up(float v) { int k = (int)v; if ((float)k > v) k--; float f = v - (float)k; return f >= 0.5f ? k + 1 : k; }
+inline int roof_round_height(int shape, int o, int h, int x, int z, int nx, int nz) {
+    const int ax = nx - 2 * o, az = nz - 2 * o;
+    const float ex = ((float)(2 * (x - o) + 1) - (float)ax) / (float)ax, ez = ((float)(2 * (z - o) + 1) - (float)az) / (float)az;
+    const float r2 = ex * ex + ez * ez;
+    if (shape == ROOF_DOME) {
+        if (r2 > 1.0f) return round_inside(ROUND_FULL, 0, x, z, nx, nz) ? 0 : -1;
+        return round_half_up((float)h * core_sqrt(1.0f - r2));
+    }
+    return round_half_up((float)h * (1.0f - core_sqrt(r2)));
+}
+// shapes of round roof column (x, z) above the eave: from just above its lowest neighbour's
+// top (so the steps touch) up to its own top; false outside the roof's outline
+inline bool roof_round_span(int shape, int o, int h, int x, int z, int nx, int nz, int* bot, int* top) {
+    if (!round_inside(ROUND_FULL, 0, x, z, nx, nz)) return false;
+    const int t = roof_round_height(shape, o, h, x, z, nx, nz);
+    int m = t;
+    static const int nb[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+    for (int k = 0; k < 4; k++) {
+        int v = roof_round_height(shape, o, h, x + nb[k][0], z + nb[k][1], nx, nz);
+        if (v < m) m = v;
+    }
+    *top = t; *bot = m + 1 < t ? m + 1 : t;
+    return true;
+}
+
 // Shapes of roof column (x, z), counted up from the plan's bottom: from just above the
 // previous column's top (so every step touches the next one) up to its own top, made
 // `thick` shapes deeper.
 inline void roof_column(const Plan& p, int x, int z, int* lo, int* hi) {
+    int t = p.thick < 1 ? 1 : p.thick;
+    if (roof_is_round(p.roofShape)) {
+        int bot, top;
+        if (!roof_round_span(p.roofShape, p.overhang, p.roofH - 1, x, z, p.count[0], p.count[2], &bot, &top)) { *lo = 1; *hi = 0; return; }
+        *lo = bot - (t - 1) + p.roofBase; *hi = top + p.roofBase;
+        if (*lo < 0) *lo = 0;
+        if (*hi > p.count[1] - 1) *hi = p.count[1] - 1;
+        return;
+    }
     int d, D;
     roof_dist(p.roofShape, p.roofAxisX != 0, p.roofFlip != 0, p.overhang, x, z, p.count[0], p.count[2], &d, &D);
     int h = p.roofH - 1;
     int top = roof_profile(p.roofShape, d, D, h);
     int bot = d > -p.overhang ? roof_profile(p.roofShape, d - 1, D, h) + 1 : (p.overhang ? top : 0);
     if (bot > top) bot = top;
-    int t = p.thick < 1 ? 1 : p.thick;
     *lo = bot - (t - 1) + p.roofBase; *hi = top + p.roofBase;
     if (*lo < 0) *lo = 0;
     if (*hi > p.count[1] - 1) *hi = p.count[1] - 1;
@@ -341,7 +394,7 @@ inline long fill_count(const Plan& p, int mode) {
         return n * p.count[wa];
     }
     if (mode == FILL_ROOF) {
-        // every column holds at least one shape: a huge area is over any limit anyway
+        // every column holds at least one shape (round roofs: about 4 in 5): a huge area is over any limit anyway
         if (cx * cz > 1000000) return cx * cz;
         long n = 0;
         for (int x = 0; x < cx; x++)
@@ -430,7 +483,18 @@ inline bool plan_area(const I3* c, int n, const float step_m[3], long max_total,
     roof_dist(shape, axisX, false, 0, 0, 0, out->count[0], out->count[2], &d, &D);
     const int H = out->count[1] == 1 ? D + 1 : out->count[1];
     out->roofH = H;
-    const int drop = -roof_profile(shape, -o, D, H - 1);
+    int drop = -roof_profile(shape, -o, D, H - 1);
+    if (roof_is_round(shape)) {
+        // the lowest step of the outline (a cone's overhang drops; a dome's brim stays level)
+        const int nx = out->count[0] + 2 * o, nz = out->count[2] + 2 * o;
+        if ((int64_t)nx * nz > 1000000) return false;
+        drop = 0;
+        for (int x = 0; x < nx; x++)
+            for (int z = 0; z < nz; z++) {
+                int bot, top;
+                if (roof_round_span(shape, o, H - 1, x, z, nx, nz, &bot, &top) && -bot > drop) drop = -bot;
+            }
+    }
     out->roofBase = (drop > 0 ? drop : 0) + out->thick - 1;
     for (int a = 0; a < 3; a += 2) { out->origin[a] -= out->stepFix[a] * o; out->count[a] += 2 * o; }
     if (out->stepFix[1] >= 0) out->origin[1] -= out->stepFix[1] * out->roofBase;
@@ -442,12 +506,12 @@ inline bool plan_area(const I3* c, int n, const float step_m[3], long max_total,
 
 // Roof shape + turn in 4 bits (the client sends its settings in few bits)
 inline int roof_pose_pack(int shape, int rot) {
-    static const int first[ROOF_COUNT] = { 0, 2, 3, 5, 6 };
+    static const int first[ROOF_COUNT] = { 0, 2, 3, 5, 6, 10, 11 };
     if (shape < 0 || shape >= ROOF_COUNT) shape = 0;
     return first[shape] + (rot % roof_turns(shape));
 }
 inline void roof_pose_unpack(int v, int* shape, int* rot) {
-    static const int first[ROOF_COUNT] = { 0, 2, 3, 5, 6 };
+    static const int first[ROOF_COUNT] = { 0, 2, 3, 5, 6, 10, 11 };
     *shape = 0; *rot = 0;
     for (int k = ROOF_COUNT - 1; k >= 0; k--)
         if (v >= first[k]) { *shape = k; *rot = v - first[k]; if (*rot >= roof_turns(k)) *rot = 0; return; }
@@ -514,6 +578,13 @@ inline uint32_t net_fill_bits(int fill, const FillOpts& fo) {
         return ((uint32_t)FILL_ROOF << NET_FILL_SHIFT) | ((10 + v / 4) << NET_ROOF_SHIFT) | ((v % 4) << NET_OVERHANG_SHIFT) |
                (t << NET_THICK_SHIFT);
     }
+    if (fill == FILL_ROOF && roof_is_round(fo.roofShape)) {
+        // cone / dome: roof pose (shape - cone) * 3 + thickness - 1 (0..5) with thickness field 3
+        // (no other roof sends that), the overhang as usual
+        uint32_t v = (uint32_t)(fo.roofShape - ROOF_CONE) * 3 + (uint32_t)clamp_thick(fo.thick) - 1;
+        return ((uint32_t)FILL_ROOF << NET_FILL_SHIFT) | (v << NET_ROOF_SHIFT) | (((uint32_t)fo.overhang & 3) << NET_OVERHANG_SHIFT) |
+               (3u << NET_THICK_SHIFT);
+    }
     return (((uint32_t)fill & 3) << NET_FILL_SHIFT) | ((uint32_t)roof_pose_pack(fo.roofShape, fo.roofRot) << NET_ROOF_SHIFT) |
            (((uint32_t)fo.overhang & 3) << NET_OVERHANG_SHIFT) | (((uint32_t)clamp_thick(fo.thick) - 1) << NET_THICK_SHIFT);
 }
@@ -532,6 +603,10 @@ inline int net_fill_unpack(uint32_t s, FillOpts* fo) {
         fo->roundHollow = t != 3;
         fo->thick = t == 3 ? 1 : t + 1;
         return FILL_ROUND;
+    }
+    if (fill == FILL_ROOF && t == 3 && pose < 6) {
+        fo->roofShape = ROOF_CONE + pose / 3; fo->roofRot = 0; fo->overhang = oh; fo->thick = pose % 3 + 1;
+        return FILL_ROOF;
     }
     roof_pose_unpack(pose, &fo->roofShape, &fo->roofRot);
     fo->overhang = oh;

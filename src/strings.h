@@ -210,6 +210,8 @@
     X(S_OPT_ROOF_GAMBREL, "option.roof_gambrel", "Gambrel (barn)") \
     X(S_OPT_ROOF_MANSARD, "option.roof_mansard", "Mansard") \
     X(S_OPT_ROOF_SHED, "option.roof_shed", "Shed (1 slope)") \
+    X(S_OPT_ROOF_CONE, "option.roof_cone", "Conical (round)") \
+    X(S_OPT_ROOF_DOME, "option.roof_dome", "Dome (round)") \
     X(S_OPT_ROOF_TURN, "option.roof_turn", "Roof turn") \
     X(S_OPT_OVERHANG, "option.overhang", "Roof overhang") \
     X(S_OPT_ROUND_SHAPE, "option.round_shape", "Round shape") \
