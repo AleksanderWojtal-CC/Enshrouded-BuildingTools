@@ -25,8 +25,8 @@ Keys (with the Construction Hammer)
   F10 Free placement on/off: the ghost hovers in front of you (snapped to the
       0.5 m building grid) instead of sticking to the surface you aim at
       Hold Q + mouse wheel (or Page Up / Page Down): farther / closer, 0.5 m steps
-  F11 Area fill: solid -> hollow room -> walls only -> roof -> round
-  Shift+R  next roof / round shape   R  turn it (only with the roof or round fill)
+  F11 Area fill: solid -> hollow room -> walls only -> roof -> round -> diagonal
+  Shift+R  next roof / round shape   R  turn it (roof, round or diagonal fill)
 
 Prefab mode
   Vanilla placement. With Replace on, the shape replaces the blocks you aim at
@@ -112,6 +112,12 @@ Area mode (2 corners)
   up in that wall: arches). Lying: a tube along the area's longer side
   (pipes; a half makes a tunnel). Solid / hollow and standing / lying are in
   the Options tab, on the tools wheel, and can get their own keys.
+  Diagonal: standing, a wall from corner 1 to corner 2 seen from above, as
+  high as the area (in an area one shape thin: a diagonal brace in that
+  wall); R turns it to the other diagonal. Lying: a ramp from corner 1 up or
+  down to the far side along the longer side, 45 degrees over a flat area;
+  R turns it 4 ways (falling, along the shorter side). 1-3 shapes thick, no
+  gaps on the steps. Standing / lying shares the round fill's key.
   The fill applies to build, replace and remove.
   3-corner mode is still there: in BuildingTools.ini set [Area] Corners=3
   (two base corners, then a third click for the height).

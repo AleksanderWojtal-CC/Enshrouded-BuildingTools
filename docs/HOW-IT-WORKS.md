@@ -79,6 +79,13 @@ On the last corner, the area is planned (`core::plan_fill`):
   or (lying) the cross-section across the longer horizontal side; the shape repeats along the
   remaining axis. The preview computes the same cells on the CPU and uploads them as bits.
   On a dedicated server the round settings travel as the roof fill with roof poses 10..15.
+- Diagonal fill (`core::diag_keep`): a 4-connected digital line from one corner of a plane
+  of the box to the opposite one. Cell (u, v) in box space is kept when
+  `f = u * dv - v * du` lies in `[-W/2, W - W/2)`, `W = t * (du + dv)`, so consecutive cells
+  share faces and `t` widens it by whole steps. The plane is the ground plan (standing), the
+  plane of an area one cell thin, or (lying) the upright plane along the longer horizontal
+  side; a flat lying area grows upward to a 45 degree ramp. It repeats along the remaining
+  axis. On a server it travels as round values 18..23 (no round uses them).
 
 Every position is dry-run priced in the game's own cost list, so the normal payment step
 charges the total. The single commit is then replaced by one commit per position.
