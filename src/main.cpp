@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.24.1"
+#define MOD_VERSION "0.25.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -130,7 +130,8 @@ struct Config {
     int globalChests = 0;      // building and crafting use the magic chests of every base
     int keyRadial    = VK_CAPITAL;  // hold: tools wheel (radial menu)
     int keyStyleFull = 0, keyStyleOverlap = 0, keyStyleConnected = 0;   // quick keys: set an option directly
-    int keyFillSolid = 0, keyFillHollow = 0, keyFillWalls = 0;
+    int keyFillSolid = 0, keyFillHollow = 0, keyFillWalls = 0, keyFillGable = 0, keyFillHip = 0;
+    int keyRoofTurn  = 'R';      // turn a gable roof (only in Area mode with a gable roof fill)
     int keyCreative  = 0;      // creative building on / off
     int keyReplaceHold = 0;    // Replace on while this key is held
     int keyPrefab = 0, keyAreaOn = 0, keyReplaceOn = 0, keyReplaceOff = 0;   // set a mode / Replace directly
@@ -167,7 +168,8 @@ static void write_full_ini(const Config& c) {
      .t("; Replace on/off\r\nToggleReplace=").i(c.keyReplace).t("\r\n")
      .t("; Clear area corners\r\nCancelCorners=").i(c.keyCancel).t("\r\n")
      .t("; Replace style: full shape / overlap only / connected (fill bucket)\r\nToggleReplaceStyle=").i(c.keyStyle).t("\r\n")
-     .t("; Area fill: solid / hollow room / walls only\r\nCycleAreaFill=").i(c.keyFill).t("\r\n")
+     .t("; Area fill: solid / hollow room / walls only / gable roof / hip roof\r\nCycleAreaFill=").i(c.keyFill).t("\r\n")
+     .t("; Turn a gable roof (only in Area mode with the gable roof fill; 82 = R)\r\nTurnRoof=").i(c.keyRoofTurn).t("\r\n")
      .t("; Whole mod off / on (off = vanilla game; all other mod keys do nothing)\r\nToggleMod=").i(c.keyOff).t("\r\n")
      .t("; Free placement on/off\r\nToggleFreePlacement=").i(c.keyHover).t("\r\n")
      .t("; Free placement distance: hold this key + mouse wheel (81 = Q), or the two keys below\r\nFreePlacementWheelKey=").i(c.wheelKey).t("\r\n")
@@ -178,6 +180,7 @@ static void write_full_ini(const Config& c) {
      .t("; Quick keys: set one option directly (0 = no key)\r\n")
      .t("StyleFull=").i(c.keyStyleFull).t("\r\nStyleOverlap=").i(c.keyStyleOverlap).t("\r\nStyleConnected=").i(c.keyStyleConnected).t("\r\n")
      .t("FillSolid=").i(c.keyFillSolid).t("\r\nFillHollow=").i(c.keyFillHollow).t("\r\nFillWalls=").i(c.keyFillWalls).t("\r\n")
+     .t("FillGableRoof=").i(c.keyFillGable).t("\r\nFillHipRoof=").i(c.keyFillHip).t("\r\n")
      .t("ToggleCreative=").i(c.keyCreative).t("\r\n")
      .t("PrefabMode=").i(c.keyPrefab).t("\r\nAreaMode=").i(c.keyAreaOn).t("\r\n")
      .t("ReplaceOn=").i(c.keyReplaceOn).t("\r\nReplaceOff=").i(c.keyReplaceOff).t("\r\n")
@@ -265,6 +268,9 @@ static void load_config() {
     g_cfg.keyFillSolid  = ini_int(L"Keys", L"FillSolid", 0);
     g_cfg.keyFillHollow = ini_int(L"Keys", L"FillHollow", 0);
     g_cfg.keyFillWalls  = ini_int(L"Keys", L"FillWalls", 0);
+    g_cfg.keyFillGable  = ini_int(L"Keys", L"FillGableRoof", 0);
+    g_cfg.keyFillHip    = ini_int(L"Keys", L"FillHipRoof", 0);
+    g_cfg.keyRoofTurn   = ini_int(L"Keys", L"TurnRoof", 'R');
     g_cfg.keyCreative   = ini_int(L"Keys", L"ToggleCreative", 0);
     g_cfg.keyPrefab     = ini_int(L"Keys", L"PrefabMode", 0);
     g_cfg.keyAreaOn     = ini_int(L"Keys", L"AreaMode", 0);
@@ -825,6 +831,7 @@ static void drain_sounds() {
 // rotation quaternion (forward = third matrix row, see 42880).
 static volatile LONG g_hover = 0;
 static volatile LONG g_fill = 0;              // core::FILL_*
+static volatile LONG g_roofRot = 0;           // roof fills: 1 = ridge along the shorter side
 static float g_hoverDist = 4.f;
 static float g_lastRot[4] = { 0.f, 0.f, 0.f, 1.f };
 static volatile LONG g_cxLogged = 0;
@@ -2135,7 +2142,7 @@ static uint8_t structure_fill(CostList* list, void* ctx, void* state, void* pdat
     I3 c[3] = { corners[0], corners[1], nc == 3 ? core::lock_third(corners[0], corners[1], corners[2], (int64_t)(0.1 * core::kFix)) : corners[1] };
     core::Plan pl = {};
     const int fm = g_fill;
-    bool ok = core::plan_fill(c, nc, step, 50000000, &pl);
+    bool ok = core::plan_area(c, nc, step, 50000000, fm, g_roofRot, &pl);
     if (ok) { pl.total = core::fill_count(pl, fm); ok = pl.total <= g_cfg.maxShapes; }
     LOG(.str("fill: mode ").i(fm).str(" last corner (").fix(corners[2].x).c(',').fix(corners[2].y).c(',').fix(corners[2].z)
         .str(") locked to (").fix(c[2].x).c(',').fix(c[2].y).c(',').fix(c[2].z)
@@ -2587,10 +2594,11 @@ static NetPlayer* net_player(uint8_t* input) {
 }
 static void net_log_state(const char* what, uint8_t* input, uint32_t s) {
     static const char* styles[] = { "?", "overlap", "full", "connected" };
-    static const char* fills[] = { "solid", "hollow", "walls", "?" };
+    static const char* fills[] = { "solid", "hollow", "walls", "gable roof", "hip roof", "?", "?", "?" };
     LOG(.str(what).str(" player ").x((uint64_t)(uintptr_t)input).str(": ").str(s & core::NET_ON ? "on" : "off (vanilla)")
         .str(", ").str(s & core::NET_AREA ? "area" : "prefab").str(", replace ").i((s & core::NET_REPLACE) != 0)
-        .str(" (").str(styles[core::net_field(s, core::NET_STYLE_SHIFT, 2)]).str("), fill ").str(fills[core::net_field(s, core::NET_FILL_SHIFT, 2)])
+        .str(" (").str(styles[core::net_field(s, core::NET_STYLE_SHIFT, 2)]).str("), fill ").str(fills[core::net_field(s, core::NET_FILL_SHIFT, 2) | (s & core::NET_FILL_HI ? 4 : 0)])
+        .str(s & core::NET_ROOF_ROT ? " (turned)" : "")
         .str(", corners ").i(s & core::NET_CORNERS3 ? 3 : 2));
 }
 // every frame, for every player holding the hammer: log when a player's settings change
@@ -2600,7 +2608,7 @@ static void net_watch(uint8_t* input) {
     EnterCriticalSection(&g_stateLock);
     NetPlayer* p = net_player(input);
     p->seen = GetTickCount();
-    const uint32_t settings = 0xffff;                 // count and click number change with every click
+    const uint32_t settings = 0xffff | core::NET_FILL_HI | core::NET_ROOF_ROT;   // count and click number change with every click
     if (ok != p->valid || (ok && ((s ^ p->state) & settings))) {
         if (ok) net_log_state("settings from", input, s);
         else LOG(.str("player ").x((uint64_t)(uintptr_t)input).str(": no Building Tools settings from this player's game (vanilla building)"));
@@ -2632,8 +2640,9 @@ struct NetScope {
         g_replace = s & core::NET_REPLACE ? 1 : 0;
         LONG st = (LONG)core::net_field(s, core::NET_STYLE_SHIFT, 2);
         g_replaceStyle = st >= STYLE_OVERLAP && st <= STYLE_CONNECTED ? st : STYLE_FULL;
-        LONG f = (LONG)core::net_field(s, core::NET_FILL_SHIFT, 2);
+        LONG f = (LONG)core::net_field(s, core::NET_FILL_SHIFT, 2) | (s & core::NET_FILL_HI ? 4 : 0);
         g_fill = f < core::FILL_COUNT ? f : core::FILL_SOLID;
+        g_roofRot = s & core::NET_ROOF_ROT ? 1 : 0;
         g_cfg.corners = s & core::NET_CORNERS3 ? 3 : 2;
         g_sc = p->sc; g_corners = p->sc; g_scOp = p->scOp;
         memcpy(g_scPos, p->scPos, sizeof(g_scPos));
@@ -2834,7 +2843,7 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
     float step[3] = { bx->mx[0] - bx->mn[0], bx->mx[1] - bx->mn[1], bx->mx[2] - bx->mn[2] };
     core::Plan pl = {};
     const int fm = g_fill;
-    bool ok = core::plan_fill(c, nc, step, 50000000, &pl);
+    bool ok = core::plan_area(c, nc, step, 50000000, fm, g_roofRot, &pl);
     if (ok) { pl.total = core::fill_count(pl, fm); ok = pl.total <= g_cfg.maxShapes; }
     LOG(.str("remove fill: mode ").i(fm).str(" step=(").f(step[0]).c(',').f(step[1]).c(',').f(step[2]).str(") counts=")
         .i(pl.count[0]).c('x').i(pl.count[1]).c('x').i(pl.count[2]).str(" total=").i(pl.total).str(ok ? "" : " REFUSED"));
@@ -3049,6 +3058,8 @@ static uint32_t net_client_state() {
     if (g_replace) s |= core::NET_REPLACE;
     s |= ((uint32_t)g_replaceStyle & 3) << core::NET_STYLE_SHIFT;
     s |= ((uint32_t)g_fill & 3) << core::NET_FILL_SHIFT;
+    if (g_fill & 4) s |= core::NET_FILL_HI;
+    if (g_roofRot & 1) s |= core::NET_ROOF_ROT;
     if (g_cfg.corners == 3) s |= core::NET_CORNERS3;
     s |= ((uint32_t)g_sc & 3) << core::NET_COUNT_SHIFT;
     if (g_scOp == OP_REMOVE) s |= core::NET_OP_REMOVE;
@@ -3090,7 +3101,7 @@ static void remote_corner(LONG op, uint8_t* item, const CursorXf* place, const C
     const int nc = g_cfg.corners;
     I3 c[3] = { g_scPos[0], g_scPos[1], nc == 3 ? core::lock_third(g_scPos[0], g_scPos[1], g_scPos[2], (int64_t)(0.1 * core::kFix)) : g_scPos[1] };
     core::Plan pl = {};
-    bool ok = core::plan_fill(c, nc, step, 50000000, &pl);
+    bool ok = core::plan_area(c, nc, step, 50000000, g_fill, g_roofRot, &pl);
     if (ok) { pl.total = core::fill_count(pl, g_fill); ok = pl.total <= g_cfg.maxShapes; }
     LeaveCriticalSection(&g_stateLock);
     LOG(.str("remote area: ").i(pl.count[0]).c('x').i(pl.count[1]).c('x').i(pl.count[2]).str(" total ").i(pl.total).str(ok ? " sent" : " too big"));
@@ -3276,7 +3287,7 @@ static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
     for (int a = 0; a < 3; a++) step[a] = g_scStep[a];
     if (step[0] <= 0.f || step[1] <= 0.f || step[2] <= 0.f) return false;
     *pl = core::Plan{};
-    *ok = core::plan_fill(c, 3, step, 50000000, pl);
+    *ok = core::plan_area(c, 3, step, 50000000, g_fill, g_roofRot, pl);
     return true;
 }
 
@@ -3355,11 +3366,14 @@ got:
     return copy;
 }
 
-// Area box (fixed point, whole shapes) of the area the next corner click would make.
+// Area box (fixed point, whole shapes) of the area the next corner click would make
+// (with a roof fill over a flat area: grown up to the roof's height).
+static volatile LONG g_boxRoofX = 0;            // the box's roof slopes rise along x (Plan::roofAcrossX)
 static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     core::Plan pl; float step[3]; bool ok = false;
     if (!g_cfg.preview || !area_plan_live(&pl, step, &ok) || !ok) return false;
     if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return false;
+    g_boxRoofX = pl.roofAcrossX;
     for (int a = 0; a < 3; a++) {
         int64_t e = pl.origin[a] + pl.stepFix[a] * (pl.count[a] - 1);
         lo[a] = e < pl.origin[a] ? e : pl.origin[a]; hi[a] = e < pl.origin[a] ? pl.origin[a] : e;
@@ -3643,7 +3657,8 @@ static void compose_overlay(char* out, int cap) {
         if (g_mode == MODE_AREA) {
             b.fmt(T(g_scOp == OP_REMOVE ? S_BAR_AREA_REMOVE : g_replace ? S_BAR_AREA_REPLACE : S_BAR_AREA_BUILD),
                   num(g_corners).s, num(g_cfg.corners).s);
-            if (g_fill % 3) b.str("  |  ").str(T(g_fill % 3 == 1 ? S_BAR_HOLLOW : S_BAR_WALLS));
+            static const Str barFill[] = { S_BAR_HOLLOW, S_BAR_HOLLOW, S_BAR_WALLS, S_BAR_GABLE, S_BAR_HIP };
+            if (g_fill % core::FILL_COUNT) b.str("  |  ").str(T(barFill[g_fill % core::FILL_COUNT]));
             live_size(b);
         } else b.str(T(g_replace ? S_BAR_PREFAB_REPLACE : S_BAR_PREFAB));
         if (g_replace) b.str("  |  ").str(T(g_replaceStyle == STYLE_FULL ? S_BAR_FULL : g_replaceStyle == STYLE_CONNECTED ? S_BAR_CONNECTED : S_BAR_OVERLAP));
@@ -3836,6 +3851,8 @@ static void set_replace_style(LONG st) {
     LOG(.str("replace style -> ").str(st == STYLE_FULL ? "full" : st == STYLE_OVERLAP ? "overlap" : "connected"));
 }
 static void set_fill(LONG f) { g_fill = f; LOG(.str("fill -> ").i(f)); }
+// the roof key works (and shows) only while it can turn something: Area mode, gable roof
+static bool roof_turn_on() { return g_mode == MODE_AREA && g_fill == core::FILL_GABLE; }
 static void set_hover(LONG h) { g_hover = h; g_cxLogged = 0; LOG(.str("free placement -> ").i(h)); }
 static bool set_creative(bool on) {
     if (remote_session()) { flash(T(S_CREATIVE_SERVER)); beep(MB_ICONHAND); return false; }   // the server's ini decides
@@ -3849,7 +3866,8 @@ static bool set_creative(bool on) {
 enum {
     ACT_AREA, ACT_REPLACE, ACT_CLEAR, ACT_STYLE, ACT_FREE, ACT_FARTHER, ACT_CLOSER, ACT_FILL,
     ACT_STYLE_FULL, ACT_STYLE_OVERLAP, ACT_STYLE_CONNECTED, ACT_FILL_SOLID, ACT_FILL_HOLLOW, ACT_FILL_WALLS,
-    ACT_CREATIVE, ACT_PREFAB, ACT_AREA_ON, ACT_REPLACE_ON, ACT_REPLACE_OFF, ACT_KEYED,          // the actions above have their own key
+    ACT_CREATIVE, ACT_PREFAB, ACT_AREA_ON, ACT_REPLACE_ON, ACT_REPLACE_OFF, ACT_FILL_GABLE, ACT_FILL_HIP, ACT_ROOF_TURN,
+    ACT_KEYED,          // the actions above have their own key
     ACT_MENU = ACT_KEYED,             // the wheel's menu entry (the menu key is handled with the menu)
 };
 static int* const kActKey[ACT_KEYED] = {
@@ -3858,6 +3876,7 @@ static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyStyleFull, &g_cfg.keyStyleOverlap, &g_cfg.keyStyleConnected,
     &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
     &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
+    &g_cfg.keyFillGable, &g_cfg.keyFillHip, &g_cfg.keyRoofTurn,
 };
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
 static volatile LONG g_menuOpen = 0;
@@ -3865,10 +3884,15 @@ static void style_set(LONG st) {
     set_replace_style(st);
     flash(T(st == STYLE_FULL ? S_STYLE_FULL : st == STYLE_OVERLAP ? S_STYLE_OVERLAP : S_STYLE_CONNECTED));
 }
+static const Str kFillMsg[core::FILL_COUNT] = { S_FILL_SOLID, S_FILL_HOLLOW, S_FILL_WALLS, S_FILL_GABLE, S_FILL_HIP };
 static void fill_set(LONG f) {
     set_fill(f);
-    flash(T(f == core::FILL_SOLID ? S_FILL_SOLID : f == core::FILL_HOLLOW ? S_FILL_HOLLOW : S_FILL_WALLS));
+    char key[32] = "";
+    if (g_cfg.keyRoofTurn > 0) vk_name(g_cfg.keyRoofTurn, key);
+    Buf b; b.fmt(T(kFillMsg[f % core::FILL_COUNT]), key);
+    flash(b.z());
 }
+static void set_roof_rot(LONG r) { g_roofRot = r & 1; LOG(.str("roof ridge -> ").str(r & 1 ? "short side" : "long side")); }
 static void do_act(int a) {
     switch (a) {
     case ACT_AREA: {
@@ -3903,6 +3927,9 @@ static void do_act(int a) {
     case ACT_FILL_SOLID: fill_set(core::FILL_SOLID); break;
     case ACT_FILL_HOLLOW: fill_set(core::FILL_HOLLOW); break;
     case ACT_FILL_WALLS: fill_set(core::FILL_WALLS); break;
+    case ACT_FILL_GABLE: fill_set(core::FILL_GABLE); break;
+    case ACT_FILL_HIP: fill_set(core::FILL_HIP); break;
+    case ACT_ROOF_TURN: set_roof_rot(!g_roofRot); flash(T(g_roofRot ? S_ROOF_SHORT : S_ROOF_LONG)); break;
     case ACT_CREATIVE:
         if (!set_creative(!g_cfg.creative)) return;
         flash(T(g_cfg.creative ? S_CREATIVE_ON : S_CREATIVE_OFF));
@@ -4082,13 +4109,15 @@ static void draw_tool_settings() {
     const char* const modes[] = { T(S_OPT_MODE_PREFAB), T(S_OPT_MODE_AREA) };
     const char* const styles[] = { T(S_OPT_STYLE_FULL), T(S_OPT_STYLE_OVERLAP), T(S_OPT_STYLE_CONNECTED) };
     static const LONG styleIds[] = { STYLE_FULL, STYLE_OVERLAP, STYLE_CONNECTED };
-    const char* const fills[] = { T(S_OPT_FILL_SOLID), T(S_OPT_FILL_HOLLOW), T(S_OPT_FILL_WALLS) };
+    const char* const fills[] = { T(S_OPT_FILL_SOLID), T(S_OPT_FILL_HOLLOW), T(S_OPT_FILL_WALLS), T(S_OPT_FILL_GABLE), T(S_OPT_FILL_HIP) };
+    const char* const ridges[] = { T(S_OPT_ROOF_LONG), T(S_OPT_ROOF_SHORT) };
     LONG v;
     if (ui_option(T(S_OPT_MODE), modes, 2, g_mode, &v)) set_mode(v);
     if (ui_option(T(S_OPT_REPLACE), offOn, 2, g_replace ? 1 : 0, &v)) set_replace(v);
     int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
     if (ui_option(T(S_OPT_STYLE), styles, 3, st, &v)) set_replace_style(styleIds[v]);
     if (ui_option(T(S_OPT_FILL), fills, core::FILL_COUNT, g_fill, &v)) set_fill(v);
+    if (g_fill == core::FILL_GABLE && ui_option(T(S_OPT_ROOF), ridges, 2, g_roofRot & 1, &v)) set_roof_rot(v);
     if (ui_option(T(S_OPT_FREE), offOn, 2, g_hover ? 1 : 0, &v)) set_hover(v);
     if (ui_option(T(S_OPT_CREATIVE), offOn, 2, g_cfg.creative ? 1 : 0, &v) && set_creative(v != 0))
         flash(T(g_cfg.creative ? S_CREATIVE_ON : S_CREATIVE_OFF));
@@ -4118,6 +4147,7 @@ static KeyAction g_keyActions[] = {
     { S_ACT_REPLACE, &g_cfg.keyReplace, 0 },
     { S_ACT_STYLE, &g_cfg.keyStyle, 0 },
     { S_ACT_FILL, &g_cfg.keyFill, 0 },
+    { S_ACT_ROOF_TURN, &g_cfg.keyRoofTurn, 0 },
     { S_ACT_CLEAR, &g_cfg.keyCancel, 0 },
     { S_ACT_FREE, &g_cfg.keyHover, 0 },
     { S_ACT_FARTHER, &g_cfg.keyFarther, 0 },
@@ -4136,6 +4166,8 @@ static KeyAction g_keyActions[] = {
     { S_ACT_FILL_SOLID, &g_cfg.keyFillSolid, 1 },
     { S_ACT_FILL_HOLLOW, &g_cfg.keyFillHollow, 1 },
     { S_ACT_FILL_WALLS, &g_cfg.keyFillWalls, 1 },
+    { S_ACT_FILL_GABLE, &g_cfg.keyFillGable, 1 },
+    { S_ACT_FILL_HIP, &g_cfg.keyFillHip, 1 },
 };
 static const int kKeyActions = sizeof g_keyActions / sizeof g_keyActions[0];
 
@@ -4487,11 +4519,12 @@ static void draw_hud_rows() {
     // also while the hammer aims at the sky (no place cursor then)
     if (GetTickCount() - g_gameRowTick > 200) return;
     static const Str styles[] = { S_HUD_STYLE_FULL, S_HUD_STYLE_OVERLAP, S_HUD_STYLE_CONNECTED };
-    static const Str fills[] = { S_HUD_FILL_SOLID, S_HUD_FILL_HOLLOW, S_HUD_FILL_WALLS };
+    static const Str fills[] = { S_HUD_FILL_SOLID, S_HUD_FILL_HOLLOW, S_HUD_FILL_WALLS, S_HUD_FILL_GABLE, S_HUD_FILL_HIP };
     bool sw = ui.hudSwitch || ui.imageCtx;
     hud_key_row(g_cfg.keyStructure, T(sw ? S_HUD_AREA : g_mode == MODE_AREA ? S_HUD_AREA_ON : S_HUD_AREA_OFF), g_mode == MODE_AREA);
     if (g_mode == MODE_AREA) {
-        hud_key_row(g_cfg.keyFill, T(fills[g_fill % 3]));
+        hud_key_row(g_cfg.keyFill, T(fills[g_fill % core::FILL_COUNT]));
+        if (roof_turn_on() && g_cfg.keyRoofTurn > 0) hud_key_row(g_cfg.keyRoofTurn, T(S_HUD_ROOF_TURN));
         if (g_corners > 0) hud_key_row(g_cfg.keyCancel, T(S_HUD_CLEAR));
     }
     hud_key_row(g_cfg.keyReplace, T(sw ? S_HUD_REPLACE : g_replace ? S_HUD_REPLACE_ON : S_HUD_REPLACE_OFF), g_replace != 0);
@@ -4783,6 +4816,7 @@ static int wheel_entries(int* act) {
     int n = 0;
     act[n++] = ACT_AREA;
     if (g_mode == MODE_AREA) act[n++] = ACT_FILL;
+    if (roof_turn_on()) act[n++] = ACT_ROOF_TURN;
     if (g_mode == MODE_AREA && g_corners > 0) act[n++] = ACT_CLEAR;
     act[n++] = ACT_FREE;
     act[n++] = ACT_MENU;
@@ -4793,10 +4827,11 @@ static int wheel_entries(int* act) {
 static void wheel_texts(int a, char* name, char* value) {
     const char* nm = ""; const char* v = "";
     static const Str styles[] = { S_OPT_STYLE_FULL, S_OPT_STYLE_OVERLAP, S_OPT_STYLE_CONNECTED };
-    static const Str fills[] = { S_OPT_FILL_SOLID, S_OPT_FILL_HOLLOW, S_OPT_FILL_WALLS };
+    static const Str fills[] = { S_OPT_FILL_SOLID, S_OPT_FILL_HOLLOW, S_OPT_FILL_WALLS, S_OPT_FILL_GABLE, S_OPT_FILL_HIP };
     switch (a) {
     case ACT_AREA: nm = T(S_OPT_MODE); v = T(g_mode == MODE_AREA ? S_OPT_MODE_AREA : S_OPT_MODE_PREFAB); break;
-    case ACT_FILL: nm = T(S_OPT_FILL); v = T(fills[g_fill % 3]); break;
+    case ACT_FILL: nm = T(S_OPT_FILL); v = T(fills[g_fill % core::FILL_COUNT]); break;
+    case ACT_ROOF_TURN: nm = T(S_OPT_ROOF); v = T(g_roofRot ? S_OPT_ROOF_SHORT : S_OPT_ROOF_LONG); break;
     case ACT_CLEAR: nm = T(S_HUD_CLEAR); break;
     case ACT_FREE: nm = T(S_OPT_FREE); v = T(g_hover ? S_OPT_ON : S_OPT_OFF); break;
     case ACT_MENU: nm = T(S_HUD_MENU); break;
@@ -4935,6 +4970,7 @@ static DWORD WINAPI input_thread(void*) {
         for (int k = 0; k < ACT_KEYED; k++) {
             int code = *kActKey[k];
             if ((k == ACT_FARTHER || k == ACT_CLOSER) && !g_hover) code = 0;
+            if (k == ACT_ROOF_TURN && !roof_turn_on()) code = 0;     // R stays the game's key otherwise
             bool down = focus && key_down(code);
             if (down && !prev[k]) do_act(k);
             prev[k] = down;

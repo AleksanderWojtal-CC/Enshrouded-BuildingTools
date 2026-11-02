@@ -626,13 +626,13 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
             push.cells[a] = g_cellStep[a];
         }
         LONG op = g_scOp == OP_REMOVE ? 2 : g_replace ? 1 : 0;
-        push.cells[3] = (float)((g_fill & 3) + 4 * op);
+        push.cells[3] = (float)((g_fill & 7) + 8 * op + (g_boxRoofX ? 64 : 0));
         if (nn <= 40000) cellN = (uint32_t)nn;
         bool onlyFull = op == 2 || (op == 1 && g_replaceStyle != STYLE_FULL);
         if (cellN && onlyFull) {
             if (s.occMap && g_occReady) {
                 memcpy(s.occMap, (const void*)g_occBits, sizeof(g_occBits));
-                push.cells[3] += 16.f;
+                push.cells[3] += 32.f;
                 g_vd.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, s.layout, 1, 1, &s.occSet, 0, nullptr);
             } else if (s.occMap) cellN = 0;          // bits for this area not read yet: no blocks rather than wrong ones
         }

@@ -32,7 +32,7 @@ void main() {
     vec2 px = max(fwidth(vec2(vCell[a], vCell[c])), vec2(1e-5));
     float e = min(uv.x / px.x, uv.y / px.y);
     float edge = (1.0 - smoothstep(0.5, 1.5, e)) * clamp(1.0 - max(px.x, px.y) * 4.0, 0.0, 1.0);   // block seams fade far away
-    int act = (int(pc.cells.w) >> 2) & 3;
+    int act = (int(pc.cells.w) >> 3) & 3;
     vec3 col = act == 1 ? vec3(1.0, 0.62, 0.12) : act == 2 ? vec3(1.0, 0.22, 0.42) : vec3(0.45, 0.75, 1.0);
     // simple light from above so the solid reads in 3D: tops bright, sides medium, bottoms dark
     float shade = vNormal.y > 0.5 ? 1.0 : vNormal.y < -0.5 ? 0.6 : (abs(vNormal.x) > 0.5 ? 0.85 : 0.75);
