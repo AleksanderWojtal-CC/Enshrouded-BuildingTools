@@ -3,6 +3,20 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.27.0
+
+- **Diagonal walls in Area mode.** A new area fill, **diagonal**. Standing: a wall from your
+  first corner to your second, seen from above, as high as the area (mark a wall one shape
+  thin and you get a diagonal brace in it). Lying: a ramp from your first corner up or down
+  to the far side, along the area's longer side; over a flat area it rises at 45 degrees,
+  over a 3D area it runs exactly corner to corner. The steps share faces, so there are no
+  gaps.
+- **R** turns it: standing to the other diagonal, lying to fall instead of rise or to run
+  along the shorter side. Standing / lying shares the round fill's key (unassigned at
+  first), and is in the Options tab and on the tools wheel. Thickness 1 to 3, a quick key
+  for the fill, 3D preview of the exact blocks. Works for build, replace and remove, and
+  on dedicated servers (update the server too).
+
 ## 0.26.0
 
 - **Round walls in Area mode** (#17). A new area fill, **round**: a full circle, a half or a
