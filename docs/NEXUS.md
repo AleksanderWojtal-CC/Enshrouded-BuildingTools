@@ -42,11 +42,14 @@ terrain while a terrain material is selected).
 Click two opposite corners: the selected shape is repeated over a line, floor, wall
 or box. Left click builds (or replaces with Replace on), right click removes.
 Area remove (and connected delete) cuts building pieces such as foundations like blocks.
-Fill (F11): solid, hollow room (walls + floor + ceiling), walls only or roof; rooms, walls
-and roofs 1-3 shapes thick.
+Fill (F11): solid, hollow room (walls + floor + ceiling), walls only, roof or round; rooms,
+walls, roofs and round walls 1-3 shapes thick.
 [b]Roofs:[/b] gable, hip, gambrel, mansard and shed (Shift+R cycles, R turns). Mark a flat area
 and the roof covers it, one shape up for every shape in from the edge; mark a 3D area and the
 box height sets the roof height. Overhang up to 3 shapes.
+[b]Round walls:[/b] full circle, half or quarter (Shift+R cycles, R turns), solid or hollow. The
+two corners bound the shape: a square gives a circle, a rectangle an ellipse. Standing (towers,
+arches in a thin wall) or lying (tubes and tunnels along the area).
 Floating text below the crosshair shows the live size and block count before you confirm.
 A see-through 3D box is drawn over the area while you set it up (dimmer where terrain or
 blocks hide it, red while you stand inside), with the blocks the action will touch shown

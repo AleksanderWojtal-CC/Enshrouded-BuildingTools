@@ -70,6 +70,15 @@ On the last corner, the area is planned (`core::plan_fill`):
   deeper, so the steps touch. Overhang widens the plan on every side and extends the
   profile to negative `d`, so the plan also grows downward (`roofBase`). The preview shader
   (`cells.vert`) repeats the same rule from bits packed into the push constants.
+- Round fill (`core::round_inside`, `core::round_keep`): a cell of the round's plane is in
+  when its centre is inside the ellipse that fills the box (half: centre on the middle of one
+  side, quarter: on a corner, the ellipse twice as big). Hollow keeps inside cells within one
+  diagonal step plus `t - 1` straight steps of an outside cell, so the wall is face-connected
+  (no diagonal gaps); past a half's or quarter's straight sides the ellipse continues, so those
+  sides stay open. The plane is the ground plan, the vertical plane of an area one cell thin,
+  or (lying) the cross-section across the longer horizontal side; the shape repeats along the
+  remaining axis. The preview computes the same cells on the CPU and uploads them as bits.
+  On a dedicated server the round settings travel as the roof fill with roof poses 10..15.
 
 Every position is dry-run priced in the game's own cost list, so the normal payment step
 charges the total. The single commit is then replaced by one commit per position.
