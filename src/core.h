@@ -311,14 +311,18 @@ inline int roof_round_height(int shape, int o, int h, int x, int z, int nx, int 
     return round_half_up((float)h * (1.0f - core_sqrt(r2)));
 }
 // shapes of round roof column (x, z) above the eave: from just above its lowest neighbour's
-// top (so the steps touch) up to its own top; false outside the roof's outline
+// top (so the steps touch; a neighbour past the outline counts as below the eave, so the
+// outline is a closed ring) up to its own top; false outside the roof's outline
 inline bool roof_round_span(int shape, int o, int h, int x, int z, int nx, int nz, int* bot, int* top) {
     if (!round_inside(ROUND_FULL, 0, x, z, nx, nz)) return false;
     const int t = roof_round_height(shape, o, h, x, z, nx, nz);
     int m = t;
     static const int nb[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
     for (int k = 0; k < 4; k++) {
-        int v = roof_round_height(shape, o, h, x + nb[k][0], z + nb[k][1], nx, nz);
+        const int x2 = x + nb[k][0], z2 = z + nb[k][1];
+        int v = roof_round_height(shape, o, h, x2, z2, nx, nz);
+        // past the outline the roof ends below the eave: the outline columns reach down to it (no holes in the bottom ring)
+        if (v > -1 && !round_inside(ROUND_FULL, 0, x2, z2, nx, nz)) v = -1;
         if (v < m) m = v;
     }
     *top = t; *bot = m + 1 < t ? m + 1 : t;

@@ -356,6 +356,21 @@ int main(int argc, char** argv) {
                 }
             }
             CHECK(closed, "cone steps touch (no gaps)");
+            core::I3 c10[2] = {{0, 0, 0}, {9 * M, 0, 8 * M}};
+            core::Plan q; bool ring = true;
+            for (int sh = core::ROOF_CONE; sh <= core::ROOF_DOME; sh++) {
+                core::plan_area(c10, 2, step1, 2000, R, fo(sh), &q);
+                for (int i = 0; i < q.count[0]; i++) for (int k = 0; k < q.count[2]; k++) {
+                    int lo, hi; core::roof_column(q, i, k, &lo, &hi);
+                    if (hi < lo) continue;
+                    bool edge = false;
+                    const int nb[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+                    for (int e = 0; e < 4; e++)
+                        if (!core::round_inside(core::ROUND_FULL, 0, i + nb[e][0], k + nb[e][1], q.count[0], q.count[2])) edge = true;
+                    if (edge && lo != 0) ring = false;
+                }
+            }
+            CHECK(ring, "cone / dome 10x9: every outline column reaches down to the eave (closed bottom ring)");
         }
         // dome over 9 x 9: steep at the eave (an edge column reaches up), round on top
         CHECK(core::plan_area(c9, 2, step1, 2000, R, fo(core::ROOF_DOME), &pl) && pl.count[1] == 5 && pl.roofBase == 0, "dome 9x9 -> 5 high");
