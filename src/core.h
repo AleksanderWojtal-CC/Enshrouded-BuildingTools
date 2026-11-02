@@ -183,7 +183,7 @@ inline int roof_turns(int shape) { return shape == ROOF_SHED ? 4 : (shape == ROO
 enum { ROUND_FULL = 0, ROUND_HALF = 1, ROUND_QUARTER = 2, ROUND_COUNT = 3 };
 inline int round_turns(int shape) { return shape == ROUND_FULL ? 1 : 4; }
 
-struct FillOpts { int roofShape, roofRot, thick, overhang, roundShape = 0, roundRot = 0, roundHollow = 0; };
+struct FillOpts { int roofShape, roofRot, thick, overhang, roundShape = 0, roundRot = 0, roundHollow = 0, roundLying = 0; };
 
 // Round fills: an ellipse (a circle in a square area) that fills the area's box, or half of
 // one (flat side on one side of the box) or a quarter (centre on one corner of the box).
@@ -330,9 +330,11 @@ inline bool plan_area(const I3* c, int n, const float step_m[3], long max_total,
     out->thick = fo.thick < 1 ? 1 : fo.thick > 3 ? 3 : fo.thick;
     out->roofShape = out->roofAxisX = out->roofFlip = out->overhang = out->roofH = out->roofBase = 0;
     if (mode == FILL_ROUND) {
-        // the plane: the ground plan, or a standing wall the area is one cell thin across
+        // standing: the ground plan, or a standing wall the area is one cell thin across;
+        // lying: a tube along the longer side of the ground plan (the round stands across it)
         int axis = 1;
-        if (out->count[1] > 1 && out->count[0] == 1 && out->count[2] > 1) axis = 0;
+        if (fo.roundLying) axis = out->count[0] >= out->count[2] ? 0 : 2;
+        else if (out->count[1] > 1 && out->count[0] == 1 && out->count[2] > 1) axis = 0;
         else if (out->count[1] > 1 && out->count[2] == 1 && out->count[0] > 1) axis = 2;
         out->roundAxis = axis;
         const int shape = fo.roundShape >= 0 && fo.roundShape < ROUND_COUNT ? fo.roundShape : ROUND_FULL;
@@ -391,15 +393,15 @@ inline void roof_pose_unpack(int v, int* shape, int* rot) {
     for (int k = ROOF_COUNT - 1; k >= 0; k--)
         if (v >= first[k]) { *shape = k; *rot = v - first[k]; if (*rot >= roof_turns(k)) *rot = 0; return; }
 }
-// Round shape, turn and solid / hollow in 18 values (pose: full 0, half 1-4, quarter 5-8)
-inline int round_pack(int shape, int rot, int hollow) {
+// Round shape, turn and standing / lying in 18 values (pose: full 0, half 1-4, quarter 5-8)
+inline int round_pack(int shape, int rot, int lying) {
     if (shape < 0 || shape >= ROUND_COUNT) shape = 0;
     int pose = shape == ROUND_FULL ? 0 : shape == ROUND_HALF ? 1 + (rot & 3) : 5 + (rot & 3);
-    return pose * 2 + (hollow ? 1 : 0);
+    return pose * 2 + (lying ? 1 : 0);
 }
-inline void round_unpack(int v, int* shape, int* rot, int* hollow) {
+inline void round_unpack(int v, int* shape, int* rot, int* lying) {
     if (v < 0 || v >= 18) v = 0;
-    *hollow = v & 1; int pose = v >> 1;
+    *lying = v & 1; int pose = v >> 1;
     *shape = pose == 0 ? ROUND_FULL : pose <= 4 ? ROUND_HALF : ROUND_QUARTER;
     *rot = pose == 0 ? 0 : (pose - 1) & 3;
 }
@@ -429,27 +431,35 @@ enum : uint32_t {
     NET_OVERHANG_SHIFT = 30,     // 2 bits: roof overhang
 };
 inline uint32_t net_field(uint32_t s, int shift, uint32_t bits) { return (s >> shift) & ((1u << bits) - 1); }
-// The fill and its options. The 2-bit fill field has no room for the round fill: it is sent
-// as the roof fill with roof pose 10..15 (no roof uses those) and the round settings
-// (round_pack) in that pose and the overhang bits.
+// The fill and its options (thickness too). The 2-bit fill field has no room for the round
+// fill: it is sent as the roof fill with roof pose 10..15 (no roof uses those) and the round
+// settings (round_pack) in that pose and the overhang bits; a solid round sends thickness 4
+// (no fill has that), a hollow one its thickness.
+inline int clamp_thick(int t) { return t < 1 ? 1 : t > 3 ? 3 : t; }
 inline uint32_t net_fill_bits(int fill, const FillOpts& fo) {
     if (fill == FILL_ROUND) {
-        uint32_t v = (uint32_t)round_pack(fo.roundShape, fo.roundRot, fo.roundHollow);
-        return ((uint32_t)FILL_ROOF << NET_FILL_SHIFT) | ((10 + v / 4) << NET_ROOF_SHIFT) | ((v % 4) << NET_OVERHANG_SHIFT);
+        uint32_t v = (uint32_t)round_pack(fo.roundShape, fo.roundRot, fo.roundLying);
+        uint32_t t = fo.roundHollow ? (uint32_t)clamp_thick(fo.thick) - 1 : 3;
+        return ((uint32_t)FILL_ROOF << NET_FILL_SHIFT) | ((10 + v / 4) << NET_ROOF_SHIFT) | ((v % 4) << NET_OVERHANG_SHIFT) |
+               (t << NET_THICK_SHIFT);
     }
     return (((uint32_t)fill & 3) << NET_FILL_SHIFT) | ((uint32_t)roof_pose_pack(fo.roofShape, fo.roofRot) << NET_ROOF_SHIFT) |
-           (((uint32_t)fo.overhang & 3) << NET_OVERHANG_SHIFT);
+           (((uint32_t)fo.overhang & 3) << NET_OVERHANG_SHIFT) | (((uint32_t)clamp_thick(fo.thick) - 1) << NET_THICK_SHIFT);
 }
-// the fill (FILL_*) and its options from a state; thickness is not touched
+// the fill (FILL_*) and its options from a state
 inline int net_fill_unpack(uint32_t s, FillOpts* fo) {
     int fill = (int)net_field(s, NET_FILL_SHIFT, 2);
     int pose = (int)net_field(s, NET_ROOF_SHIFT, 4), oh = (int)net_field(s, NET_OVERHANG_SHIFT, 2);
+    int t = (int)net_field(s, NET_THICK_SHIFT, 2);
     if (fill == FILL_ROOF && pose >= 10) {
-        round_unpack((pose - 10) * 4 + oh, &fo->roundShape, &fo->roundRot, &fo->roundHollow);
+        round_unpack((pose - 10) * 4 + oh, &fo->roundShape, &fo->roundRot, &fo->roundLying);
+        fo->roundHollow = t != 3;
+        fo->thick = t == 3 ? 1 : t + 1;
         return FILL_ROUND;
     }
     roof_pose_unpack(pose, &fo->roofShape, &fo->roofRot);
     fo->overhang = oh;
+    fo->thick = t == 3 ? 3 : t + 1;
     return fill;
 }
 inline uint16_t net_check(uint32_t s) {

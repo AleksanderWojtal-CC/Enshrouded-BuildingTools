@@ -33,6 +33,8 @@
     X(S_ROUND_TURNED, "msg.round_turned", "Round shape turned ({0} of {1})") \
     X(S_ROUND_SOLID, "msg.round_solid", "Round fill: solid") \
     X(S_ROUND_HOLLOW, "msg.round_hollow", "Round fill: hollow (a round wall)") \
+    X(S_ROUND_STANDING, "msg.round_standing", "Round fill: standing") \
+    X(S_ROUND_LYING, "msg.round_lying", "Round fill: lying (a tube along the area)") \
     X(S_FREE_ON, "msg.free_on", "Free placement ON (no surface snapping)") \
     X(S_FREE_OFF, "msg.free_off", "Free placement OFF") \
     X(S_FREE_DISTANCE, "msg.free_distance", "Free placement distance {0} m") \
@@ -102,6 +104,8 @@
     X(S_HUD_ROUND_TURN, "hud.round_turn", "Turn round shape") \
     X(S_HUD_ROUND_SOLID, "hud.round_solid", "Round: solid") \
     X(S_HUD_ROUND_HOLLOW, "hud.round_hollow", "Round: hollow") \
+    X(S_HUD_ROUND_STANDING, "hud.round_standing", "Round: standing") \
+    X(S_HUD_ROUND_LYING, "hud.round_lying", "Round: lying") \
     X(S_HUD_THICK, "hud.thick", "Thickness") \
     X(S_HUD_CLEAR, "hud.clear", "Clear corners") \
     X(S_HUD_REPLACE, "hud.replace", "Replace") \
@@ -151,6 +155,7 @@
     X(S_ACT_THICK, "menu.key_thick", "Thickness 1 / 2 / 3 (rooms, walls, roofs)") \
     X(S_ACT_OVERHANG, "menu.key_overhang", "Roof overhang none / 1 / 2 / 3") \
     X(S_ACT_ROUND_HOLLOW, "menu.key_round_hollow", "Round fill: solid / hollow") \
+    X(S_ACT_ROUND_LYING, "menu.key_round_lying", "Round fill: standing / lying") \
     X(S_ACT_CLEAR, "menu.key_clear", "Clear area corners") \
     X(S_ACT_FREE, "menu.key_free", "Free placement on / off") \
     X(S_ACT_FARTHER, "menu.key_farther", "Free placement farther") \
@@ -203,6 +208,9 @@
     X(S_OPT_ROUND_TURN, "option.round_turn", "Round turn") \
     X(S_OPT_ROUND_FILL, "option.round_fill", "Round inside") \
     X(S_OPT_ROUND_HOLLOW, "option.round_hollow", "Hollow (wall)") \
+    X(S_OPT_ROUND_DIR, "option.round_dir", "Round direction") \
+    X(S_OPT_ROUND_STANDING, "option.round_standing", "Standing") \
+    X(S_OPT_ROUND_LYING, "option.round_lying", "Lying (tube)") \
     X(S_OPT_THICK, "option.thick", "Thickness (rooms, walls, roofs)") \
     X(S_OPT_NONE, "option.none", "None") \
     X(S_OPT_FREE, "option.free", "Free placement") \
