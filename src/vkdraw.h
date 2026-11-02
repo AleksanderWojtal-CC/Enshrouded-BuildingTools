@@ -631,8 +631,9 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
         if (nn <= 40000) cellN = (uint32_t)nn;
         bool onlyFull = op == 2 || (op == 1 && g_replaceStyle != STYLE_FULL);
         const bool isRound = g_fill == core::FILL_ROUND && (boxFill & (1 << 20)), isDiag = g_fill == core::FILL_DIAG && (boxFill & (1 << 21));
-        if (cellN && (isRound || isDiag) && s.occMap) {
-            // round and diagonal fills: the cells come from the same code that builds (core::round_keep, diag_keep),
+        const bool isRoundRoof = g_fill == core::FILL_ROOF && (boxFill & (1 << 22));
+        if (cellN && (isRound || isDiag || isRoundRoof) && s.occMap) {
+            // round, diagonal and cone / dome fills: the cells come from the same code that builds (core::round_keep, diag_keep, roof_column),
             // as bits (with the existing blocks when only those count); the shader draws them as solid
             int n[3];
             for (int a = 0; a < 3; a++) { int k = (int)(push.size[a] / g_cellStep[a] + 0.5f); n[a] = k < 1 ? 1 : k; }
@@ -646,8 +647,20 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
                 if (isDiag) { ua = (boxFill >> 6) & 3; va = (boxFill >> 8) & 3; }
                 const int wa = 3 - ua - va;
                 memset(bits, 0, sizeof(bits));
+                if (isRoundRoof) {
+                    // cone / dome: core::roof_column in box space (the plan's y counted from the bottom)
+                    core::Plan p = {};
+                    for (int a = 0; a < 3; a++) { p.count[a] = n[a]; p.stepFix[a] = 1; }
+                    p.roofShape = (boxFill >> 7) & 7; p.thick = ((boxFill >> 10) & 3) + 1; p.overhang = (boxFill >> 12) & 3;
+                    p.roofBase = (boxFill >> 14) & 63; p.roofH = n[1] - p.roofBase;
+                    for (int x = 0; x < n[0]; x++)
+                        for (int z = 0; z < n[2]; z++) {
+                            int lo, hi; core::roof_column(p, x, z, &lo, &hi);
+                            for (int y = lo; y <= hi; y++) { int id = x + n[0] * (y + n[1] * z); bits[id >> 5] |= 1u << (id & 31); }
+                        }
+                }
                 int c[3];
-                for (c[0] = 0; c[0] < n[0]; c[0]++)
+                for (c[0] = 0; c[0] < (isRoundRoof ? 0 : n[0]); c[0]++)
                     for (c[2] = 0; c[2] < n[2]; c[2]++) {
                         if (wa != 1 && c[wa] > 0) continue;            // the plane once, copied along the axis below
                         for (c[1] = 0; c[1] < (wa == 1 ? 1 : n[1]); c[1]++) {

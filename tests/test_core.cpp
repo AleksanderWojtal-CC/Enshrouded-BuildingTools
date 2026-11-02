@@ -307,7 +307,9 @@ int main(int argc, char** argv) {
                 if (!core::plan_area(c2, 2, step1, 20000, R, fo(sh, rt, t, o), &pl)) { okAll = false; continue; }
                 for (int i = 0; i < pl.count[0]; i++) for (int k = 0; k < pl.count[2]; k++) {
                     int col = 0; for (int j = 0; j < pl.count[1]; j++) col += core::fill_keep(pl, i, j, k, R);
-                    if (col < 1) okAll = false;
+                    // round roofs: exactly the columns inside the outline (the area's ellipse widened by the overhang)
+                    bool want = !core::roof_is_round(sh) || core::round_inside(core::ROUND_FULL, 0, i, k, pl.count[0], pl.count[2]);
+                    if ((col >= 1) != want) okAll = false;
                 }
                 if (keepCount(pl, R) != core::fill_count(pl, R)) okAll = false;
             }
@@ -323,6 +325,54 @@ int main(int argc, char** argv) {
             if (v > 15 || s2 != sh || r2 != rt) poses = false;
         }
         CHECK(poses, "roof shape + turn fit 4 bits");
+        // cone over a flat 9 x 9: a circle, 45 degrees, 5 high, peak in the middle
+        core::I3 c9[2] = {{0, 0, 0}, {8 * M, 0, 8 * M}};
+        CHECK(core::plan_area(c9, 2, step1, 2000, R, fo(core::ROOF_CONE), &pl) && pl.count[1] == 5 && pl.roofBase == 0 &&
+              core::roof_turns(core::ROOF_CONE) == 1, "cone 9x9 -> 5 high");
+        CHECK(core::fill_keep(pl, 4, 4, 4, R) && !core::fill_keep(pl, 4, 3, 4, R) && core::fill_keep(pl, 0, 0, 4, R) &&
+              !core::fill_keep(pl, 0, 0, 0, R) && core::fill_keep(pl, 2, 2, 4, R), "cone: peak in the middle, round outline, empty corners");
+        {   // same outline as the full round fill of the area (sits on round walls)
+            core::Plan rp; core::FillOpts rf = {}; rf.thick = 1;
+            core::plan_area(c9, 2, step1, 2000, core::FILL_ROUND, rf, &rp);
+            bool same = true;
+            for (int i = 0; i < 9; i++) for (int k = 0; k < 9; k++) {
+                int col = 0; for (int j = 0; j < pl.count[1]; j++) col += core::fill_keep(pl, i, j, k, R);
+                if ((col > 0) != core::fill_keep(rp, i, 0, k, core::FILL_ROUND)) same = false;
+            }
+            CHECK(same, "cone outline = round fill outline");
+        }
+        // the cone is a closed surface: every column's span reaches down to its lowest neighbour's top
+        {
+            bool closed = true;
+            for (int i = 0; i < 9; i++) for (int k = 0; k < 9; k++) {
+                int lo, hi; core::roof_column(pl, i, k, &lo, &hi);
+                if (hi < lo) continue;
+                const int nb[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+                for (int q = 0; q < 4; q++) {
+                    int x = i + nb[q][0], z = k + nb[q][1], lo2, hi2;
+                    if (x < 0 || z < 0 || x >= 9 || z >= 9) continue;
+                    core::roof_column(pl, x, z, &lo2, &hi2);
+                    if (hi2 >= lo2 && (hi2 < lo - 1 || hi < lo2 - 1)) closed = false;
+                }
+            }
+            CHECK(closed, "cone steps touch (no gaps)");
+        }
+        // dome over 9 x 9: steep at the eave (an edge column reaches up), round on top
+        CHECK(core::plan_area(c9, 2, step1, 2000, R, fo(core::ROOF_DOME), &pl) && pl.count[1] == 5 && pl.roofBase == 0, "dome 9x9 -> 5 high");
+        {
+            int lo, hi; core::roof_column(pl, 4, 0, &lo, &hi);
+            int loC, hiC; core::roof_column(pl, 4, 4, &loC, &hiC);
+            CHECK(lo == 0 && hi >= 2 && hiC == 4, "dome: edge column from the eave up the steep side, top in the middle");
+        }
+        // overhang: cone slope carries on down, dome gets a flat brim
+        CHECK(core::plan_area(c9, 2, step1, 2000, R, fo(core::ROOF_CONE, 0, 1, 2), &pl) && pl.count[0] == 13 && pl.roofBase >= 2,
+              "cone overhang drops");
+        CHECK(core::plan_area(c9, 2, step1, 2000, R, fo(core::ROOF_DOME, 0, 1, 2), &pl) && pl.count[0] == 13 && pl.roofBase == 0 &&
+              core::fill_keep(pl, 6, 0, 0, R) && core::fill_keep(pl, 6, 0, 1, R) && !core::fill_keep(pl, 6, 1, 1, R), "dome overhang = level brim");
+        // ellipse: rectangle area
+        core::I3 el[2] = {{0, 0, 0}, {14 * M, 0, 6 * M}};
+        CHECK(core::plan_area(el, 2, step1, 5000, R, fo(core::ROOF_DOME, 0, 2), &pl) && pl.count[1] == 5 &&
+              keepCount(pl, R) == core::fill_count(pl, R), "dome over an ellipse");
         CHECK(core::plan_area(flat, 2, step1, 2000, core::FILL_SOLID, fo(core::ROOF_GABLE, 1, 1, 3), &pl) && pl.count[1] == 1 && pl.total == 28, "solid unchanged");
     }
 
@@ -429,6 +479,16 @@ int main(int argc, char** argv) {
                 if (core::net_fill_unpack(core::net_fill_bits(core::FILL_ROOF, f), &back) != core::FILL_ROOF || back.roofShape != sh ||
                     back.roofRot != rt || back.overhang != 3 || back.thick != 2) ok = false;
             }
+        for (int sh = core::ROOF_CONE; sh <= core::ROOF_DOME; sh++)
+            for (int t = 1; t <= 3; t++)
+                for (int o = 0; o <= 3; o++) {
+                    core::FillOpts f = {}, back = {}; f.roofShape = sh; f.overhang = o; f.thick = t;
+                    uint32_t bits = core::net_fill_bits(core::FILL_ROOF, f);
+                    if (core::net_fill_unpack(bits, &back) != core::FILL_ROOF || back.roofShape != sh || back.roofRot != 0 ||
+                        back.overhang != o || back.thick != t) ok = false;
+                    if (bits & ~((3u << core::NET_FILL_SHIFT) | (15u << core::NET_ROOF_SHIFT) | (3u << core::NET_OVERHANG_SHIFT) |
+                                 (3u << core::NET_THICK_SHIFT))) ok = false;
+                }
         CHECK(ok, "round and roof settings round trip through the state");
     }
 

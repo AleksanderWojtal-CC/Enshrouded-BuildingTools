@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.27.0"
+#define MOD_VERSION "0.28.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -860,7 +860,8 @@ static volatile LONG g_roundLying = 0;        // 1 = lying (a tube along the are
 // diagonal fill options
 static volatile LONG g_diagRot = 0;           // 0..diag_turns-1
 static volatile LONG g_diagLying = 0;         // 1 = lying (a ramp), 0 = standing (a wall corner to corner)
-static const Str kRoofName[core::ROOF_COUNT] = { S_OPT_ROOF_GABLE, S_OPT_ROOF_HIP, S_OPT_ROOF_GAMBREL, S_OPT_ROOF_MANSARD, S_OPT_ROOF_SHED };
+static const Str kRoofName[core::ROOF_COUNT] = { S_OPT_ROOF_GABLE, S_OPT_ROOF_HIP, S_OPT_ROOF_GAMBREL, S_OPT_ROOF_MANSARD, S_OPT_ROOF_SHED,
+                                                 S_OPT_ROOF_CONE, S_OPT_ROOF_DOME };
 static const Str kRoundName[core::ROUND_COUNT] = { S_OPT_ROUND_FULL, S_OPT_ROUND_HALF, S_OPT_ROUND_QUARTER };
 static core::FillOpts fill_opts() {
     return core::FillOpts{ (int)g_roofShape, (int)g_roofRot, (int)g_thick, (int)g_overhang,
@@ -3417,6 +3418,7 @@ static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return false;
     g_boxFill = (pl.thick - 1) * 1024 + (g_fill == core::FILL_ROOF ? pl.roofAxisX * 32 + pl.roofFlip * 64 + pl.roofShape * 128 +
                 pl.overhang * 4096 + pl.roofBase * 16384 : 0);
+    if (g_fill == core::FILL_ROOF && core::roof_is_round(pl.roofShape)) g_boxFill += 1 << 22;   // cells from the CPU (vkdraw)
     if (g_fill == core::FILL_ROUND)
         g_boxFill = (pl.thick - 1) * 1024 + (1 << 20) + pl.roundShape * 32 + pl.roundSide * 128 + pl.roundHollow * 512 + pl.roundAxis * 4096;
     if (g_fill == core::FILL_DIAG)
