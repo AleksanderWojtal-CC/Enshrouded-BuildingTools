@@ -3,6 +3,15 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.28.1
+
+- **Area clicks only while building.** With Area mode (and Replace) on, attacking or
+  mining with a weapon or tool no longer marks area corners, and the area box no longer
+  shows while you play. Corners are taken only with the hammer or a building material in
+  hand. This mostly hit games where the mod thought it was on a server (single player
+  while not holding the hammer).
+- The crash log names the module of addresses outside the game and the mod.
+
 ## 0.28.0
 
 - **Conical and dome roofs.** Two new roof shapes after shed (Shift+R). They are round:
