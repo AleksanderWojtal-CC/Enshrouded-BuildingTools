@@ -1,6 +1,6 @@
 # Enshrouded Building Tools
 
-A mod for **Enshrouded 1.0** (single player and dedicated servers) that extends the Construction Hammer:
+A mod for **Enshrouded 1.0, Patch #1** (single player and dedicated servers) that extends the Construction Hammer:
 
 - **Replace**: repaint existing blocks with your current material, as a full shape,
   only where the shape overlaps existing blocks, or **connected** (fill bucket: every
@@ -98,7 +98,8 @@ research log with all game addresses.
 
 ## Compatibility
 
-The mod is built against the Enshrouded 1.0 client from 2026-10-20. It finds the game code by
+The mod is built against Enshrouded Patch #1 (1.0.1.0, 2026-11-02); 0.24.0 and older
+only work with the original 1.0 client. It finds the game code by
 byte signatures. If an update changes that code, the mod turns itself off safely, and
 `BuildingTools.log` says which signature was not found.
 

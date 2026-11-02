@@ -2,7 +2,8 @@
 
 This is the design overview. Exact addresses and the research history are in
 [reverse-engineering-notes.md](reverse-engineering-notes.md). All addresses are RVAs in the
-2026-10-20 1.0 client.
+2026-10-20 1.0 client unless noted; the 0.24.1 section of the notes lists what moved in
+Patch #1 (1.0.1.0).
 
 ## Loading
 
@@ -102,7 +103,7 @@ offers fewer than 144 bytes of push constants or anything fails, nothing is draw
 edge highlights come back. Client only: the server never loads these hooks.
 
 **Base-area box** (`Preview=2`). The renderer of the build-zone borders reads the client
-world's BuildZoneVisualizationState (world+0xffc0) through a getter once per frame; the
+world's BuildZoneVisualizationState (world+0xffd0; 0xffc0 before Patch #1) through a getter once per frame; the
 flame altar cursor fills its preview box there (min/max in metres, valid flag). The mod
 redirects that one getter call and returns a copy of the state with the area's box, so
 the game's state is never written.
