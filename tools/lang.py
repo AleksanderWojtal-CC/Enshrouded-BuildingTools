@@ -62,8 +62,8 @@ def read(path):
             k, v = t.split('=', 1)
             texts[k.strip()] = v.strip()
             body = True
-        elif not body and t.startswith('#'):
-            head.append(line)
+        elif not body and t.startswith('#') and t[1:].strip() not in SECTIONS.values():
+            head.append(line)   # the file's own header (not a section title)
     return head, texts
 
 

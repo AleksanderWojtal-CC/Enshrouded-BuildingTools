@@ -4,9 +4,6 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
-# Numbers
-# Numbers
-# Numbers
 
 # Numbers
 num.decimal = ,
@@ -32,6 +29,11 @@ msg.roof_shape = Forma del tetto: {0}
 msg.roof_turned = Tetto ruotato ({0} di {1})
 msg.thick = Spessore: {0}
 msg.overhang = Sporgenza del tetto: {0}
+msg.fill_round = Riempimento area: rotondo ({0}, {1})
+msg.round_shape = Forma rotonda: {0}
+msg.round_turned = Forma rotonda ruotata ({0} di {1})
+msg.round_solid = Riempimento rotondo: pieno
+msg.round_hollow = Riempimento rotondo: vuoto (muro rotondo)
 msg.free_on = Posizionamento libero ATTIVO (senza aggancio alle superfici)
 msg.free_off = Posizionamento libero DISATTIVATO
 msg.free_distance = Distanza del posizionamento libero: {0} m
@@ -69,6 +71,7 @@ bar.area_remove = Area rimuovi {0}/{1}
 bar.hollow = vuoto
 bar.walls = pareti
 bar.roof = tetto: {0}
+bar.round = rotondo: {0}, {1}
 bar.prefab = Normale
 bar.prefab_replace = Normale sostituisci
 bar.full = forma intera
@@ -97,6 +100,11 @@ hud.fill_walls = Riempimento: pareti
 hud.fill_roof = Riempimento: tetto
 hud.roof_shape = Tetto: {0}
 hud.roof_turn = Ruota tetto
+hud.fill_round = Riempimento: rotondo
+hud.round_shape = Rotondo: {0}
+hud.round_turn = Ruota forma rotonda
+hud.round_solid = Rotondo: pieno
+hud.round_hollow = Rotondo: vuoto
 hud.thick = Spessore
 hud.clear = Cancella angoli
 hud.replace = Sostituisci
@@ -144,10 +152,11 @@ menu.key_area = Modalità area sì / no
 menu.key_replace = Sostituzione sì / no
 menu.key_style = Stile di sostituzione
 menu.key_fill = Riempimento area
-menu.key_roof_shape = Forma di tetto successiva (modalità area, tetto)
-menu.key_roof_turn = Ruota il tetto (modalità area, tetto)
+menu.key_roof_shape = Forma di tetto / rotonda successiva (modalità area, tetto o rotondo)
+menu.key_roof_turn = Ruota tetto / forma rotonda (modalità area, tetto o rotondo)
 menu.key_thick = Spessore 1 / 2 / 3 (stanze, pareti, tetti)
 menu.key_overhang = Sporgenza del tetto nessuna / 1 / 2 / 3
+menu.key_round_hollow = Riempimento rotondo: pieno / vuoto
 menu.key_clear = Cancella gli angoli dell'area
 menu.key_free = Posizionamento libero sì / no
 menu.key_farther = Posizionamento libero più lontano
@@ -161,6 +170,7 @@ menu.key_fill_solid = Riempimento area: pieno
 menu.key_fill_hollow = Riempimento area: stanza vuota
 menu.key_fill_walls = Riempimento area: solo pareti
 menu.key_fill_roof = Riempimento area: tetto
+menu.key_fill_round = Riempimento area: rotondo
 menu.key_creative = Costruzione creativa sì / no
 menu.key_replace_hold = Sostituisci (tieni premuto)
 menu.key_prefab = Modalità normale (come nel gioco)
@@ -185,6 +195,7 @@ option.fill_solid = Pieno
 option.fill_hollow = Stanza vuota
 option.fill_walls = Solo pareti
 option.fill_roof = Tetto
+option.fill_round = Rotondo
 option.roof_shape = Forma del tetto
 option.roof_gable = A due falde
 option.roof_hip = A padiglione (4 falde)
@@ -193,6 +204,13 @@ option.roof_mansard = A mansarda
 option.roof_shed = A una falda
 option.roof_turn = Rotazione del tetto
 option.overhang = Sporgenza del tetto
+option.round_shape = Forma rotonda
+option.round_full = Intero
+option.round_half = Metà
+option.round_quarter = Quarto
+option.round_turn = Rotazione del rotondo
+option.round_fill = Interno rotondo
+option.round_hollow = Vuoto (muro)
 option.thick = Spessore (stanze, pareti, tetti)
 option.none = Nessuna
 option.free = Posizionamento libero

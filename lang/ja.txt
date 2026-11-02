@@ -4,9 +4,6 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
-# Numbers
-# Numbers
-# Numbers
 
 # Numbers
 num.decimal = .
@@ -32,6 +29,11 @@ msg.roof_shape = 屋根の形：{0}
 msg.roof_turned = 屋根を回転（{0}/{1}）
 msg.thick = 厚さ：{0}
 msg.overhang = 屋根の軒の出：{0}
+msg.fill_round = 範囲の埋め方：円形（{0}、{1}）
+msg.round_shape = 円形の形：{0}
+msg.round_turned = 円形を回転（{0}/{1}）
+msg.round_solid = 円形：中まで埋める
+msg.round_hollow = 円形：中空（円形の壁）
 msg.free_on = 自由配置 オン（面に吸着しない）
 msg.free_off = 自由配置 オフ
 msg.free_distance = 自由配置の距離：{0} m
@@ -69,6 +71,7 @@ bar.area_remove = 範囲 撤去 {0}/{1}
 bar.hollow = 空洞
 bar.walls = 壁
 bar.roof = 屋根：{0}
+bar.round = 円形：{0}、{1}
 bar.prefab = 通常
 bar.prefab_replace = 通常 置き換え
 bar.full = 形全体
@@ -97,6 +100,11 @@ hud.fill_walls = 埋め方：壁
 hud.fill_roof = 埋め方：屋根
 hud.roof_shape = 屋根：{0}
 hud.roof_turn = 屋根を回転
+hud.fill_round = 埋め方：円形
+hud.round_shape = 円形：{0}
+hud.round_turn = 円形を回転
+hud.round_solid = 円形：中まで
+hud.round_hollow = 円形：中空
 hud.thick = 厚さ
 hud.clear = 角をクリア
 hud.replace = 置き換え
@@ -144,10 +152,11 @@ menu.key_area = 範囲モード オン / オフ
 menu.key_replace = 置き換え オン / オフ
 menu.key_style = 置き換え方式
 menu.key_fill = 範囲の埋め方
-menu.key_roof_shape = 次の屋根の形（範囲モード、屋根）
-menu.key_roof_turn = 屋根を回転（範囲モード、屋根）
+menu.key_roof_shape = 次の屋根・円形の形（範囲モード、屋根または円形）
+menu.key_roof_turn = 屋根・円形を回転（範囲モード、屋根または円形）
 menu.key_thick = 厚さ 1 / 2 / 3（部屋、壁、屋根）
 menu.key_overhang = 屋根の軒の出 なし / 1 / 2 / 3
+menu.key_round_hollow = 円形：中まで埋める / 中空
 menu.key_clear = 範囲の角をクリア
 menu.key_free = 自由配置 オン / オフ
 menu.key_farther = 自由配置 遠くへ
@@ -161,6 +170,7 @@ menu.key_fill_solid = 範囲の塗りつぶし: 中身あり
 menu.key_fill_hollow = 範囲の塗りつぶし: 中空の部屋
 menu.key_fill_walls = 範囲の塗りつぶし: 壁のみ
 menu.key_fill_roof = 範囲の埋め方：屋根
+menu.key_fill_round = 範囲の埋め方：円形
 menu.key_creative = クリエイティブ建築 オン / オフ
 menu.key_replace_hold = 置換（長押し）
 menu.key_prefab = 通常モード（ゲーム標準）
@@ -185,6 +195,7 @@ option.fill_solid = 中まで埋める
 option.fill_hollow = 空洞の部屋
 option.fill_walls = 壁のみ
 option.fill_roof = 屋根
+option.fill_round = 円形
 option.roof_shape = 屋根の形
 option.roof_gable = 切妻（2面）
 option.roof_hip = 寄棟（4面）
@@ -193,6 +204,13 @@ option.roof_mansard = マンサード
 option.roof_shed = 片流れ（1面）
 option.roof_turn = 屋根の向き
 option.overhang = 屋根の軒の出
+option.round_shape = 円形の形
+option.round_full = 全円
+option.round_half = 半円
+option.round_quarter = 四分円
+option.round_turn = 円形の向き
+option.round_fill = 円形の中身
+option.round_hollow = 中空（壁）
 option.thick = 厚さ（部屋、壁、屋根）
 option.none = なし
 option.free = 自由配置

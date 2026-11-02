@@ -4,9 +4,6 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
-# Numbers
-# Numbers
-# Numbers
 
 # Numbers
 num.decimal = ,
@@ -32,6 +29,11 @@ msg.roof_shape = Forme du toit : {0}
 msg.roof_turned = Toit tourné ({0} sur {1})
 msg.thick = Épaisseur : {0}
 msg.overhang = Débord du toit : {0}
+msg.fill_round = Remplissage de zone : rond ({0}, {1})
+msg.round_shape = Forme ronde : {0}
+msg.round_turned = Forme ronde tournée ({0} sur {1})
+msg.round_solid = Remplissage rond : plein
+msg.round_hollow = Remplissage rond : creux (mur rond)
 msg.free_on = Placement libre ACTIVÉ (sans aimantation aux surfaces)
 msg.free_off = Placement libre DÉSACTIVÉ
 msg.free_distance = Distance du placement libre : {0} m
@@ -69,6 +71,7 @@ bar.area_remove = Zone retirer {0}/{1}
 bar.hollow = creux
 bar.walls = murs
 bar.roof = toit : {0}
+bar.round = rond : {0}, {1}
 bar.prefab = Normal
 bar.prefab_replace = Normal remplacer
 bar.full = forme entière
@@ -97,6 +100,11 @@ hud.fill_walls = Remplissage : murs
 hud.fill_roof = Remplissage : toit
 hud.roof_shape = Toit : {0}
 hud.roof_turn = Tourner le toit
+hud.fill_round = Remplissage : rond
+hud.round_shape = Rond : {0}
+hud.round_turn = Tourner la forme ronde
+hud.round_solid = Rond : plein
+hud.round_hollow = Rond : creux
 hud.thick = Épaisseur
 hud.clear = Effacer les coins
 hud.replace = Remplacer
@@ -144,10 +152,11 @@ menu.key_area = Mode zone oui / non
 menu.key_replace = Remplacement oui / non
 menu.key_style = Style de remplacement
 menu.key_fill = Remplissage de zone
-menu.key_roof_shape = Forme de toit suivante (mode zone, toit)
-menu.key_roof_turn = Tourner le toit (mode zone, toit)
+menu.key_roof_shape = Forme de toit / ronde suivante (mode zone, toit ou rond)
+menu.key_roof_turn = Tourner le toit / la forme ronde (mode zone, toit ou rond)
 menu.key_thick = Épaisseur 1 / 2 / 3 (pièces, murs, toits)
 menu.key_overhang = Débord du toit aucun / 1 / 2 / 3
+menu.key_round_hollow = Remplissage rond : plein / creux
 menu.key_clear = Effacer les coins de la zone
 menu.key_free = Placement libre oui / non
 menu.key_farther = Placement libre plus loin
@@ -161,6 +170,7 @@ menu.key_fill_solid = Remplissage : plein
 menu.key_fill_hollow = Remplissage : pièce creuse
 menu.key_fill_walls = Remplissage : murs seuls
 menu.key_fill_roof = Remplissage : toit
+menu.key_fill_round = Remplissage : rond
 menu.key_creative = Construction créative activée / désactivée
 menu.key_replace_hold = Remplacer (maintenir)
 menu.key_prefab = Mode normal (comme le jeu)
@@ -185,6 +195,7 @@ option.fill_solid = Plein
 option.fill_hollow = Pièce creuse
 option.fill_walls = Murs seulement
 option.fill_roof = Toit
+option.fill_round = Rond
 option.roof_shape = Forme du toit
 option.roof_gable = À deux pans
 option.roof_hip = À quatre pans
@@ -193,6 +204,13 @@ option.roof_mansard = Mansardé
 option.roof_shed = Appentis (1 pan)
 option.roof_turn = Rotation du toit
 option.overhang = Débord du toit
+option.round_shape = Forme ronde
+option.round_full = Entier
+option.round_half = Moitié
+option.round_quarter = Quart
+option.round_turn = Rotation du rond
+option.round_fill = Intérieur du rond
+option.round_hollow = Creux (mur)
 option.thick = Épaisseur (pièces, murs, toits)
 option.none = Aucun
 option.free = Placement libre

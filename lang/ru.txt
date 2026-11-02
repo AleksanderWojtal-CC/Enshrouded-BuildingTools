@@ -4,9 +4,6 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
-# Numbers
-# Numbers
-# Numbers
 
 # Numbers
 num.decimal = ,
@@ -32,6 +29,11 @@ msg.roof_shape = Форма крыши: {0}
 msg.roof_turned = Крыша повёрнута ({0} из {1})
 msg.thick = Толщина: {0}
 msg.overhang = Свес крыши: {0}
+msg.fill_round = Заполнение области: круглое ({0}, {1})
+msg.round_shape = Круглая форма: {0}
+msg.round_turned = Круглая форма повёрнута ({0} из {1})
+msg.round_solid = Круглое: сплошное
+msg.round_hollow = Круглое: пустое (круглая стена)
 msg.free_on = Свободная установка ВКЛ. (без привязки к поверхности)
 msg.free_off = Свободная установка ВЫКЛ.
 msg.free_distance = Расстояние свободной установки: {0} м
@@ -69,6 +71,7 @@ bar.area_remove = Область: удаление {0}/{1}
 bar.hollow = пустая
 bar.walls = стены
 bar.roof = крыша: {0}
+bar.round = круг: {0}, {1}
 bar.prefab = Обычный
 bar.prefab_replace = Обычный, замена
 bar.full = вся форма
@@ -97,6 +100,11 @@ hud.fill_walls = Заполнение: стены
 hud.fill_roof = Заполнение: крыша
 hud.roof_shape = Крыша: {0}
 hud.roof_turn = Повернуть крышу
+hud.fill_round = Заполнение: круглое
+hud.round_shape = Круг: {0}
+hud.round_turn = Повернуть круг
+hud.round_solid = Круг: сплошной
+hud.round_hollow = Круг: пустой
 hud.thick = Толщина
 hud.clear = Сбросить углы
 hud.replace = Замена
@@ -144,10 +152,11 @@ menu.key_area = Режим области вкл. / выкл.
 menu.key_replace = Замена вкл. / выкл.
 menu.key_style = Стиль замены
 menu.key_fill = Заполнение области
-menu.key_roof_shape = Следующая форма крыши (режим области, крыша)
-menu.key_roof_turn = Повернуть крышу (режим области, крыша)
+menu.key_roof_shape = Следующая форма крыши / круга (режим области, крыша или круг)
+menu.key_roof_turn = Повернуть крышу / круг (режим области, крыша или круг)
 menu.key_thick = Толщина 1 / 2 / 3 (комнаты, стены, крыши)
 menu.key_overhang = Свес крыши нет / 1 / 2 / 3
+menu.key_round_hollow = Круглое: сплошное / пустое
 menu.key_clear = Сбросить углы области
 menu.key_free = Свободная установка вкл. / выкл.
 menu.key_farther = Свободная установка дальше
@@ -161,6 +170,7 @@ menu.key_fill_solid = Заполнение: сплошное
 menu.key_fill_hollow = Заполнение: пустая комната
 menu.key_fill_walls = Заполнение: только стены
 menu.key_fill_roof = Заполнение: крыша
+menu.key_fill_round = Заполнение: круглое
 menu.key_creative = Творческое строительство вкл. / выкл.
 menu.key_replace_hold = Замена (удерживать)
 menu.key_prefab = Обычный режим (как в игре)
@@ -185,6 +195,7 @@ option.fill_solid = Сплошное
 option.fill_hollow = Пустая комната
 option.fill_walls = Только стены
 option.fill_roof = Крыша
+option.fill_round = Круглое
 option.roof_shape = Форма крыши
 option.roof_gable = Двускатная
 option.roof_hip = Вальмовая (4 ската)
@@ -193,6 +204,13 @@ option.roof_mansard = Мансардная
 option.roof_shed = Односкатная
 option.roof_turn = Поворот крыши
 option.overhang = Свес крыши
+option.round_shape = Круглая форма
+option.round_full = Полный круг
+option.round_half = Половина
+option.round_quarter = Четверть
+option.round_turn = Поворот круга
+option.round_fill = Круг внутри
+option.round_hollow = Пустое (стена)
 option.thick = Толщина (комнаты, стены, крыши)
 option.none = Нет
 option.free = Свободная установка

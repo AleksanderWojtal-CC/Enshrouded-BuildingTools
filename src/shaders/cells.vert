@@ -7,6 +7,8 @@ layout(push_constant) uniform Push { mat4 mvp; vec4 size; vec4 eye; vec4 capA; v
 // + 16 when only cells that already hold blocks count (remove, replace overlap: one bit per cell in occ)
 // + 32 roof slopes rise along x + 64 shed flipped + 128 * roof shape + 1024 * (thickness - 1)
 // + 4096 * roof overhang + 16384 * roof base (shapes below the area): see core::plan_area
+// Round fill (fill 3 + 2^20): + 32 * shape (full, half, quarter) + 128 * side (box space)
+// + 512 hollow + 1024 * (thickness - 1) + 4096 * axis the shape runs along
 layout(set = 1, binding = 0) readonly buffer Occ { uint bits[]; } occ;
 layout(location = 0) out vec3 vLocal;      // box units
 layout(location = 1) out vec4 vClip;
@@ -43,6 +45,33 @@ bool roofKept(ivec3 c, ivec3 n, int w) {
     int lo = max(bot - (thick - 1) + base, 0), hi = min(top + base, n.y - 1);
     return c.y >= lo && c.y <= hi;
 }
+// round fills: the same rule as core::round_inside / round_keep (src/core.h)
+bool roundInside(int shape, int side, int u, int v, int nu, int nv) {
+    float cu = float(nu), cv = float(nv), au = float(nu), av = float(nv);
+    if (shape == 1) {
+        if (side < 2) { av = 2.0 * float(nv); cv = side == 1 ? 2.0 * float(nv) : 0.0; }
+        else { au = 2.0 * float(nu); cu = side == 3 ? 2.0 * float(nu) : 0.0; }
+    } else if (shape == 2) {
+        au = 2.0 * float(nu); av = 2.0 * float(nv);
+        cu = (side & 1) != 0 ? 2.0 * float(nu) : 0.0; cv = (side & 2) != 0 ? 2.0 * float(nv) : 0.0;
+    }
+    precise float x = (float(2 * u + 1) - cu) / au;
+    precise float y = (float(2 * v + 1) - cv) / av;
+    precise float r = x * x + y * y;
+    return r <= 1.0;
+}
+bool roundKept(ivec3 c, ivec3 n, int w) {
+    int shape = (w >> 5) & 3, side = (w >> 7) & 3, axis = (w >> 12) & 3, t = ((w >> 10) & 3) + 1;
+    bool hollow = (w & 512) != 0;
+    int u = axis == 0 ? c.z : c.x, v = axis == 1 ? c.z : c.y;
+    int nu = axis == 0 ? n.z : n.x, nv = axis == 1 ? n.z : n.y;
+    if (!roundInside(shape, side, u, v, nu, nv)) return false;
+    if (!hollow) return true;
+    for (int du = -t; du <= t; du++)
+        for (int dv = -t; dv <= t; dv++)
+            if (max(abs(du) - 1, 0) + max(abs(dv) - 1, 0) <= t - 1 && !roundInside(shape, side, u + du, v + dv, nu, nv)) return true;
+    return false;
+}
 bool kept(ivec3 c, ivec3 n, int w, bool onlyFull) {
     int fill = w & 3;
     if (any(lessThan(c, ivec3(0))) || any(greaterThanEqual(c, n))) return false;
@@ -50,7 +79,7 @@ bool kept(ivec3 c, ivec3 n, int w, bool onlyFull) {
         int id = c.x + n.x * (c.y + n.y * c.z);
         if ((occ.bits[id >> 5] & (1u << (id & 31))) == 0u) return false;
     }
-    if (fill == 3) return roofKept(c, n, w);
+    if (fill == 3) return (w & 1048576) != 0 ? roundKept(c, n, w) : roofKept(c, n, w);
     int t = ((w >> 10) & 3) + 1;
     bool ex = c.x < t || c.x >= n.x - t, ey = c.y < t || c.y >= n.y - t, ez = c.z < t || c.z >= n.z - t;
     return fill == 1 ? (ex || ey || ez) : fill == 2 ? (ex || ez) : true;

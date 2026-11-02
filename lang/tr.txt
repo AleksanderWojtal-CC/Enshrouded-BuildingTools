@@ -4,9 +4,6 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
-# Numbers
-# Numbers
-# Numbers
 
 # Numbers
 num.decimal = ,
@@ -32,6 +29,11 @@ msg.roof_shape = Çatı şekli: {0}
 msg.roof_turned = Çatı döndürüldü ({0}/{1})
 msg.thick = Kalınlık: {0}
 msg.overhang = Çatı saçağı: {0}
+msg.fill_round = Alan dolgusu: yuvarlak ({0}, {1})
+msg.round_shape = Yuvarlak şekil: {0}
+msg.round_turned = Yuvarlak şekil döndürüldü ({0}/{1})
+msg.round_solid = Yuvarlak dolgu: dolu
+msg.round_hollow = Yuvarlak dolgu: boş (yuvarlak duvar)
 msg.free_on = Serbest yerleştirme AÇIK (yüzeye yapışma yok)
 msg.free_off = Serbest yerleştirme KAPALI
 msg.free_distance = Serbest yerleştirme mesafesi: {0} m
@@ -69,6 +71,7 @@ bar.area_remove = Alan kaldır {0}/{1}
 bar.hollow = boş
 bar.walls = duvarlar
 bar.roof = çatı: {0}
+bar.round = yuvarlak: {0}, {1}
 bar.prefab = Normal
 bar.prefab_replace = Normal değiştir
 bar.full = tüm şekil
@@ -97,6 +100,11 @@ hud.fill_walls = Dolgu: duvarlar
 hud.fill_roof = Dolgu: çatı
 hud.roof_shape = Çatı: {0}
 hud.roof_turn = Çatıyı döndür
+hud.fill_round = Dolgu: yuvarlak
+hud.round_shape = Yuvarlak: {0}
+hud.round_turn = Yuvarlağı döndür
+hud.round_solid = Yuvarlak: dolu
+hud.round_hollow = Yuvarlak: boş
 hud.thick = Kalınlık
 hud.clear = Köşeleri temizle
 hud.replace = Değiştirme
@@ -144,10 +152,11 @@ menu.key_area = Alan modu açık / kapalı
 menu.key_replace = Değiştirme açık / kapalı
 menu.key_style = Değiştirme stili
 menu.key_fill = Alan dolgusu
-menu.key_roof_shape = Sonraki çatı şekli (Alan modu, çatı)
-menu.key_roof_turn = Çatıyı döndür (Alan modu, çatı)
+menu.key_roof_shape = Sonraki çatı / yuvarlak şekil (Alan modu, çatı veya yuvarlak)
+menu.key_roof_turn = Çatıyı / yuvarlağı döndür (Alan modu, çatı veya yuvarlak)
 menu.key_thick = Kalınlık 1 / 2 / 3 (odalar, duvarlar, çatılar)
 menu.key_overhang = Çatı saçağı yok / 1 / 2 / 3
+menu.key_round_hollow = Yuvarlak dolgu: dolu / boş
 menu.key_clear = Alan köşelerini temizle
 menu.key_free = Serbest yerleştirme açık / kapalı
 menu.key_farther = Serbest yerleştirme daha uzak
@@ -161,6 +170,7 @@ menu.key_fill_solid = Alan dolgusu: dolu
 menu.key_fill_hollow = Alan dolgusu: içi boş oda
 menu.key_fill_walls = Alan dolgusu: yalnızca duvarlar
 menu.key_fill_roof = Alan dolgusu: çatı
+menu.key_fill_round = Alan dolgusu: yuvarlak
 menu.key_creative = Yaratıcı inşa aç / kapat
 menu.key_replace_hold = Değiştirme (basılı tut)
 menu.key_prefab = Normal mod (oyundaki gibi)
@@ -185,6 +195,7 @@ option.fill_solid = Dolu
 option.fill_hollow = Boş oda
 option.fill_walls = Yalnızca duvarlar
 option.fill_roof = Çatı
+option.fill_round = Yuvarlak
 option.roof_shape = Çatı şekli
 option.roof_gable = Beşik (2 eğim)
 option.roof_hip = Kırma (4 eğim)
@@ -193,6 +204,13 @@ option.roof_mansard = Mansart
 option.roof_shed = Tek eğimli
 option.roof_turn = Çatı yönü
 option.overhang = Çatı saçağı
+option.round_shape = Yuvarlak şekil
+option.round_full = Tam
+option.round_half = Yarım
+option.round_quarter = Çeyrek
+option.round_turn = Yuvarlak yönü
+option.round_fill = Yuvarlak içi
+option.round_hollow = Boş (duvar)
 option.thick = Kalınlık (odalar, duvarlar, çatılar)
 option.none = Yok
 option.free = Serbest yerleştirme

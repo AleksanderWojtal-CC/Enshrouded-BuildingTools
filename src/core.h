@@ -114,6 +114,10 @@ struct Plan {
     int     overhang;    // shapes the roof reaches past the area on every side
     int     roofH;       // height of the roof itself (shapes)
     int     roofBase;    // shapes of the plan below the area's bottom (overhang drop + thickness)
+    int     roundShape;  // ROUND_*
+    int     roundSide;   // half: flat side, quarter: centre corner, in box space (see round_inside)
+    int     roundHollow; // a wall `thick` shapes thick along the curve, else solid
+    int     roundAxis;   // the axis the round shape runs along (1 = y: a round in the ground plan)
 };
 
 inline int64_t iabs64(int64_t v) { return v < 0 ? -v : v; }
@@ -142,6 +146,7 @@ inline bool plan_fill(const I3* c, int n, const float step_m[3], long max_total,
     }
     out->total = (long)total;
     out->thick = 1; out->roofShape = out->roofAxisX = out->roofFlip = out->overhang = out->roofH = out->roofBase = 0;
+    out->roundShape = out->roundSide = out->roundHollow = 0; out->roundAxis = 1;
     return true;
 }
 
@@ -169,13 +174,58 @@ inline I3 plan_pos(const Plan& p, int i, int j, int k) {
 // Fill shape of an area: solid, hollow room (walls + floor + ceiling), walls only, or a
 // roof. Rooms, walls and roofs are `thick` shapes thick. A side too thin to have an inside
 // stays complete.
-enum { FILL_SOLID = 0, FILL_HOLLOW = 1, FILL_WALLS = 2, FILL_ROOF = 3, FILL_COUNT = 4 };
+enum { FILL_SOLID = 0, FILL_HOLLOW = 1, FILL_WALLS = 2, FILL_ROOF = 3, FILL_ROUND = 4, FILL_COUNT = 5 };
 enum { ROOF_GABLE = 0, ROOF_HIP = 1, ROOF_GAMBREL = 2, ROOF_MANSARD = 3, ROOF_SHED = 4, ROOF_COUNT = 5 };
 // how many ways a roof shape can be turned (gable / gambrel: ridge along either side,
 // shed: rising toward each of the four sides; hip and mansard look the same every way)
 inline int roof_turns(int shape) { return shape == ROOF_SHED ? 4 : (shape == ROOF_HIP || shape == ROOF_MANSARD) ? 1 : 2; }
 
-struct FillOpts { int roofShape, roofRot, thick, overhang; };
+enum { ROUND_FULL = 0, ROUND_HALF = 1, ROUND_QUARTER = 2, ROUND_COUNT = 3 };
+inline int round_turns(int shape) { return shape == ROUND_FULL ? 1 : 4; }
+
+struct FillOpts { int roofShape, roofRot, thick, overhang, roundShape = 0, roundRot = 0, roundHollow = 0; };
+
+// Round fills: an ellipse (a circle in a square area) that fills the area's box, or half of
+// one (flat side on one side of the box) or a quarter (centre on one corner of the box).
+// Cell (u, v) of a nu x nv plane, counted from the box's low corner, belongs to the shape
+// when its centre is inside the ellipse. Cells may lie outside the box (neighbour tests):
+// past a half's flat side or a quarter's straight sides the ellipse goes on, so those sides
+// are not walls. side: half 0 = flat side at v = 0, 1 at v = nv, 2 at u = 0, 3 at u = nu;
+// quarter: centre corner, bit 0 = at u = nu, bit 1 = at v = nv. Same rule in cells.vert.
+inline bool round_inside(int shape, int side, int u, int v, int nu, int nv) {
+    float cu = (float)nu, cv = (float)nv, au = (float)nu, av = (float)nv;   // doubled units
+    if (shape == ROUND_HALF) {
+        if (side < 2) { av = 2.f * nv; cv = side == 1 ? 2.f * nv : 0.f; }
+        else { au = 2.f * nu; cu = side == 3 ? 2.f * nu : 0.f; }
+    } else if (shape == ROUND_QUARTER) {
+        au = 2.f * nu; av = 2.f * nv;
+        cu = (side & 1) ? 2.f * nu : 0.f; cv = (side & 2) ? 2.f * nv : 0.f;
+    }
+    float x = ((float)(2 * u + 1) - cu) / au, y = ((float)(2 * v + 1) - cv) / av;
+    return x * x + y * y <= 1.0f;
+}
+// solid: every cell inside; hollow: the inside cells near a cell outside: one diagonal or
+// straight step, then t - 1 straight steps (t shapes thick across a straight side, and
+// where the curve runs diagonally the blocks still share faces, so the wall has no gaps)
+inline bool round_keep(int shape, int side, bool hollow, int t, int u, int v, int nu, int nv) {
+    if (!round_inside(shape, side, u, v, nu, nv)) return false;
+    if (!hollow) return true;
+    for (int du = -t; du <= t; du++)
+        for (int dv = -t; dv <= t; dv++) {
+            int au = du < 0 ? -du : du, av = dv < 0 ? -dv : dv;
+            if ((au > 1 ? au - 1 : 0) + (av > 1 ? av - 1 : 0) > t - 1) continue;
+            if (!round_inside(shape, side, u + du, v + dv, nu, nv)) return true;
+        }
+    return false;
+}
+// the plane of a round fill's plan: the ground plan (along y), unless the area is a
+// standing wall (one cell thin across x or z and more than one high): then the shape
+// stands in that wall
+inline void round_plane(const Plan& p, int* ua, int* va) {
+    if (p.roundAxis == 0) { *ua = 2; *va = 1; }
+    else if (p.roundAxis == 2) { *ua = 0; *va = 1; }
+    else { *ua = 0; *va = 2; }
+}
 
 inline int64_t floor_div(int64_t a, int64_t b) { return a >= 0 ? a / b : -((-a + b - 1) / b); }   // b > 0
 
@@ -224,6 +274,13 @@ inline void roof_column(const Plan& p, int x, int z, int* lo, int* hi) {
     if (*hi > p.count[1] - 1) *hi = p.count[1] - 1;
 }
 inline bool fill_keep(const Plan& p, int i, int j, int k, int mode) {
+    if (mode == FILL_ROUND) {
+        int c[3] = { i, j, k }, ua, va;
+        for (int a = 0; a < 3; a++) if (p.stepFix[a] < 0) c[a] = p.count[a] - 1 - c[a];   // box space
+        round_plane(p, &ua, &va);
+        return round_keep(p.roundShape, p.roundSide, p.roundHollow != 0, p.thick < 1 ? 1 : p.thick,
+                          c[ua], c[va], p.count[ua], p.count[va]);
+    }
     if (mode == FILL_ROOF) {
         int y = p.stepFix[1] >= 0 ? j : p.count[1] - 1 - j, lo, hi;
         roof_column(p, i, k, &lo, &hi);
@@ -238,6 +295,16 @@ inline bool fill_keep(const Plan& p, int i, int j, int k, int mode) {
 }
 inline long fill_count(const Plan& p, int mode) {
     long cx = p.count[0], cy = p.count[1], cz = p.count[2];
+    if (mode == FILL_ROUND) {
+        int ua, va; round_plane(p, &ua, &va);
+        const int wa = 3 - ua - va;
+        long nu = p.count[ua], nv = p.count[va], n = 0;
+        if (nu * nv > 1000000) return cx * cy * cz;
+        for (int u = 0; u < nu; u++)
+            for (int v = 0; v < nv; v++)
+                n += round_keep(p.roundShape, p.roundSide, p.roundHollow != 0, p.thick < 1 ? 1 : p.thick, u, v, (int)nu, (int)nv);
+        return n * p.count[wa];
+    }
     if (mode == FILL_ROOF) {
         // every column holds at least one shape: a huge area is over any limit anyway
         if (cx * cz > 1000000) return cx * cz;
@@ -261,6 +328,35 @@ inline bool plan_area(const I3* c, int n, const float step_m[3], long max_total,
     if (!plan_fill(c, n, step_m, max_total, out)) return false;
     out->thick = fo.thick < 1 ? 1 : fo.thick > 3 ? 3 : fo.thick;
     out->roofShape = out->roofAxisX = out->roofFlip = out->overhang = out->roofH = out->roofBase = 0;
+    if (mode == FILL_ROUND) {
+        // the plane: the ground plan, or a standing wall the area is one cell thin across
+        int axis = 1;
+        if (out->count[1] > 1 && out->count[0] == 1 && out->count[2] > 1) axis = 0;
+        else if (out->count[1] > 1 && out->count[2] == 1 && out->count[0] > 1) axis = 2;
+        out->roundAxis = axis;
+        const int shape = fo.roundShape >= 0 && fo.roundShape < ROUND_COUNT ? fo.roundShape : ROUND_FULL;
+        const int rot = fo.roundRot & 3;
+        out->roundShape = shape; out->roundHollow = fo.roundHollow != 0;
+        int ua, va; round_plane(*out, &ua, &va);
+        // turns count from corner 1 (plan index 0; the height counts from the bottom)
+        const bool mu = out->stepFix[ua] < 0, mv = va != 1 && out->stepFix[va] < 0;
+        int side = 0;
+        if (shape == ROUND_HALF) {
+            // the flat side on the longer side of the box first (a circle in a 2:1 area),
+            // on corner 1's side, then the opposite side, then the two shorter sides
+            static const int longU[4] = { 0, 1, 2, 3 }, longV[4] = { 2, 3, 0, 1 };
+            side = out->count[ua] >= out->count[va] ? longU[rot] : longV[rot];
+            if (side < 2 && mv) side ^= 1;
+            if (side >= 2 && mu) side ^= 1;
+        } else if (shape == ROUND_QUARTER) {
+            // the curve runs from corner 1 to corner 2 (bending one way, then the other),
+            // then the centre on corner 1, then on corner 2
+            static const int centre[4] = { 2, 1, 0, 3 };
+            side = centre[rot] ^ (mu ? 1 : 0) ^ (mv ? 2 : 0);
+        }
+        out->roundSide = side;
+        return true;
+    }
     if (mode != FILL_ROOF) return true;
     const int shape = fo.roofShape >= 0 && fo.roofShape < ROOF_COUNT ? fo.roofShape : ROOF_GABLE;
     const int o = fo.overhang < 0 ? 0 : fo.overhang > 3 ? 3 : fo.overhang;
@@ -294,6 +390,18 @@ inline void roof_pose_unpack(int v, int* shape, int* rot) {
     for (int k = ROOF_COUNT - 1; k >= 0; k--)
         if (v >= first[k]) { *shape = k; *rot = v - first[k]; if (*rot >= roof_turns(k)) *rot = 0; return; }
 }
+// Round shape, turn and solid / hollow in 18 values (pose: full 0, half 1-4, quarter 5-8)
+inline int round_pack(int shape, int rot, int hollow) {
+    if (shape < 0 || shape >= ROUND_COUNT) shape = 0;
+    int pose = shape == ROUND_FULL ? 0 : shape == ROUND_HALF ? 1 + (rot & 3) : 5 + (rot & 3);
+    return pose * 2 + (hollow ? 1 : 0);
+}
+inline void round_unpack(int v, int* shape, int* rot, int* hollow) {
+    if (v < 0 || v >= 18) v = 0;
+    *hollow = v & 1; int pose = v >> 1;
+    *shape = pose == 0 ? ROUND_FULL : pose <= 4 ? ROUND_HALF : ROUND_QUARTER;
+    *rot = pose == 0 ? 0 : (pose - 1) & 3;
+}
 
 // ------------------------------------------------------ client -> server state
 // On a dedicated server the mod's settings live on each player's client. The client
@@ -320,6 +428,29 @@ enum : uint32_t {
     NET_OVERHANG_SHIFT = 30,     // 2 bits: roof overhang
 };
 inline uint32_t net_field(uint32_t s, int shift, uint32_t bits) { return (s >> shift) & ((1u << bits) - 1); }
+// The fill and its options. The 2-bit fill field has no room for the round fill: it is sent
+// as the roof fill with roof pose 10..15 (no roof uses those) and the round settings
+// (round_pack) in that pose and the overhang bits.
+inline uint32_t net_fill_bits(int fill, const FillOpts& fo) {
+    if (fill == FILL_ROUND) {
+        uint32_t v = (uint32_t)round_pack(fo.roundShape, fo.roundRot, fo.roundHollow);
+        return ((uint32_t)FILL_ROOF << NET_FILL_SHIFT) | ((10 + v / 4) << NET_ROOF_SHIFT) | ((v % 4) << NET_OVERHANG_SHIFT);
+    }
+    return (((uint32_t)fill & 3) << NET_FILL_SHIFT) | ((uint32_t)roof_pose_pack(fo.roofShape, fo.roofRot) << NET_ROOF_SHIFT) |
+           (((uint32_t)fo.overhang & 3) << NET_OVERHANG_SHIFT);
+}
+// the fill (FILL_*) and its options from a state; thickness is not touched
+inline int net_fill_unpack(uint32_t s, FillOpts* fo) {
+    int fill = (int)net_field(s, NET_FILL_SHIFT, 2);
+    int pose = (int)net_field(s, NET_ROOF_SHIFT, 4), oh = (int)net_field(s, NET_OVERHANG_SHIFT, 2);
+    if (fill == FILL_ROOF && pose >= 10) {
+        round_unpack((pose - 10) * 4 + oh, &fo->roundShape, &fo->roundRot, &fo->roundHollow);
+        return FILL_ROUND;
+    }
+    roof_pose_unpack(pose, &fo->roofShape, &fo->roofRot);
+    fo->overhang = oh;
+    return fill;
+}
 inline uint16_t net_check(uint32_t s) {
     uint32_t h = s * 0x9E3779B1u;
     h ^= h >> 15; h *= 0x85EBCA77u; h ^= h >> 13;
