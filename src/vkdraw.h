@@ -626,7 +626,7 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
             push.cells[a] = g_cellStep[a];
         }
         LONG op = g_scOp == OP_REMOVE ? 2 : g_replace ? 1 : 0;
-        push.cells[3] = (float)((g_fill & 3) + 4 * op + g_boxFill);
+        push.cells[3] = (float)((g_fill == core::FILL_ROUND ? 3 : g_fill & 3) + 4 * op + g_boxFill);
         if (nn <= 40000) cellN = (uint32_t)nn;
         bool onlyFull = op == 2 || (op == 1 && g_replaceStyle != STYLE_FULL);
         if (cellN && onlyFull) {

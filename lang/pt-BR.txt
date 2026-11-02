@@ -4,9 +4,6 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
-# Numbers
-# Numbers
-# Numbers
 
 # Numbers
 num.decimal = ,
@@ -32,6 +29,11 @@ msg.roof_shape = Forma do telhado: {0}
 msg.roof_turned = Telhado girado ({0} de {1})
 msg.thick = Espessura: {0}
 msg.overhang = Beiral do telhado: {0}
+msg.fill_round = Preenchimento da área: redondo ({0}, {1})
+msg.round_shape = Forma redonda: {0}
+msg.round_turned = Forma redonda girada ({0} de {1})
+msg.round_solid = Preench. redondo: sólido
+msg.round_hollow = Preench. redondo: oco (parede redonda)
 msg.free_on = Posicionamento livre LIGADO (sem encaixe em superfícies)
 msg.free_off = Posicionamento livre DESLIGADO
 msg.free_distance = Distância do posicionamento livre: {0} m
@@ -69,6 +71,7 @@ bar.area_remove = Área remover {0}/{1}
 bar.hollow = oca
 bar.walls = paredes
 bar.roof = telhado: {0}
+bar.round = redondo: {0}, {1}
 bar.prefab = Normal
 bar.prefab_replace = Normal substituir
 bar.full = forma inteira
@@ -97,6 +100,11 @@ hud.fill_walls = Preenchimento: paredes
 hud.fill_roof = Preench.: telhado
 hud.roof_shape = Telhado: {0}
 hud.roof_turn = Girar telhado
+hud.fill_round = Preench.: redondo
+hud.round_shape = Redondo: {0}
+hud.round_turn = Girar forma redonda
+hud.round_solid = Redondo: sólido
+hud.round_hollow = Redondo: oco
 hud.thick = Espessura
 hud.clear = Limpar cantos
 hud.replace = Substituir
@@ -144,10 +152,11 @@ menu.key_area = Modo área sim / não
 menu.key_replace = Substituir sim / não
 menu.key_style = Estilo de substituição
 menu.key_fill = Preenchimento da área
-menu.key_roof_shape = Próxima forma de telhado (modo área, telhado)
-menu.key_roof_turn = Girar telhado (modo área, telhado)
+menu.key_roof_shape = Próxima forma de telhado / redonda (modo área, telhado ou redondo)
+menu.key_roof_turn = Girar telhado / forma redonda (modo área, telhado ou redondo)
 menu.key_thick = Espessura 1 / 2 / 3 (salas, paredes, telhados)
 menu.key_overhang = Beiral do telhado nenhum / 1 / 2 / 3
+menu.key_round_hollow = Preench. redondo: sólido / oco
 menu.key_clear = Limpar cantos da área
 menu.key_free = Posicionamento livre sim / não
 menu.key_farther = Posicionamento livre mais longe
@@ -161,6 +170,7 @@ menu.key_fill_solid = Preenchimento: sólido
 menu.key_fill_hollow = Preenchimento: sala oca
 menu.key_fill_walls = Preenchimento: só paredes
 menu.key_fill_roof = Preenchimento: telhado
+menu.key_fill_round = Preenchimento: redondo
 menu.key_creative = Construção criativa liga / desliga
 menu.key_replace_hold = Substituir (segurar)
 menu.key_prefab = Modo normal (como no jogo)
@@ -185,6 +195,7 @@ option.fill_solid = Sólido
 option.fill_hollow = Sala oca
 option.fill_walls = Só paredes
 option.fill_roof = Telhado
+option.fill_round = Redondo
 option.roof_shape = Forma do telhado
 option.roof_gable = Duas águas
 option.roof_hip = Quatro águas
@@ -193,6 +204,13 @@ option.roof_mansard = Mansarda
 option.roof_shed = Uma água
 option.roof_turn = Giro do telhado
 option.overhang = Beiral do telhado
+option.round_shape = Forma redonda
+option.round_full = Inteiro
+option.round_half = Metade
+option.round_quarter = Quarto
+option.round_turn = Giro do redondo
+option.round_fill = Interior redondo
+option.round_hollow = Oco (parede)
 option.thick = Espessura (salas, paredes, telhados)
 option.none = Nenhum
 option.free = Posicionamento livre

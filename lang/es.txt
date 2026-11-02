@@ -4,9 +4,6 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
-# Numbers
-# Numbers
-# Numbers
 
 # Numbers
 num.decimal = ,
@@ -32,6 +29,11 @@ msg.roof_shape = Forma del tejado: {0}
 msg.roof_turned = Tejado girado ({0} de {1})
 msg.thick = Grosor: {0}
 msg.overhang = Alero del tejado: {0}
+msg.fill_round = Relleno del área: redondo ({0}, {1})
+msg.round_shape = Forma redonda: {0}
+msg.round_turned = Forma redonda girada ({0} de {1})
+msg.round_solid = Relleno redondo: sólido
+msg.round_hollow = Relleno redondo: hueco (pared redonda)
 msg.free_on = Colocación libre ACTIVADA (sin ajuste a superficies)
 msg.free_off = Colocación libre DESACTIVADA
 msg.free_distance = Distancia de colocación libre: {0} m
@@ -69,6 +71,7 @@ bar.area_remove = Área quitar {0}/{1}
 bar.hollow = hueco
 bar.walls = paredes
 bar.roof = tejado: {0}
+bar.round = redondo: {0}, {1}
 bar.prefab = Normal
 bar.prefab_replace = Normal reemplazar
 bar.full = forma completa
@@ -97,6 +100,11 @@ hud.fill_walls = Relleno: paredes
 hud.fill_roof = Relleno: tejado
 hud.roof_shape = Tejado: {0}
 hud.roof_turn = Girar tejado
+hud.fill_round = Relleno: redondo
+hud.round_shape = Redondo: {0}
+hud.round_turn = Girar forma redonda
+hud.round_solid = Redondo: sólido
+hud.round_hollow = Redondo: hueco
 hud.thick = Grosor
 hud.clear = Borrar esquinas
 hud.replace = Reemplazar
@@ -144,10 +152,11 @@ menu.key_area = Modo área sí / no
 menu.key_replace = Reemplazar sí / no
 menu.key_style = Estilo de reemplazo
 menu.key_fill = Relleno del área
-menu.key_roof_shape = Siguiente forma de tejado (modo área, tejado)
-menu.key_roof_turn = Girar tejado (modo área, tejado)
+menu.key_roof_shape = Siguiente forma de tejado / redonda (modo área, tejado o redondo)
+menu.key_roof_turn = Girar tejado / forma redonda (modo área, tejado o redondo)
 menu.key_thick = Grosor 1 / 2 / 3 (salas, paredes, tejados)
 menu.key_overhang = Alero del tejado ninguno / 1 / 2 / 3
+menu.key_round_hollow = Relleno redondo: sólido / hueco
 menu.key_clear = Borrar esquinas del área
 menu.key_free = Colocación libre sí / no
 menu.key_farther = Colocación libre más lejos
@@ -161,6 +170,7 @@ menu.key_fill_solid = Relleno de área: sólido
 menu.key_fill_hollow = Relleno de área: sala hueca
 menu.key_fill_walls = Relleno de área: solo paredes
 menu.key_fill_roof = Relleno de área: tejado
+menu.key_fill_round = Relleno de área: redondo
 menu.key_creative = Construcción creativa sí / no
 menu.key_replace_hold = Reemplazar (mantener)
 menu.key_prefab = Modo normal (como el juego)
@@ -185,6 +195,7 @@ option.fill_solid = Sólido
 option.fill_hollow = Habitación hueca
 option.fill_walls = Solo paredes
 option.fill_roof = Tejado
+option.fill_round = Redondo
 option.roof_shape = Forma del tejado
 option.roof_gable = A dos aguas
 option.roof_hip = A cuatro aguas
@@ -193,6 +204,13 @@ option.roof_mansard = Mansarda
 option.roof_shed = A un agua
 option.roof_turn = Giro del tejado
 option.overhang = Alero del tejado
+option.round_shape = Forma redonda
+option.round_full = Completo
+option.round_half = Mitad
+option.round_quarter = Cuarto
+option.round_turn = Giro de lo redondo
+option.round_fill = Interior redondo
+option.round_hollow = Hueco (pared)
 option.thick = Grosor (salas, paredes, tejados)
 option.none = Ninguno
 option.free = Colocación libre

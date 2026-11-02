@@ -4,9 +4,6 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
-# Numbers
-# Numbers
-# Numbers
 
 # Numbers
 num.decimal = .
@@ -32,6 +29,11 @@ msg.roof_shape = 屋頂形狀：{0}
 msg.roof_turned = 屋頂已旋轉（{0}/{1}）
 msg.thick = 厚度：{0}
 msg.overhang = 屋簷出挑：{0}
+msg.fill_round = 區域填充：圓形（{0}，{1}）
+msg.round_shape = 圓形形狀：{0}
+msg.round_turned = 圓形已旋轉（{0}/{1}）
+msg.round_solid = 圓形填充：實心
+msg.round_hollow = 圓形填充：空心（圓牆）
 msg.free_on = 自由放置 開（不吸附表面）
 msg.free_off = 自由放置 關
 msg.free_distance = 自由放置距離：{0} 公尺
@@ -69,6 +71,7 @@ bar.area_remove = 區域移除 {0}/{1}
 bar.hollow = 空心
 bar.walls = 牆壁
 bar.roof = 屋頂：{0}
+bar.round = 圓形：{0}，{1}
 bar.prefab = 一般
 bar.prefab_replace = 一般替換
 bar.full = 整個形狀
@@ -97,6 +100,11 @@ hud.fill_walls = 填充：牆壁
 hud.fill_roof = 填充：屋頂
 hud.roof_shape = 屋頂：{0}
 hud.roof_turn = 旋轉屋頂
+hud.fill_round = 填充：圓形
+hud.round_shape = 圓形：{0}
+hud.round_turn = 旋轉圓形
+hud.round_solid = 圓形：實心
+hud.round_hollow = 圓形：空心
 hud.thick = 厚度
 hud.clear = 清除角點
 hud.replace = 替換
@@ -144,10 +152,11 @@ menu.key_area = 區域模式 開 / 關
 menu.key_replace = 替換 開 / 關
 menu.key_style = 替換方式
 menu.key_fill = 區域填充
-menu.key_roof_shape = 下一個屋頂形狀（區域模式，屋頂）
-menu.key_roof_turn = 旋轉屋頂（區域模式，屋頂）
+menu.key_roof_shape = 下一個屋頂 / 圓形形狀（區域模式，屋頂或圓形）
+menu.key_roof_turn = 旋轉屋頂 / 圓形（區域模式，屋頂或圓形）
 menu.key_thick = 厚度 1 / 2 / 3（房間、牆壁、屋頂）
 menu.key_overhang = 屋簷出挑 無 / 1 / 2 / 3
+menu.key_round_hollow = 圓形填充：實心 / 空心
 menu.key_clear = 清除區域角點
 menu.key_free = 自由放置 開 / 關
 menu.key_farther = 自由放置 更遠
@@ -161,6 +170,7 @@ menu.key_fill_solid = 區域填充：實心
 menu.key_fill_hollow = 區域填充：空心房間
 menu.key_fill_walls = 區域填充：僅牆壁
 menu.key_fill_roof = 區域填充：屋頂
+menu.key_fill_round = 區域填充：圓形
 menu.key_creative = 創造建造 開 / 關
 menu.key_replace_hold = 替換（按住）
 menu.key_prefab = 一般模式（遊戲原版）
@@ -185,6 +195,7 @@ option.fill_solid = 實心
 option.fill_hollow = 空心房間
 option.fill_walls = 僅牆壁
 option.fill_roof = 屋頂
+option.fill_round = 圓形
 option.roof_shape = 屋頂形狀
 option.roof_gable = 雙斜（2 面）
 option.roof_hip = 四斜（4 面）
@@ -193,6 +204,13 @@ option.roof_mansard = 孟莎式
 option.roof_shed = 單斜（1 面）
 option.roof_turn = 屋頂朝向
 option.overhang = 屋簷出挑
+option.round_shape = 圓形形狀
+option.round_full = 整圓
+option.round_half = 半圓
+option.round_quarter = 四分之一圓
+option.round_turn = 圓形朝向
+option.round_fill = 圓形內部
+option.round_hollow = 空心（牆）
 option.thick = 厚度（房間、牆壁、屋頂）
 option.none = 無
 option.free = 自由放置

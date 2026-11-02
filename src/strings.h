@@ -28,6 +28,11 @@
     X(S_ROOF_TURNED, "msg.roof_turned", "Roof turned ({0} of {1})") \
     X(S_THICK_SET, "msg.thick", "Thickness: {0}") \
     X(S_OVERHANG_SET, "msg.overhang", "Roof overhang: {0}") \
+    X(S_FILL_ROUND, "msg.fill_round", "Area fill: round ({0}, {1})") \
+    X(S_ROUND_SHAPE, "msg.round_shape", "Round shape: {0}") \
+    X(S_ROUND_TURNED, "msg.round_turned", "Round shape turned ({0} of {1})") \
+    X(S_ROUND_SOLID, "msg.round_solid", "Round fill: solid") \
+    X(S_ROUND_HOLLOW, "msg.round_hollow", "Round fill: hollow (a round wall)") \
     X(S_FREE_ON, "msg.free_on", "Free placement ON (no surface snapping)") \
     X(S_FREE_OFF, "msg.free_off", "Free placement OFF") \
     X(S_FREE_DISTANCE, "msg.free_distance", "Free placement distance {0} m") \
@@ -64,6 +69,7 @@
     X(S_BAR_HOLLOW, "bar.hollow", "hollow") \
     X(S_BAR_WALLS, "bar.walls", "walls") \
     X(S_BAR_ROOF, "bar.roof", "roof: {0}") \
+    X(S_BAR_ROUND, "bar.round", "round: {0}, {1}") \
     X(S_BAR_PREFAB, "bar.prefab", "Prefab") \
     X(S_BAR_PREFAB_REPLACE, "bar.prefab_replace", "Prefab replace") \
     X(S_BAR_FULL, "bar.full", "full shape") \
@@ -91,6 +97,11 @@
     X(S_HUD_FILL_ROOF, "hud.fill_roof", "Fill: roof") \
     X(S_HUD_ROOF_SHAPE, "hud.roof_shape", "Roof: {0}") \
     X(S_HUD_ROOF_TURN, "hud.roof_turn", "Turn roof") \
+    X(S_HUD_FILL_ROUND, "hud.fill_round", "Fill: round") \
+    X(S_HUD_ROUND_SHAPE, "hud.round_shape", "Round: {0}") \
+    X(S_HUD_ROUND_TURN, "hud.round_turn", "Turn round shape") \
+    X(S_HUD_ROUND_SOLID, "hud.round_solid", "Round: solid") \
+    X(S_HUD_ROUND_HOLLOW, "hud.round_hollow", "Round: hollow") \
     X(S_HUD_THICK, "hud.thick", "Thickness") \
     X(S_HUD_CLEAR, "hud.clear", "Clear corners") \
     X(S_HUD_REPLACE, "hud.replace", "Replace") \
@@ -135,10 +146,11 @@
     X(S_ACT_REPLACE, "menu.key_replace", "Replace on / off") \
     X(S_ACT_STYLE, "menu.key_style", "Replace style") \
     X(S_ACT_FILL, "menu.key_fill", "Area fill") \
-    X(S_ACT_ROOF_SHAPE, "menu.key_roof_shape", "Next roof shape (Area mode, roof fill)") \
-    X(S_ACT_ROOF_TURN, "menu.key_roof_turn", "Turn roof (Area mode, roof fill)") \
+    X(S_ACT_ROOF_SHAPE, "menu.key_roof_shape", "Next roof / round shape (Area mode, roof or round fill)") \
+    X(S_ACT_ROOF_TURN, "menu.key_roof_turn", "Turn roof / round shape (Area mode, roof or round fill)") \
     X(S_ACT_THICK, "menu.key_thick", "Thickness 1 / 2 / 3 (rooms, walls, roofs)") \
     X(S_ACT_OVERHANG, "menu.key_overhang", "Roof overhang none / 1 / 2 / 3") \
+    X(S_ACT_ROUND_HOLLOW, "menu.key_round_hollow", "Round fill: solid / hollow") \
     X(S_ACT_CLEAR, "menu.key_clear", "Clear area corners") \
     X(S_ACT_FREE, "menu.key_free", "Free placement on / off") \
     X(S_ACT_FARTHER, "menu.key_farther", "Free placement farther") \
@@ -152,6 +164,7 @@
     X(S_ACT_FILL_HOLLOW, "menu.key_fill_hollow", "Area fill: hollow room") \
     X(S_ACT_FILL_WALLS, "menu.key_fill_walls", "Area fill: walls only") \
     X(S_ACT_FILL_ROOF, "menu.key_fill_roof", "Area fill: roof") \
+    X(S_ACT_FILL_ROUND, "menu.key_fill_round", "Area fill: round") \
     X(S_ACT_CREATIVE, "menu.key_creative", "Creative building on / off") \
     X(S_ACT_REPLACE_HOLD, "menu.key_replace_hold", "Replace while held") \
     X(S_ACT_PREFAB, "menu.key_prefab", "Prefab mode (vanilla)") \
@@ -174,6 +187,7 @@
     X(S_OPT_FILL_HOLLOW, "option.fill_hollow", "Hollow room") \
     X(S_OPT_FILL_WALLS, "option.fill_walls", "Walls only") \
     X(S_OPT_FILL_ROOF, "option.fill_roof", "Roof") \
+    X(S_OPT_FILL_ROUND, "option.fill_round", "Round") \
     X(S_OPT_ROOF_SHAPE, "option.roof_shape", "Roof shape") \
     X(S_OPT_ROOF_GABLE, "option.roof_gable", "Gable (2 slopes)") \
     X(S_OPT_ROOF_HIP, "option.roof_hip", "Hip (4 slopes)") \
@@ -182,6 +196,13 @@
     X(S_OPT_ROOF_SHED, "option.roof_shed", "Shed (1 slope)") \
     X(S_OPT_ROOF_TURN, "option.roof_turn", "Roof turn") \
     X(S_OPT_OVERHANG, "option.overhang", "Roof overhang") \
+    X(S_OPT_ROUND_SHAPE, "option.round_shape", "Round shape") \
+    X(S_OPT_ROUND_FULL, "option.round_full", "Full") \
+    X(S_OPT_ROUND_HALF, "option.round_half", "Half") \
+    X(S_OPT_ROUND_QUARTER, "option.round_quarter", "Quarter") \
+    X(S_OPT_ROUND_TURN, "option.round_turn", "Round turn") \
+    X(S_OPT_ROUND_FILL, "option.round_fill", "Round inside") \
+    X(S_OPT_ROUND_HOLLOW, "option.round_hollow", "Hollow (wall)") \
     X(S_OPT_THICK, "option.thick", "Thickness (rooms, walls, roofs)") \
     X(S_OPT_NONE, "option.none", "None") \
     X(S_OPT_FREE, "option.free", "Free placement") \

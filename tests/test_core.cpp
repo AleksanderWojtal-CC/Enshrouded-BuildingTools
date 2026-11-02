@@ -326,6 +326,98 @@ int main(int argc, char** argv) {
         CHECK(core::plan_area(flat, 2, step1, 2000, core::FILL_SOLID, fo(core::ROOF_GABLE, 1, 1, 3), &pl) && pl.count[1] == 1 && pl.total == 28, "solid unchanged");
     }
 
+    // round fills
+    {
+        const float step1[3] = { 1.f, 1.f, 1.f };
+        const int O = core::FILL_ROUND;
+        core::Plan pl;
+        auto ro = [](int shape, int rot, int hollow, int thick = 1) {
+            core::FillOpts f = {}; f.thick = thick; f.roundShape = shape; f.roundRot = rot; f.roundHollow = hollow; return f;
+        };
+        auto keepCount = [&](const core::Plan& p) {
+            long n = 0;
+            for (int i = 0; i < p.count[0]; i++) for (int j = 0; j < p.count[1]; j++) for (int k = 0; k < p.count[2]; k++)
+                n += core::fill_keep(p, i, j, k, O);
+            return n;
+        };
+        // full circle 9 x 9, 2 high: corners out, centre and edge middles in, symmetric
+        core::I3 sq[2] = {{0, 0, 0}, {8 * M, 1 * M, 8 * M}};
+        CHECK(core::plan_area(sq, 2, step1, 5000, O, ro(core::ROUND_FULL, 0, 0), &pl) && pl.roundAxis == 1, "round: ground plan");
+        CHECK(!core::fill_keep(pl, 0, 0, 0, O) && core::fill_keep(pl, 4, 0, 4, O) && core::fill_keep(pl, 0, 1, 4, O) &&
+              core::fill_keep(pl, 4, 1, 8, O), "full circle: corners out, centre and sides in");
+        bool sym = true;
+        for (int i = 0; i < 9; i++) for (int k = 0; k < 9; k++)
+            if (core::fill_keep(pl, i, 0, k, O) != core::fill_keep(pl, 8 - i, 0, k, O) ||
+                core::fill_keep(pl, i, 0, k, O) != core::fill_keep(pl, k, 0, i, O)) sym = false;
+        CHECK(sym, "full circle is symmetric");
+        CHECK(core::fill_count(pl, O) == keepCount(pl), "full circle: count matches keep");
+        // hollow ring: no centre, no gap a step can pass through (4-neighbour flood from the centre stays inside)
+        for (int t = 1; t <= 3; t++) {
+            core::I3 big[2] = {{0, 0, 0}, {14 * M, 0, 10 * M}};
+            CHECK(core::plan_area(big, 2, step1, 5000, O, ro(core::ROUND_FULL, 0, 1, t), &pl), "ellipse 15 x 11 planned");
+            const int nx = pl.count[0], nz = pl.count[2];
+            CHECK(!core::fill_keep(pl, 7, 0, 5, O) && core::fill_keep(pl, 0, 0, 5, O) && core::fill_keep(pl, 7, 0, 0, O), "ring: centre empty, sides walled");
+            CHECK(core::fill_keep(pl, t - 1, 0, 5, O) && !core::fill_keep(pl, t, 0, 5, O), "ring is `thick` shapes thick at the side");
+            std::vector<int> seen(nx * nz, 0), st{ 7 + nx * 5 }; seen[7 + nx * 5] = 1; bool leak = false;
+            while (!st.empty()) {
+                int c = st.back(); st.pop_back(); int x = c % nx, z = c / nx;
+                const int d[4][2] = {{1,0},{-1,0},{0,1},{0,-1}};
+                for (auto& e : d) {
+                    int X = x + e[0], Z = z + e[1];
+                    if (X < 0 || Z < 0 || X >= nx || Z >= nz) { leak = true; continue; }
+                    if (seen[X + nx * Z] || core::fill_keep(pl, X, 0, Z, O)) continue;
+                    seen[X + nx * Z] = 1; st.push_back(X + nx * Z);
+                }
+            }
+            CHECK(!leak, "ring wall has no gaps");
+            CHECK(core::fill_count(pl, O) == keepCount(pl), "ring: count matches keep");
+        }
+        // quarter: the curve runs from corner 1 to corner 2, also with corner 1 on the far side
+        core::I3 q[2] = {{0, 0, 0}, {5 * M, 0, 5 * M}};
+        CHECK(core::plan_area(q, 2, step1, 5000, O, ro(core::ROUND_QUARTER, 0, 1), &pl), "quarter planned");
+        CHECK(core::fill_keep(pl, 0, 0, 0, O) && core::fill_keep(pl, 5, 0, 5, O) && !core::fill_keep(pl, 5, 0, 0, O) &&
+              !core::fill_keep(pl, 1, 0, 4, O), "quarter wall from corner 1 to corner 2, open toward its centre");
+        core::I3 qb[2] = {{5 * M, 0, 5 * M}, {0, 0, 0}};
+        CHECK(core::plan_area(qb, 2, step1, 5000, O, ro(core::ROUND_QUARTER, 0, 1), &pl) &&
+              core::fill_keep(pl, 0, 0, 0, O) && core::fill_keep(pl, 5, 0, 5, O) && !core::fill_keep(pl, 5, 0, 0, O), "quarter from the far corner");
+        CHECK(core::plan_area(q, 2, step1, 5000, O, ro(core::ROUND_QUARTER, 1, 1), &pl) &&
+              core::fill_keep(pl, 0, 0, 0, O) && core::fill_keep(pl, 5, 0, 5, O) && !core::fill_keep(pl, 0, 0, 5, O), "quarter turned bends the other way");
+        CHECK(core::plan_area(q, 2, step1, 5000, O, ro(core::ROUND_QUARTER, 2, 0), &pl) &&
+              core::fill_keep(pl, 0, 0, 0, O) && !core::fill_keep(pl, 5, 0, 5, O), "quarter turned twice: centre on corner 1");
+        // half: flat side on the long side, open there when hollow
+        core::I3 h[2] = {{0, 0, 0}, {10 * M, 0, 5 * M}};
+        CHECK(core::plan_area(h, 2, step1, 5000, O, ro(core::ROUND_HALF, 0, 1), &pl) && pl.roundSide == 0, "half: flat on the long side");
+        CHECK(core::fill_keep(pl, 0, 0, 0, O) && core::fill_keep(pl, 10, 0, 0, O) && core::fill_keep(pl, 5, 0, 5, O) &&
+              !core::fill_keep(pl, 5, 0, 0, O) && !core::fill_keep(pl, 5, 0, 3, O), "half wall: ends and top in, flat side open");
+        CHECK(core::plan_area(h, 2, step1, 5000, O, ro(core::ROUND_HALF, 1, 0), &pl) && pl.roundSide == 1 &&
+              core::fill_keep(pl, 5, 0, 0, O) && core::fill_keep(pl, 0, 0, 5, O) && !core::fill_keep(pl, 0, 0, 0, O), "half turned: flat on the far side");
+        // standing wall (one shape thin): the round stands in it, an arch with the flat side down
+        core::I3 w[2] = {{0, 0, 0}, {8 * M, 4 * M, 0}};
+        CHECK(core::plan_area(w, 2, step1, 5000, O, ro(core::ROUND_HALF, 0, 1), &pl) && pl.roundAxis == 2, "round in a standing wall");
+        CHECK(core::fill_keep(pl, 0, 0, 0, O) && core::fill_keep(pl, 4, 4, 0, O) && !core::fill_keep(pl, 4, 0, 0, O) &&
+              !core::fill_keep(pl, 0, 4, 0, O), "arch: feet and top in, opening below");
+        core::I3 wd[2] = {{8 * M, 4 * M, 0}, {0, 0, 0}};
+        CHECK(core::plan_area(wd, 2, step1, 5000, O, ro(core::ROUND_HALF, 0, 1), &pl) && core::fill_keep(pl, 4, 0, 0, O) &&
+              !core::fill_keep(pl, 4, 4, 0, O), "arch from the top corner: still standing on the ground");
+        // every pose fits the state (as the roof fill with poses 10..15) and comes back
+        bool ok = true;
+        for (int sh = 0; sh < core::ROUND_COUNT; sh++)
+            for (int rt = 0; rt < core::round_turns(sh); rt++)
+                for (int hl = 0; hl < 2; hl++) {
+                    core::FillOpts f = ro(sh, rt, hl), back = {};
+                    uint32_t bits = core::net_fill_bits(O, f);
+                    if (core::net_fill_unpack(bits, &back) != O || back.roundShape != sh || back.roundRot != rt || back.roundHollow != hl) ok = false;
+                    if (bits & ~((3u << core::NET_FILL_SHIFT) | (15u << core::NET_ROOF_SHIFT) | (3u << core::NET_OVERHANG_SHIFT))) ok = false;
+                }
+        for (int sh = 0; sh < core::ROOF_COUNT; sh++)
+            for (int rt = 0; rt < core::roof_turns(sh); rt++) {
+                core::FillOpts f = {}, back = {}; f.roofShape = sh; f.roofRot = rt; f.overhang = 3;
+                if (core::net_fill_unpack(core::net_fill_bits(core::FILL_ROOF, f), &back) != core::FILL_ROOF || back.roofShape != sh ||
+                    back.roofRot != rt || back.overhang != 3) ok = false;
+            }
+        CHECK(ok, "round and roof settings round trip through the state");
+    }
+
     // ----------------------------------------------------- axis lock
     {
         const int64_t T = M / 10;

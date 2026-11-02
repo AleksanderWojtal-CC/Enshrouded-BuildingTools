@@ -4,9 +4,6 @@
 # https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools (see TRANSLATING.md).
 # Keep the keys (left of "=") and {0} {1} ... as they are. When the translation has
 # been checked, menu.translation_note can be left empty.
-# Numbers
-# Numbers
-# Numbers
 
 # Numbers
 num.decimal = .
@@ -32,6 +29,11 @@ msg.roof_shape = รูปทรงหลังคา: {0}
 msg.roof_turned = หมุนหลังคาแล้ว ({0}/{1})
 msg.thick = ความหนา: {0}
 msg.overhang = ชายคายื่น: {0}
+msg.fill_round = การเติมพื้นที่: ทรงกลม ({0}, {1})
+msg.round_shape = รูปทรงกลม: {0}
+msg.round_turned = หมุนทรงกลมแล้ว ({0}/{1})
+msg.round_solid = ทรงกลม: ทึบ
+msg.round_hollow = ทรงกลม: กลวง (ผนังโค้ง)
 msg.free_on = วางอิสระ เปิด (ไม่ยึดกับพื้นผิว)
 msg.free_off = วางอิสระ ปิด
 msg.free_distance = ระยะวางอิสระ: {0} ม.
@@ -69,6 +71,7 @@ bar.area_remove = พื้นที่ ลบ {0}/{1}
 bar.hollow = กลวง
 bar.walls = ผนัง
 bar.roof = หลังคา: {0}
+bar.round = ทรงกลม: {0}, {1}
 bar.prefab = ปกติ
 bar.prefab_replace = ปกติ แทนที่
 bar.full = ทั้งรูปทรง
@@ -97,6 +100,11 @@ hud.fill_walls = เติม: ผนัง
 hud.fill_roof = เติม: หลังคา
 hud.roof_shape = หลังคา: {0}
 hud.roof_turn = หมุนหลังคา
+hud.fill_round = เติม: ทรงกลม
+hud.round_shape = ทรงกลม: {0}
+hud.round_turn = หมุนทรงกลม
+hud.round_solid = ทรงกลม: ทึบ
+hud.round_hollow = ทรงกลม: กลวง
 hud.thick = ความหนา
 hud.clear = ล้างมุม
 hud.replace = แทนที่
@@ -144,10 +152,11 @@ menu.key_area = โหมดพื้นที่ เปิด / ปิด
 menu.key_replace = แทนที่ เปิด / ปิด
 menu.key_style = รูปแบบการแทนที่
 menu.key_fill = การเติมพื้นที่
-menu.key_roof_shape = รูปทรงหลังคาถัดไป (โหมดพื้นที่, หลังคา)
-menu.key_roof_turn = หมุนหลังคา (โหมดพื้นที่, หลังคา)
+menu.key_roof_shape = รูปทรงหลังคา / ทรงกลมถัดไป (โหมดพื้นที่, หลังคาหรือทรงกลม)
+menu.key_roof_turn = หมุนหลังคา / ทรงกลม (โหมดพื้นที่, หลังคาหรือทรงกลม)
 menu.key_thick = ความหนา 1 / 2 / 3 (ห้อง, ผนัง, หลังคา)
 menu.key_overhang = ชายคายื่น ไม่มี / 1 / 2 / 3
+menu.key_round_hollow = ทรงกลม: ทึบ / กลวง
 menu.key_clear = ล้างมุมพื้นที่
 menu.key_free = วางอิสระ เปิด / ปิด
 menu.key_farther = วางอิสระ ไกลขึ้น
@@ -161,6 +170,7 @@ menu.key_fill_solid = การเติมพื้นที่: ทึบ
 menu.key_fill_hollow = การเติมพื้นที่: ห้องกลวง
 menu.key_fill_walls = การเติมพื้นที่: เฉพาะผนัง
 menu.key_fill_roof = การเติมพื้นที่: หลังคา
+menu.key_fill_round = การเติมพื้นที่: ทรงกลม
 menu.key_creative = การสร้างแบบสร้างสรรค์ เปิด / ปิด
 menu.key_replace_hold = แทนที่ (กดค้าง)
 menu.key_prefab = โหมดปกติ (แบบในเกม)
@@ -185,6 +195,7 @@ option.fill_solid = ทึบ
 option.fill_hollow = ห้องกลวง
 option.fill_walls = เฉพาะผนัง
 option.fill_roof = หลังคา
+option.fill_round = ทรงกลม
 option.roof_shape = รูปทรงหลังคา
 option.roof_gable = จั่ว (2 ด้าน)
 option.roof_hip = ปั้นหยา (4 ด้าน)
@@ -193,6 +204,13 @@ option.roof_mansard = มันซาร์ด
 option.roof_shed = เพิงหมาแหงน (1 ด้าน)
 option.roof_turn = ทิศหลังคา
 option.overhang = ชายคายื่น
+option.round_shape = รูปทรงกลม
+option.round_full = เต็มวง
+option.round_half = ครึ่งวง
+option.round_quarter = หนึ่งในสี่
+option.round_turn = ทิศทรงกลม
+option.round_fill = ด้านในทรงกลม
+option.round_hollow = กลวง (ผนัง)
 option.thick = ความหนา (ห้อง, ผนัง, หลังคา)
 option.none = ไม่มี
 option.free = วางอิสระ
