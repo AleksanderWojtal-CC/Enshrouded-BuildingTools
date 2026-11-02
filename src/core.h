@@ -118,6 +118,8 @@ struct Plan {
     int     roundSide;   // half: flat side, quarter: centre corner, in box space (see round_inside)
     int     roundHollow; // a wall `thick` shapes thick along the curve, else solid
     int     roundAxis;   // the axis the round shape runs along (1 = y: a round in the ground plan)
+    int     diagU, diagV; // diagonal fill: the plane the line runs in (axes, u < v not required)
+    int     diagFlip;    // the line runs from (0, nv-1) to (nu-1, 0) in box space, else (0, 0) to (nu-1, nv-1)
 };
 
 inline int64_t iabs64(int64_t v) { return v < 0 ? -v : v; }
@@ -147,6 +149,7 @@ inline bool plan_fill(const I3* c, int n, const float step_m[3], long max_total,
     out->total = (long)total;
     out->thick = 1; out->roofShape = out->roofAxisX = out->roofFlip = out->overhang = out->roofH = out->roofBase = 0;
     out->roundShape = out->roundSide = out->roundHollow = 0; out->roundAxis = 1;
+    out->diagU = 0; out->diagV = 2; out->diagFlip = 0;
     return true;
 }
 
@@ -174,7 +177,7 @@ inline I3 plan_pos(const Plan& p, int i, int j, int k) {
 // Fill shape of an area: solid, hollow room (walls + floor + ceiling), walls only, or a
 // roof. Rooms, walls and roofs are `thick` shapes thick. A side too thin to have an inside
 // stays complete.
-enum { FILL_SOLID = 0, FILL_HOLLOW = 1, FILL_WALLS = 2, FILL_ROOF = 3, FILL_ROUND = 4, FILL_COUNT = 5 };
+enum { FILL_SOLID = 0, FILL_HOLLOW = 1, FILL_WALLS = 2, FILL_ROOF = 3, FILL_ROUND = 4, FILL_DIAG = 5, FILL_COUNT = 6 };
 enum { ROOF_GABLE = 0, ROOF_HIP = 1, ROOF_GAMBREL = 2, ROOF_MANSARD = 3, ROOF_SHED = 4, ROOF_COUNT = 5 };
 // how many ways a roof shape can be turned (gable / gambrel: ridge along either side,
 // shed: rising toward each of the four sides; hip and mansard look the same every way)
@@ -183,7 +186,25 @@ inline int roof_turns(int shape) { return shape == ROOF_SHED ? 4 : (shape == ROO
 enum { ROUND_FULL = 0, ROUND_HALF = 1, ROUND_QUARTER = 2, ROUND_COUNT = 3 };
 inline int round_turns(int shape) { return shape == ROUND_FULL ? 1 : 4; }
 
-struct FillOpts { int roofShape, roofRot, thick, overhang, roundShape = 0, roundRot = 0, roundHollow = 0, roundLying = 0; };
+struct FillOpts { int roofShape, roofRot, thick, overhang, roundShape = 0, roundRot = 0, roundHollow = 0, roundLying = 0,
+                  diagRot = 0, diagLying = 0; };
+
+// Diagonal fills: a wall `t` shapes thick along the line from one corner of a plane of the
+// box to the opposite one. Standing: the ground plan (a wall from corner 1 to corner 2 seen
+// from above); lying: the upright plane along the area (a ramp from corner 1 up or down to
+// the far side). The cells form a digital line whose blocks share faces (no gaps where it
+// steps): (u, v) in box space is kept when f = u * dv - v * du lies in [-W/2, W - W/2),
+// W = t * (du + dv), du = nu - 1, dv = nv - 1. Same rule in cells.vert.
+inline int diag_turns(int lying) { return lying ? 4 : 2; }
+inline bool diag_keep(int flip, int t, int u, int v, int nu, int nv) {
+    if (u < 0 || v < 0 || u >= nu || v >= nv) return false;
+    const int64_t du = nu - 1, dv = nv - 1;
+    if (du + dv == 0) return true;
+    if (flip) v = nv - 1 - v;
+    const int64_t W = (int64_t)(t < 1 ? 1 : t) * (du + dv), h = W / 2;
+    const int64_t f = (int64_t)u * dv - (int64_t)v * du;
+    return f >= -h && f < W - h;
+}
 
 // Round fills: an ellipse (a circle in a square area) that fills the area's box, or half of
 // one (flat side on one side of the box) or a quarter (centre on one corner of the box).
@@ -275,6 +296,11 @@ inline void roof_column(const Plan& p, int x, int z, int* lo, int* hi) {
     if (*hi > p.count[1] - 1) *hi = p.count[1] - 1;
 }
 inline bool fill_keep(const Plan& p, int i, int j, int k, int mode) {
+    if (mode == FILL_DIAG) {
+        int c[3] = { i, j, k };
+        for (int a = 0; a < 3; a++) if (p.stepFix[a] < 0) c[a] = p.count[a] - 1 - c[a];   // box space
+        return diag_keep(p.diagFlip, p.thick, c[p.diagU], c[p.diagV], p.count[p.diagU], p.count[p.diagV]);
+    }
     if (mode == FILL_ROUND) {
         int c[3] = { i, j, k }, ua, va;
         for (int a = 0; a < 3; a++) if (p.stepFix[a] < 0) c[a] = p.count[a] - 1 - c[a];   // box space
@@ -296,6 +322,14 @@ inline bool fill_keep(const Plan& p, int i, int j, int k, int mode) {
 }
 inline long fill_count(const Plan& p, int mode) {
     long cx = p.count[0], cy = p.count[1], cz = p.count[2];
+    if (mode == FILL_DIAG) {
+        const int ua = p.diagU, va = p.diagV, wa = 3 - ua - va;
+        long nu = p.count[ua], nv = p.count[va], n = 0;
+        if (nu * nv > 1000000) return cx * cy * cz;
+        for (int u = 0; u < nu; u++)
+            for (int v = 0; v < nv; v++) n += diag_keep(p.diagFlip, p.thick, u, v, (int)nu, (int)nv);
+        return n * p.count[wa];
+    }
     if (mode == FILL_ROUND) {
         int ua, va; round_plane(p, &ua, &va);
         const int wa = 3 - ua - va;
@@ -329,6 +363,31 @@ inline bool plan_area(const I3* c, int n, const float step_m[3], long max_total,
     if (!plan_fill(c, n, step_m, max_total, out)) return false;
     out->thick = fo.thick < 1 ? 1 : fo.thick > 3 ? 3 : fo.thick;
     out->roofShape = out->roofAxisX = out->roofFlip = out->overhang = out->roofH = out->roofBase = 0;
+    if (mode == FILL_DIAG) {
+        // standing: the ground plan, or a standing wall the area is one cell thin across (a
+        // diagonal brace in it); lying: the upright plane along the longer side of the ground
+        // plan (turns 2 and 3: the shorter side). Over a flat area a lying one rises one shape
+        // per shape (45 degrees) and the plan grows upward to fit.
+        const int rot = fo.diagRot & 3;
+        int ua = 0, va = 2;
+        if (fo.diagLying) {
+            bool alongX = out->count[0] >= out->count[2];
+            if (rot & 2) alongX = !alongX;
+            ua = alongX ? 0 : 2; va = 1;
+            if (out->count[1] == 1 && out->count[ua] > 1) {
+                out->count[1] = out->count[ua];
+                int64_t total = (int64_t)out->count[0] * out->count[1] * out->count[2];
+                out->total = total > 0x7fffffff ? 0x7fffffff : (long)total;
+                if (total > (int64_t)max_total) return false;
+            }
+        } else if (out->count[1] > 1 && out->count[0] == 1 && out->count[2] > 1) { ua = 2; va = 1; }
+        else if (out->count[1] > 1 && out->count[2] == 1 && out->count[0] > 1) { ua = 0; va = 1; }
+        out->diagU = ua; out->diagV = va;
+        // turn 0 (2 lying) runs from corner 1 (plan index 0) to the far corner, turn 1 (3) the other diagonal
+        const bool mu = out->stepFix[ua] < 0, mv = out->stepFix[va] < 0;
+        out->diagFlip = ((rot & 1) ? 1 : 0) ^ (mu ? 1 : 0) ^ (mv ? 1 : 0);
+        return true;
+    }
     if (mode == FILL_ROUND) {
         // standing: the ground plan, or a standing wall the area is one cell thin across;
         // lying: a tube along the longer side of the ground plan (the round stands across it)
@@ -436,7 +495,19 @@ inline uint32_t net_field(uint32_t s, int shift, uint32_t bits) { return (s >> s
 // settings (round_pack) in that pose and the overhang bits; a solid round sends thickness 4
 // (no fill has that), a hollow one its thickness.
 inline int clamp_thick(int t) { return t < 1 ? 1 : t > 3 ? 3 : t; }
+// The diagonal fill goes the same way: round values 18..23 (no round uses those) hold its
+// turn and standing / lying (diag_pack), the thickness field its thickness.
+inline int diag_pack(int rot, int lying) { return lying ? 2 + (rot & 3) : (rot & 1); }
+inline void diag_unpack(int v, int* rot, int* lying) {
+    if (v < 0 || v >= 6) v = 0;
+    *lying = v >= 2; *rot = v >= 2 ? v - 2 : v;
+}
 inline uint32_t net_fill_bits(int fill, const FillOpts& fo) {
+    if (fill == FILL_DIAG) {
+        uint32_t v = 18u + (uint32_t)diag_pack(fo.diagRot, fo.diagLying);
+        return ((uint32_t)FILL_ROOF << NET_FILL_SHIFT) | ((10 + v / 4) << NET_ROOF_SHIFT) | ((v % 4) << NET_OVERHANG_SHIFT) |
+               (((uint32_t)clamp_thick(fo.thick) - 1) << NET_THICK_SHIFT);
+    }
     if (fill == FILL_ROUND) {
         uint32_t v = (uint32_t)round_pack(fo.roundShape, fo.roundRot, fo.roundLying);
         uint32_t t = fo.roundHollow ? (uint32_t)clamp_thick(fo.thick) - 1 : 3;
@@ -451,6 +522,11 @@ inline int net_fill_unpack(uint32_t s, FillOpts* fo) {
     int fill = (int)net_field(s, NET_FILL_SHIFT, 2);
     int pose = (int)net_field(s, NET_ROOF_SHIFT, 4), oh = (int)net_field(s, NET_OVERHANG_SHIFT, 2);
     int t = (int)net_field(s, NET_THICK_SHIFT, 2);
+    if (fill == FILL_ROOF && pose >= 10 && (pose - 10) * 4 + oh >= 18) {
+        diag_unpack((pose - 10) * 4 + oh - 18, &fo->diagRot, &fo->diagLying);
+        fo->thick = t == 3 ? 3 : t + 1;
+        return FILL_DIAG;
+    }
     if (fill == FILL_ROOF && pose >= 10) {
         round_unpack((pose - 10) * 4 + oh, &fo->roundShape, &fo->roundRot, &fo->roundLying);
         fo->roundHollow = t != 3;

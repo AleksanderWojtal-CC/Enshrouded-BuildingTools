@@ -432,6 +432,102 @@ int main(int argc, char** argv) {
         CHECK(ok, "round and roof settings round trip through the state");
     }
 
+    // diagonal fills
+    {
+        const float step1[3] = { 1.f, 1.f, 1.f };
+        const int O = core::FILL_DIAG;
+        core::Plan pl;
+        auto dg = [](int rot, int lying, int thick = 1) {
+            core::FillOpts f = {}; f.thick = thick; f.diagRot = rot; f.diagLying = lying; return f;
+        };
+        // face-connected: all kept cells of the plane form one piece through shared faces
+        auto connected = [](const core::Plan& p) {
+            const int nu = p.count[p.diagU], nv = p.count[p.diagV];
+            static int stack[4096]; static bool seen[4096];
+            if (nu * nv > 4096) return false;
+            int kept = 0, start = -1;
+            for (int c = 0; c < nu * nv; c++) {
+                seen[c] = false;
+                if (core::diag_keep(p.diagFlip, p.thick, c % nu, c / nu, nu, nv)) { kept++; if (start < 0) start = c; }
+            }
+            if (start < 0) return false;
+            int top = 0, found = 0; stack[top++] = start; seen[start] = true;
+            while (top) {
+                int c = stack[--top], u = c % nu, v = c / nu; found++;
+                const int du[4] = { 1, -1, 0, 0 }, dv[4] = { 0, 0, 1, -1 };
+                for (int k = 0; k < 4; k++) {
+                    int a = u + du[k], b = v + dv[k];
+                    if (!core::diag_keep(p.diagFlip, p.thick, a, b, nu, nv) || seen[a + nu * b]) continue;
+                    seen[a + nu * b] = true; stack[top++] = a + nu * b;
+                }
+            }
+            return found == kept;
+        };
+        // standing 8 x 8, 3 high: the wall runs from corner 1 to corner 2 in the ground plan
+        core::I3 sq[2] = {{0, 0, 0}, {7 * M, 2 * M, 7 * M}};
+        CHECK(core::plan_area(sq, 2, step1, 5000, O, dg(0, 0), &pl) && pl.diagU == 0 && pl.diagV == 2, "diag standing: ground plan");
+        CHECK(core::fill_keep(pl, 0, 0, 0, O) && core::fill_keep(pl, 7, 2, 7, O) && !core::fill_keep(pl, 7, 0, 0, O) &&
+              !core::fill_keep(pl, 0, 1, 7, O), "corner 1 to corner 2, not the other corners");
+        CHECK(core::fill_count(pl, O) == 15 * 3, "45 degrees: a staircase of 15 cells per layer");
+        CHECK(connected(pl), "no gaps along the staircase");
+        CHECK(core::plan_area(sq, 2, step1, 5000, O, dg(1, 0), &pl) && core::fill_keep(pl, 7, 0, 0, O) &&
+              core::fill_keep(pl, 0, 0, 7, O) && !core::fill_keep(pl, 0, 0, 0, O), "turned: the other diagonal");
+        // corner 2 on the negative side: still from corner 1 to corner 2
+        core::I3 neg[2] = {{0, 0, 0}, {-9 * M, 0, 4 * M}};
+        CHECK(core::plan_area(neg, 2, step1, 5000, O, dg(0, 0), &pl) && core::fill_keep(pl, 0, 0, 0, O) &&
+              core::fill_keep(pl, 9, 0, 4, O) && !core::fill_keep(pl, 9, 0, 0, O) && connected(pl), "mirrored area");
+        long c1 = core::fill_count(pl, O);
+        CHECK(c1 == 14, "10 x 5: 10 + 5 - 1 cells");
+        CHECK(core::plan_area(neg, 2, step1, 5000, O, dg(0, 0, 3), &pl) && core::fill_count(pl, O) > c1 && connected(pl), "thicker");
+        // thickness counts the slots of the band: brute force count matches fill_count
+        {
+            long n = 0;
+            for (int i = 0; i < pl.count[0]; i++) for (int j = 0; j < pl.count[1]; j++) for (int k = 0; k < pl.count[2]; k++)
+                n += core::fill_keep(pl, i, j, k, O);
+            CHECK(n == core::fill_count(pl, O), "count matches the cells");
+        }
+        // standing wall one thin: a diagonal brace in it
+        core::I3 w[2] = {{0, 0, 0}, {0, 4 * M, 8 * M}};
+        CHECK(core::plan_area(w, 2, step1, 5000, O, dg(0, 0), &pl) && pl.diagU == 2 && pl.diagV == 1 &&
+              core::fill_keep(pl, 0, 0, 0, O) && core::fill_keep(pl, 0, 4, 8, O) && !core::fill_keep(pl, 0, 4, 0, O), "brace in a wall");
+        // lying: a ramp along the longer side; over a flat area 45 degrees, growing upward
+        core::I3 flat[2] = {{0, 0, 0}, {5 * M, 0, 2 * M}};
+        CHECK(core::plan_area(flat, 2, step1, 5000, O, dg(0, 1), &pl) && pl.diagU == 0 && pl.diagV == 1 && pl.count[1] == 6 &&
+              core::fill_keep(pl, 0, 0, 0, O) && core::fill_keep(pl, 5, 5, 2, O) && !core::fill_keep(pl, 5, 0, 1, O), "ramp up along x");
+        CHECK(core::plan_area(flat, 2, step1, 5000, O, dg(1, 1), &pl) && core::fill_keep(pl, 0, 5, 0, O) && core::fill_keep(pl, 5, 0, 2, O),
+              "ramp turned: down");
+        CHECK(core::plan_area(flat, 2, step1, 5000, O, dg(2, 1), &pl) && pl.diagU == 2 && pl.count[1] == 3, "ramp along the shorter side");
+        core::I3 r3[2] = {{0, 0, 0}, {9 * M, 3 * M, 1 * M}};
+        CHECK(core::plan_area(r3, 2, step1, 5000, O, dg(0, 1), &pl) && pl.count[1] == 4 && core::fill_count(pl, O) == 13 * 2 &&
+              connected(pl), "3D area: ramp corner to corner, height kept");
+        // any size, thickness and turn: no gaps, both ends kept
+        bool all = true;
+        for (int x = 0; x < 14; x++)
+            for (int z = 0; z < 14; z++)
+                for (int t = 1; t <= 3; t++)
+                    for (int rt = 0; rt < 2; rt++) {
+                        core::I3 c2[2] = {{0, 0, 0}, {x * M, 0, z * M}};
+                        if (!core::plan_area(c2, 2, step1, 5000, O, dg(rt, 0, t), &pl) || !connected(pl)) all = false;
+                        if (!core::fill_keep(pl, rt ? x : 0, 0, 0, O) || !core::fill_keep(pl, rt ? 0 : x, 0, z, O)) all = false;
+                    }
+        CHECK(all, "every size: gap-free, from corner to corner");
+        // settings round trip
+        bool ok = true;
+        for (int ly = 0; ly < 2; ly++)
+            for (int rt = 0; rt < core::diag_turns(ly); rt++)
+                for (int t = 1; t <= 3; t++) {
+                    core::FillOpts f = dg(rt, ly, t), back = {};
+                    uint32_t bits = core::net_fill_bits(O, f);
+                    if (core::net_fill_unpack(bits, &back) != O || back.diagRot != rt || back.diagLying != ly || back.thick != t) ok = false;
+                }
+        for (int sh = 0; sh < core::ROUND_COUNT; sh++)
+            for (int rt = 0; rt < core::round_turns(sh); rt++) {
+                core::FillOpts f = {}, back = {}; f.roundShape = sh; f.roundRot = rt; f.roundLying = 1;
+                if (core::net_fill_unpack(core::net_fill_bits(core::FILL_ROUND, f), &back) != core::FILL_ROUND) ok = false;
+            }
+        CHECK(ok, "diagonal settings round trip through the state, rounds still rounds");
+    }
+
     // ----------------------------------------------------- axis lock
     {
         const int64_t T = M / 10;

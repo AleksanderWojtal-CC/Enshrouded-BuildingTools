@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.26.0"
+#define MOD_VERSION "0.27.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -135,7 +135,8 @@ struct Config {
     int keyRoofShape = 'R' + 0x1000;   // Shift+R: next roof shape (same)
     int keyThick = 0, keyOverhang = 0; // cycle the thickness (rooms, walls, roofs) / the roof overhang
     int keyFillRound = 0, keyRoundHollow = 0;   // round fill quick key / round fill solid <-> hollow
-    int keyRoundLying = 0;                       // round fill standing <-> lying
+    int keyRoundLying = 0;                       // round / diagonal fill standing <-> lying
+    int keyFillDiag = 0;                         // diagonal fill quick key
     int keyCreative  = 0;      // creative building on / off
     int keyReplaceHold = 0;    // Replace on while this key is held
     int keyPrefab = 0, keyAreaOn = 0, keyReplaceOn = 0, keyReplaceOff = 0;   // set a mode / Replace directly
@@ -172,10 +173,10 @@ static void write_full_ini(const Config& c) {
      .t("; Replace on/off\r\nToggleReplace=").i(c.keyReplace).t("\r\n")
      .t("; Clear area corners\r\nCancelCorners=").i(c.keyCancel).t("\r\n")
      .t("; Replace style: full shape / overlap only / connected (fill bucket)\r\nToggleReplaceStyle=").i(c.keyStyle).t("\r\n")
-     .t("; Area fill: solid / hollow room / walls only / roof / round\r\nCycleAreaFill=").i(c.keyFill).t("\r\n")
-     .t("; Roof and round fills (only in Area mode with that fill): turn the shape (82 = R), next shape (4178 = Shift+R)\r\nTurnRoof=").i(c.keyRoofTurn)
+     .t("; Area fill: solid / hollow room / walls only / roof / round / diagonal\r\nCycleAreaFill=").i(c.keyFill).t("\r\n")
+     .t("; Roof, round and diagonal fills (only in Area mode with that fill): turn the shape (82 = R), next shape (4178 = Shift+R)\r\nTurnRoof=").i(c.keyRoofTurn)
      .t("\r\nNextRoofShape=").i(c.keyRoofShape).t("\r\n")
-     .t("; Round fill: solid <-> hollow, standing <-> lying (0 = no key)\r\nRoundHollow=").i(c.keyRoundHollow)
+     .t("; Round fill: solid <-> hollow; round and diagonal fills: standing <-> lying (0 = no key)\r\nRoundHollow=").i(c.keyRoundHollow)
      .t("\r\nRoundLying=").i(c.keyRoundLying).t("\r\n")
      .t("; Thickness 1 -> 2 -> 3 (rooms, walls, roofs), roof overhang none -> 1 -> 2 -> 3 (0 = no key)\r\nCycleThickness=").i(c.keyThick)
      .t("\r\nCycleOverhang=").i(c.keyOverhang).t("\r\n")
@@ -189,7 +190,7 @@ static void write_full_ini(const Config& c) {
      .t("; Quick keys: set one option directly (0 = no key)\r\n")
      .t("StyleFull=").i(c.keyStyleFull).t("\r\nStyleOverlap=").i(c.keyStyleOverlap).t("\r\nStyleConnected=").i(c.keyStyleConnected).t("\r\n")
      .t("FillSolid=").i(c.keyFillSolid).t("\r\nFillHollow=").i(c.keyFillHollow).t("\r\nFillWalls=").i(c.keyFillWalls).t("\r\n")
-     .t("FillRoof=").i(c.keyFillRoof).t("\r\nFillRound=").i(c.keyFillRound).t("\r\n")
+     .t("FillRoof=").i(c.keyFillRoof).t("\r\nFillRound=").i(c.keyFillRound).t("\r\nFillDiagonal=").i(c.keyFillDiag).t("\r\n")
      .t("ToggleCreative=").i(c.keyCreative).t("\r\n")
      .t("PrefabMode=").i(c.keyPrefab).t("\r\nAreaMode=").i(c.keyAreaOn).t("\r\n")
      .t("ReplaceOn=").i(c.keyReplaceOn).t("\r\nReplaceOff=").i(c.keyReplaceOff).t("\r\n")
@@ -285,6 +286,7 @@ static void load_config() {
     g_cfg.keyFillRound  = ini_int(L"Keys", L"FillRound", 0);
     g_cfg.keyRoundHollow = ini_int(L"Keys", L"RoundHollow", 0);
     g_cfg.keyRoundLying = ini_int(L"Keys", L"RoundLying", 0);
+    g_cfg.keyFillDiag   = ini_int(L"Keys", L"FillDiagonal", 0);
     g_cfg.keyCreative   = ini_int(L"Keys", L"ToggleCreative", 0);
     g_cfg.keyPrefab     = ini_int(L"Keys", L"PrefabMode", 0);
     g_cfg.keyAreaOn     = ini_int(L"Keys", L"AreaMode", 0);
@@ -855,11 +857,15 @@ static volatile LONG g_roundShape = 0;        // core::ROUND_*
 static volatile LONG g_roundRot = 0;          // 0..round_turns-1
 static volatile LONG g_roundHollow = 0;       // 1 = a round wall, 0 = solid
 static volatile LONG g_roundLying = 0;        // 1 = lying (a tube along the area), 0 = standing
+// diagonal fill options
+static volatile LONG g_diagRot = 0;           // 0..diag_turns-1
+static volatile LONG g_diagLying = 0;         // 1 = lying (a ramp), 0 = standing (a wall corner to corner)
 static const Str kRoofName[core::ROOF_COUNT] = { S_OPT_ROOF_GABLE, S_OPT_ROOF_HIP, S_OPT_ROOF_GAMBREL, S_OPT_ROOF_MANSARD, S_OPT_ROOF_SHED };
 static const Str kRoundName[core::ROUND_COUNT] = { S_OPT_ROUND_FULL, S_OPT_ROUND_HALF, S_OPT_ROUND_QUARTER };
 static core::FillOpts fill_opts() {
     return core::FillOpts{ (int)g_roofShape, (int)g_roofRot, (int)g_thick, (int)g_overhang,
-                           (int)g_roundShape, (int)g_roundRot, (int)g_roundHollow, (int)g_roundLying };
+                           (int)g_roundShape, (int)g_roundRot, (int)g_roundHollow, (int)g_roundLying,
+                           (int)g_diagRot, (int)g_diagLying };
 }
 static float g_hoverDist = 4.f;
 static float g_lastRot[4] = { 0.f, 0.f, 0.f, 1.f };
@@ -2623,7 +2629,7 @@ static NetPlayer* net_player(uint8_t* input) {
 }
 static void net_log_state(const char* what, uint8_t* input, uint32_t s) {
     static const char* styles[] = { "?", "overlap", "full", "connected" };
-    static const char* fills[] = { "solid", "hollow", "walls", "roof", "round" };
+    static const char* fills[] = { "solid", "hollow", "walls", "roof", "round", "diagonal" };
     core::FillOpts fo = {};
     const int fill = core::net_fill_unpack(s, &fo);
     LOG(.str(what).str(" player ").x((uint64_t)(uintptr_t)input).str(": ").str(s & core::NET_ON ? "on" : "off (vanilla)")
@@ -2632,6 +2638,7 @@ static void net_log_state(const char* what, uint8_t* input, uint32_t s) {
         .str(", roof pose ").i((int)core::net_field(s, core::NET_ROOF_SHIFT, 4)).str(" thick ").i(1 + (int)core::net_field(s, core::NET_THICK_SHIFT, 2))
         .str(" overhang ").i((int)core::net_field(s, core::NET_OVERHANG_SHIFT, 2))
         .str(" round ").i(fo.roundShape).c('/').i(fo.roundRot).c('/').i(fo.roundHollow).c('/').i(fo.roundLying)
+        .str(" diagonal ").i(fo.diagRot).c('/').i(fo.diagLying)
         .str(", corners ").i(s & core::NET_CORNERS3 ? 3 : 2));
 }
 // every frame, for every player holding the hammer: log when a player's settings change
@@ -2678,6 +2685,7 @@ struct NetScope {
         g_fill = f < core::FILL_COUNT ? f : core::FILL_SOLID;
         g_roofShape = fo.roofShape; g_roofRot = fo.roofRot; g_overhang = fo.overhang;
         g_roundShape = fo.roundShape; g_roundRot = fo.roundRot; g_roundHollow = fo.roundHollow; g_roundLying = fo.roundLying;
+        g_diagRot = fo.diagRot; g_diagLying = fo.diagLying;
         g_thick = fo.thick;
         g_cfg.corners = s & core::NET_CORNERS3 ? 3 : 2;
         g_sc = p->sc; g_corners = p->sc; g_scOp = p->scOp;
@@ -3411,6 +3419,8 @@ static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
                 pl.overhang * 4096 + pl.roofBase * 16384 : 0);
     if (g_fill == core::FILL_ROUND)
         g_boxFill = (pl.thick - 1) * 1024 + (1 << 20) + pl.roundShape * 32 + pl.roundSide * 128 + pl.roundHollow * 512 + pl.roundAxis * 4096;
+    if (g_fill == core::FILL_DIAG)
+        g_boxFill = (pl.thick - 1) * 1024 + (1 << 21) + pl.diagFlip * 32 + pl.diagU * 64 + pl.diagV * 256;
     for (int a = 0; a < 3; a++) {
         int64_t e = pl.origin[a] + pl.stepFix[a] * (pl.count[a] - 1);
         lo[a] = e < pl.origin[a] ? e : pl.origin[a]; hi[a] = e < pl.origin[a] ? pl.origin[a] : e;
@@ -3641,7 +3651,8 @@ static int* const g_allKeys[] = { &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg
                                   &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
                                   &g_cfg.keyReplaceHold, &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
                                   &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape,
-                                  &g_cfg.keyThick, &g_cfg.keyOverhang, &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying };
+                                  &g_cfg.keyThick, &g_cfg.keyOverhang, &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying,
+                                  &g_cfg.keyFillDiag };
 // Down with exactly its modifiers. A key without modifiers ignores held modifiers (Shift
 // while sprinting), unless another setting uses the same key with the held ones.
 static bool key_down(int code) {
@@ -3699,6 +3710,7 @@ static void compose_overlay(char* out, int cap) {
             if (g_fill == core::FILL_ROOF) b.str("  |  ").fmt(T(S_BAR_ROOF), T(kRoofName[g_roofShape % core::ROOF_COUNT]));
             else if (g_fill == core::FILL_ROUND)
                 b.str("  |  ").fmt(T(S_BAR_ROUND), T(kRoundName[g_roundShape % core::ROUND_COUNT]), T(g_roundHollow ? S_OPT_ROUND_HOLLOW : S_OPT_FILL_SOLID));
+            else if (g_fill == core::FILL_DIAG) b.str("  |  ").fmt(T(S_BAR_DIAG), T(g_diagLying ? S_OPT_DIAG_LYING : S_OPT_ROUND_STANDING));
             else if (g_fill % core::FILL_COUNT) b.str("  |  ").str(T(g_fill == core::FILL_HOLLOW ? S_BAR_HOLLOW : S_BAR_WALLS));
             live_size(b);
         } else b.str(T(g_replace ? S_BAR_PREFAB_REPLACE : S_BAR_PREFAB));
@@ -3899,8 +3911,10 @@ static bool roof_turn_on() { return roof_on() && core::roof_turns(g_roofShape) >
 // the round fill uses the same keys (next shape, turn)
 static bool round_on() { return g_mode == MODE_AREA && g_fill == core::FILL_ROUND; }
 static bool round_turn_on() { return round_on() && core::round_turns(g_roundShape) > 1; }
+// the diagonal fill turns with the same key (it has no shapes to cycle)
+static bool diag_on() { return g_mode == MODE_AREA && g_fill == core::FILL_DIAG; }
 static bool shape_on() { return roof_on() || round_on(); }
-static bool shape_turn_on() { return roof_turn_on() || round_turn_on(); }
+static bool shape_turn_on() { return roof_turn_on() || round_turn_on() || diag_on(); }
 // thickness applies to rooms, walls, roofs and hollow round fills
 static bool thick_on() {
     return g_mode == MODE_AREA && g_fill != core::FILL_SOLID && !(g_fill == core::FILL_ROUND && !g_roundHollow);
@@ -3919,7 +3933,7 @@ enum {
     ACT_AREA, ACT_REPLACE, ACT_CLEAR, ACT_STYLE, ACT_FREE, ACT_FARTHER, ACT_CLOSER, ACT_FILL,
     ACT_STYLE_FULL, ACT_STYLE_OVERLAP, ACT_STYLE_CONNECTED, ACT_FILL_SOLID, ACT_FILL_HOLLOW, ACT_FILL_WALLS,
     ACT_CREATIVE, ACT_PREFAB, ACT_AREA_ON, ACT_REPLACE_ON, ACT_REPLACE_OFF, ACT_FILL_ROOF, ACT_ROOF_TURN, ACT_ROOF_SHAPE,
-    ACT_THICK, ACT_OVERHANG, ACT_FILL_ROUND, ACT_ROUND_HOLLOW, ACT_ROUND_LYING,
+    ACT_THICK, ACT_OVERHANG, ACT_FILL_ROUND, ACT_ROUND_HOLLOW, ACT_ROUND_LYING, ACT_FILL_DIAG,
     ACT_KEYED,          // the actions above have their own key
     ACT_MENU = ACT_KEYED,             // the wheel's menu entry (the menu key is handled with the menu)
 };
@@ -3930,7 +3944,7 @@ static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
     &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
     &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape, &g_cfg.keyThick, &g_cfg.keyOverhang,
-    &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying,
+    &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying, &g_cfg.keyFillDiag,
 };
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
 static volatile LONG g_menuOpen = 0;
@@ -3938,11 +3952,12 @@ static void style_set(LONG st) {
     set_replace_style(st);
     flash(T(st == STYLE_FULL ? S_STYLE_FULL : st == STYLE_OVERLAP ? S_STYLE_OVERLAP : S_STYLE_CONNECTED));
 }
-static const Str kFillMsg[core::FILL_COUNT] = { S_FILL_SOLID, S_FILL_HOLLOW, S_FILL_WALLS, S_FILL_ROOF, S_FILL_ROUND };
+static const Str kFillMsg[core::FILL_COUNT] = { S_FILL_SOLID, S_FILL_HOLLOW, S_FILL_WALLS, S_FILL_ROOF, S_FILL_ROUND, S_FILL_DIAG };
 static void fill_set(LONG f) {
     set_fill(f);
     Buf b;
-    if (f == core::FILL_ROUND)
+    if (f == core::FILL_DIAG) b.fmt(T(S_FILL_DIAG), T(g_diagLying ? S_OPT_DIAG_LYING : S_OPT_ROUND_STANDING));
+    else if (f == core::FILL_ROUND)
         b.fmt(T(S_FILL_ROUND), T(kRoundName[g_roundShape % core::ROUND_COUNT]), T(g_roundHollow ? S_OPT_ROUND_HOLLOW : S_OPT_FILL_SOLID));
     else b.fmt(T(kFillMsg[f % core::FILL_COUNT]), T(kRoofName[g_roofShape % core::ROOF_COUNT]));
     flash(b.z());
@@ -3951,6 +3966,8 @@ static void set_round_shape(LONG r) { g_roundShape = r % core::ROUND_COUNT; g_ro
 static void set_round_rot(LONG r) { g_roundRot = r % core::round_turns(g_roundShape); LOG(.str("round turn -> ").i(g_roundRot)); }
 static void set_round_hollow(LONG h) { g_roundHollow = h ? 1 : 0; LOG(.str("round hollow -> ").i(g_roundHollow)); }
 static void set_round_lying(LONG l) { g_roundLying = l ? 1 : 0; LOG(.str("round lying -> ").i(g_roundLying)); }
+static void set_diag_rot(LONG r) { g_diagRot = r % core::diag_turns(g_diagLying); LOG(.str("diagonal turn -> ").i(g_diagRot)); }
+static void set_diag_lying(LONG l) { g_diagLying = l ? 1 : 0; g_diagRot = 0; LOG(.str("diagonal lying -> ").i(g_diagLying)); }
 static void set_roof_shape(LONG r) { g_roofShape = r % core::ROOF_COUNT; g_roofRot = 0; LOG(.str("roof shape -> ").i(g_roofShape)); }
 static void set_roof_rot(LONG r) { g_roofRot = r % core::roof_turns(g_roofShape); LOG(.str("roof turn -> ").i(g_roofRot)); }
 static void set_thick(LONG t) { g_thick = t < 1 ? 1 : t > 3 ? 3 : t; LOG(.str("thickness -> ").i(g_thick)); }
@@ -3991,12 +4008,18 @@ static void do_act(int a) {
     case ACT_FILL_WALLS: fill_set(core::FILL_WALLS); break;
     case ACT_FILL_ROOF: fill_set(core::FILL_ROOF); break;
     case ACT_FILL_ROUND: fill_set(core::FILL_ROUND); break;
+    case ACT_FILL_DIAG: fill_set(core::FILL_DIAG); break;
     case ACT_ROUND_HOLLOW: {
         set_round_hollow(!g_roundHollow);
         flash(T(g_roundHollow ? S_ROUND_HOLLOW : S_ROUND_SOLID));
         break;
     }
     case ACT_ROUND_LYING: {
+        if (g_fill == core::FILL_DIAG) {
+            set_diag_lying(!g_diagLying);
+            flash(T(g_diagLying ? S_DIAG_LYING : S_DIAG_STANDING));
+            break;
+        }
         set_round_lying(!g_roundLying);
         flash(T(g_roundLying ? S_ROUND_LYING : S_ROUND_STANDING));
         break;
@@ -4022,6 +4045,11 @@ static void do_act(int a) {
         break;
     }
     case ACT_ROOF_TURN: {
+        if (g_fill == core::FILL_DIAG) {
+            set_diag_rot(g_diagRot + 1);
+            Buf b; b.fmt(T(S_DIAG_TURNED), num(g_diagRot + 1).s, num(core::diag_turns(g_diagLying)).s); flash(b.z());
+            break;
+        }
         if (g_fill == core::FILL_ROUND) {
             set_round_rot(g_roundRot + 1);
             Buf b; b.fmt(T(S_ROUND_TURNED), num(g_roundRot + 1).s, num(core::round_turns(g_roundShape)).s); flash(b.z());
@@ -4227,7 +4255,8 @@ static void draw_tool_rows() {
     const char* const modes[] = { T(S_OPT_MODE_PREFAB), T(S_OPT_MODE_AREA) };
     const char* const styles[] = { T(S_OPT_STYLE_FULL), T(S_OPT_STYLE_OVERLAP), T(S_OPT_STYLE_CONNECTED) };
     static const LONG styleIds[] = { STYLE_FULL, STYLE_OVERLAP, STYLE_CONNECTED };
-    const char* const fills[] = { T(S_OPT_FILL_SOLID), T(S_OPT_FILL_HOLLOW), T(S_OPT_FILL_WALLS), T(S_OPT_FILL_ROOF), T(S_OPT_FILL_ROUND) };
+    const char* const fills[] = { T(S_OPT_FILL_SOLID), T(S_OPT_FILL_HOLLOW), T(S_OPT_FILL_WALLS), T(S_OPT_FILL_ROOF), T(S_OPT_FILL_ROUND), T(S_OPT_FILL_DIAG) };
+    const char* const diagDirs[] = { T(S_OPT_ROUND_STANDING), T(S_OPT_DIAG_LYING) };
     const char* const rounds[] = { T(S_OPT_ROUND_FULL), T(S_OPT_ROUND_HALF), T(S_OPT_ROUND_QUARTER) };
     const char* const insides[] = { T(S_OPT_FILL_SOLID), T(S_OPT_ROUND_HOLLOW) };
     const char* const dirs[] = { T(S_OPT_ROUND_STANDING), T(S_OPT_ROUND_LYING) };
@@ -4251,6 +4280,10 @@ static void draw_tool_rows() {
         if (core::round_turns(g_roundShape) > 1 && ui_option(T(S_OPT_ROUND_TURN), digits, core::round_turns(g_roundShape), g_roundRot, &v)) set_round_rot(v);
         if (ui_option(T(S_OPT_ROUND_FILL), insides, 2, g_roundHollow ? 1 : 0, &v)) set_round_hollow(v);
         if (ui_option(T(S_OPT_ROUND_DIR), dirs, 2, g_roundLying ? 1 : 0, &v)) set_round_lying(v);
+    }
+    if (g_fill == core::FILL_DIAG) {
+        if (ui_option(T(S_OPT_DIAG_DIR), diagDirs, 2, g_diagLying ? 1 : 0, &v)) set_diag_lying(v);
+        if (ui_option(T(S_OPT_DIAG_TURN), digits, core::diag_turns(g_diagLying), g_diagRot, &v)) set_diag_rot(v);
     }
     if (g_fill != core::FILL_SOLID && !(g_fill == core::FILL_ROUND && !g_roundHollow) &&
         ui_option(T(S_OPT_THICK), digits, 3, g_thick - 1, &v)) set_thick(v + 1);
@@ -4309,6 +4342,7 @@ static KeyAction g_keyActions[] = {
     { S_ACT_FILL_WALLS, &g_cfg.keyFillWalls, 1 },
     { S_ACT_FILL_ROOF, &g_cfg.keyFillRoof, 1 },
     { S_ACT_FILL_ROUND, &g_cfg.keyFillRound, 1 },
+    { S_ACT_FILL_DIAG, &g_cfg.keyFillDiag, 1 },
 };
 static const int kKeyActions = sizeof g_keyActions / sizeof g_keyActions[0];
 
@@ -4668,7 +4702,7 @@ static void draw_hud_rows() {
     // also while the hammer aims at the sky (no place cursor then)
     if (GetTickCount() - g_gameRowTick > 200) return;
     static const Str styles[] = { S_HUD_STYLE_FULL, S_HUD_STYLE_OVERLAP, S_HUD_STYLE_CONNECTED };
-    static const Str fills[] = { S_HUD_FILL_SOLID, S_HUD_FILL_HOLLOW, S_HUD_FILL_WALLS, S_HUD_FILL_ROOF, S_HUD_FILL_ROUND };
+    static const Str fills[] = { S_HUD_FILL_SOLID, S_HUD_FILL_HOLLOW, S_HUD_FILL_WALLS, S_HUD_FILL_ROOF, S_HUD_FILL_ROUND, S_HUD_FILL_DIAG };
     bool sw = ui.hudSwitch || ui.imageCtx;
     hud_key_row(g_cfg.keyStructure, T(sw ? S_HUD_AREA : g_mode == MODE_AREA ? S_HUD_AREA_ON : S_HUD_AREA_OFF), g_mode == MODE_AREA);
     if (g_mode == MODE_AREA) {
@@ -4681,6 +4715,10 @@ static void draw_hud_rows() {
             if (round_turn_on() && g_cfg.keyRoofTurn > 0) hud_key_row(g_cfg.keyRoofTurn, T(S_HUD_ROUND_TURN));
             if (g_cfg.keyRoundHollow > 0) hud_key_row(g_cfg.keyRoundHollow, T(g_roundHollow ? S_HUD_ROUND_HOLLOW : S_HUD_ROUND_SOLID));
             if (g_cfg.keyRoundLying > 0) hud_key_row(g_cfg.keyRoundLying, T(g_roundLying ? S_HUD_ROUND_LYING : S_HUD_ROUND_STANDING));
+        }
+        if (diag_on()) {
+            if (g_cfg.keyRoofTurn > 0) hud_key_row(g_cfg.keyRoofTurn, T(S_HUD_DIAG_TURN));
+            if (g_cfg.keyRoundLying > 0) hud_key_row(g_cfg.keyRoundLying, T(g_diagLying ? S_HUD_DIAG_LYING : S_HUD_DIAG_STANDING));
         }
         if (g_corners > 0) hud_key_row(g_cfg.keyCancel, T(S_HUD_CLEAR));
     }
@@ -4979,6 +5017,8 @@ static int wheel_entries(int* act) {
     if (round_on()) act[n++] = ACT_ROOF_SHAPE;
     if (round_on()) act[n++] = ACT_ROUND_HOLLOW;
     if (round_on()) act[n++] = ACT_ROUND_LYING;
+    if (diag_on()) act[n++] = ACT_ROUND_LYING;
+    if (diag_on()) act[n++] = ACT_ROOF_TURN;
     if (thick_on()) act[n++] = ACT_THICK;
     if (g_mode == MODE_AREA && g_corners > 0) act[n++] = ACT_CLEAR;
     act[n++] = ACT_FREE;
@@ -4991,7 +5031,7 @@ static void wheel_texts(int a, char* name, char* value) {
     const char* nm = ""; const char* v = "";
     Num numText;
     static const Str styles[] = { S_OPT_STYLE_FULL, S_OPT_STYLE_OVERLAP, S_OPT_STYLE_CONNECTED };
-    static const Str fills[] = { S_OPT_FILL_SOLID, S_OPT_FILL_HOLLOW, S_OPT_FILL_WALLS, S_OPT_FILL_ROOF, S_OPT_FILL_ROUND };
+    static const Str fills[] = { S_OPT_FILL_SOLID, S_OPT_FILL_HOLLOW, S_OPT_FILL_WALLS, S_OPT_FILL_ROOF, S_OPT_FILL_ROUND, S_OPT_FILL_DIAG };
     switch (a) {
     case ACT_AREA: nm = T(S_OPT_MODE); v = T(g_mode == MODE_AREA ? S_OPT_MODE_AREA : S_OPT_MODE_PREFAB); break;
     case ACT_FILL: nm = T(S_OPT_FILL); v = T(fills[g_fill % core::FILL_COUNT]); break;
@@ -4999,7 +5039,10 @@ static void wheel_texts(int a, char* name, char* value) {
         if (g_fill == core::FILL_ROUND) { nm = T(S_OPT_ROUND_SHAPE); v = T(kRoundName[g_roundShape % core::ROUND_COUNT]); break; }
         nm = T(S_OPT_ROOF_SHAPE); v = T(kRoofName[g_roofShape % core::ROOF_COUNT]); break;
     case ACT_ROUND_HOLLOW: nm = T(S_OPT_ROUND_FILL); v = T(g_roundHollow ? S_OPT_ROUND_HOLLOW : S_OPT_FILL_SOLID); break;
-    case ACT_ROUND_LYING: nm = T(S_OPT_ROUND_DIR); v = T(g_roundLying ? S_OPT_ROUND_LYING : S_OPT_ROUND_STANDING); break;
+    case ACT_ROUND_LYING:
+        if (g_fill == core::FILL_DIAG) { nm = T(S_OPT_DIAG_DIR); v = T(g_diagLying ? S_OPT_DIAG_LYING : S_OPT_ROUND_STANDING); break; }
+        nm = T(S_OPT_ROUND_DIR); v = T(g_roundLying ? S_OPT_ROUND_LYING : S_OPT_ROUND_STANDING); break;
+    case ACT_ROOF_TURN: nm = T(S_OPT_DIAG_TURN); numText = num(g_diagRot + 1); v = numText.s; break;
     case ACT_OVERHANG: nm = T(S_OPT_OVERHANG); numText = num(g_overhang); v = g_overhang ? numText.s : T(S_OPT_NONE); break;
     case ACT_THICK: nm = T(S_HUD_THICK); numText = num(g_thick); v = numText.s; break;
     case ACT_CLEAR: nm = T(S_HUD_CLEAR); break;

@@ -9,6 +9,7 @@ layout(push_constant) uniform Push { mat4 mvp; vec4 size; vec4 eye; vec4 capA; v
 // + 4096 * roof overhang + 16384 * roof base (shapes below the area): see core::plan_area
 // Round fill (fill 3 + 2^20): + 32 * shape (full, half, quarter) + 128 * side (box space)
 // + 512 hollow + 1024 * (thickness - 1) + 4096 * axis the shape runs along
+// Diagonal fill (fill 3 + 2^21): + 32 flipped + 64 * u axis + 256 * v axis + 1024 * (thickness - 1)
 layout(set = 1, binding = 0) readonly buffer Occ { uint bits[]; } occ;
 layout(location = 0) out vec3 vLocal;      // box units
 layout(location = 1) out vec4 vClip;
@@ -72,6 +73,16 @@ bool roundKept(ivec3 c, ivec3 n, int w) {
             if (max(abs(du) - 1, 0) + max(abs(dv) - 1, 0) <= t - 1 && !roundInside(shape, side, u + du, v + dv, nu, nv)) return true;
     return false;
 }
+// diagonal fills: the same rule as core::diag_keep (src/core.h)
+bool diagKept(ivec3 c, ivec3 n, int w) {
+    int ua = (w >> 6) & 3, va = (w >> 8) & 3, t = ((w >> 10) & 3) + 1;
+    int u = c[ua], v = c[va], nu = n[ua], nv = n[va];
+    int du = nu - 1, dv = nv - 1;
+    if (du + dv == 0) return true;
+    if ((w & 32) != 0) v = nv - 1 - v;
+    int W = t * (du + dv), h = W / 2, f = u * dv - v * du;
+    return f >= -h && f < W - h;
+}
 bool kept(ivec3 c, ivec3 n, int w, bool onlyFull) {
     int fill = w & 3;
     if (any(lessThan(c, ivec3(0))) || any(greaterThanEqual(c, n))) return false;
@@ -79,7 +90,7 @@ bool kept(ivec3 c, ivec3 n, int w, bool onlyFull) {
         int id = c.x + n.x * (c.y + n.y * c.z);
         if ((occ.bits[id >> 5] & (1u << (id & 31))) == 0u) return false;
     }
-    if (fill == 3) return (w & 1048576) != 0 ? roundKept(c, n, w) : roofKept(c, n, w);
+    if (fill == 3) return (w & 2097152) != 0 ? diagKept(c, n, w) : (w & 1048576) != 0 ? roundKept(c, n, w) : roofKept(c, n, w);
     int t = ((w >> 10) & 3) + 1;
     bool ex = c.x < t || c.x >= n.x - t, ey = c.y < t || c.y >= n.y - t, ez = c.z < t || c.z >= n.z - t;
     return fill == 1 ? (ex || ey || ez) : fill == 2 ? (ex || ez) : true;
