@@ -250,49 +250,80 @@ int main(int argc, char** argv) {
                 n += core::fill_keep(p, i, j, k, mode);
             return n;
         };
-        // flat 7 x 4 area: gable ridge along x (the long side), slopes across z
+        const int R = core::FILL_ROOF;
+        auto fo = [](int shape, int rot = 0, int thick = 1, int o = 0) { return core::FillOpts{ shape, rot, thick, o }; };
+        // flat 7 x 4 area: gable slopes across the short side (z)
         core::I3 flat[2] = {{0, 0, 0}, {6 * M, 0, 3 * M}};
-        CHECK(core::plan_area(flat, 2, step1, 2000, core::FILL_GABLE, 0, &pl) && !pl.roofAcrossX && pl.count[1] == 2,
+        CHECK(core::plan_area(flat, 2, step1, 2000, R, fo(core::ROOF_GABLE), &pl) && !pl.roofAxisX && pl.count[1] == 2,
               "flat 7x4 gable: ridge along the long side, grows to 2 high");
-        CHECK(core::fill_count(pl, core::FILL_GABLE) == 7 * 4 && keepCount(pl, core::FILL_GABLE) == 7 * 4, "45 degree gable: one shape per column");
-        CHECK(core::fill_keep(pl, 3, 0, 0, core::FILL_GABLE) && core::fill_keep(pl, 3, 1, 1, core::FILL_GABLE) &&
-              core::fill_keep(pl, 3, 1, 2, core::FILL_GABLE) && core::fill_keep(pl, 3, 0, 3, core::FILL_GABLE) &&
-              !core::fill_keep(pl, 3, 1, 0, core::FILL_GABLE), "gable steps: up one per shape in, flat 2-wide ridge");
-        CHECK(core::plan_area(flat, 2, step1, 2000, core::FILL_GABLE, 1, &pl) && pl.roofAcrossX && pl.count[1] == 4,
+        CHECK(core::fill_count(pl, R) == 7 * 4 && keepCount(pl, R) == 7 * 4, "45 degree gable: one shape per column");
+        CHECK(core::fill_keep(pl, 3, 0, 0, R) && core::fill_keep(pl, 3, 1, 1, R) && core::fill_keep(pl, 3, 1, 2, R) &&
+              core::fill_keep(pl, 3, 0, 3, R) && !core::fill_keep(pl, 3, 1, 0, R), "gable steps: up one per shape in");
+        CHECK(core::plan_area(flat, 2, step1, 2000, R, fo(core::ROOF_GABLE, 1), &pl) && pl.roofAxisX && pl.count[1] == 4,
               "turned gable: ridge along the short side, 4 high");
-        CHECK(core::fill_keep(pl, 3, 3, 0, core::FILL_GABLE) && core::fill_keep(pl, 0, 0, 2, core::FILL_GABLE), "turned gable peak in the middle");
         // hip over a flat 5 x 5: a pyramid 3 high
         core::I3 sq[2] = {{0, 0, 0}, {4 * M, 0, 4 * M}};
-        CHECK(core::plan_area(sq, 2, step1, 2000, core::FILL_HIP, 0, &pl) && pl.count[1] == 3, "hip 5x5 -> 3 high");
-        CHECK(core::fill_count(pl, core::FILL_HIP) == 25 && keepCount(pl, core::FILL_HIP) == 25 &&
-              core::fill_keep(pl, 2, 2, 2, core::FILL_HIP) && core::fill_keep(pl, 1, 1, 3, core::FILL_HIP) &&
-              core::fill_keep(pl, 0, 0, 4, core::FILL_HIP), "hip pyramid");
-        // 3D area: the box height is the roof height (9 wide, 9 high: steep, straight runs)
+        CHECK(core::plan_area(sq, 2, step1, 2000, R, fo(core::ROOF_HIP), &pl) && pl.count[1] == 3, "hip 5x5 -> 3 high");
+        CHECK(core::fill_count(pl, R) == 25 && core::fill_keep(pl, 2, 2, 2, R) && core::fill_keep(pl, 1, 1, 3, R) &&
+              core::fill_keep(pl, 0, 0, 4, R), "hip pyramid");
+        // shed over a flat 5 wide: rises one per shape, 5 high, 4 ways round
+        CHECK(core::plan_area(sq, 2, step1, 2000, R, fo(core::ROOF_SHED), &pl) && pl.count[1] == 5 &&
+              core::fill_keep(pl, 0, 0, 0, R) && core::fill_keep(pl, 0, 4, 4, R), "shed rises across the area");
+        CHECK(core::plan_area(sq, 2, step1, 2000, R, fo(core::ROOF_SHED, 2), &pl) && core::fill_keep(pl, 0, 4, 0, R) &&
+              core::fill_keep(pl, 0, 0, 4, R), "shed turned twice rises the other way");
+        // gambrel / mansard: steep below, flatter above
+        core::I3 wide[2] = {{0, 0, 0}, {8 * M, 0, 20 * M}};       // 9 across -> D 4, 5 high
+        CHECK(core::plan_area(wide, 2, step1, 2000, R, fo(core::ROOF_GAMBREL), &pl) && pl.count[1] == 5, "gambrel 5 high");
+        int lo, hi; core::roof_column(pl, 1, 0, &lo, &hi);
+        int lo2, hi2; core::roof_column(pl, 4, 0, &lo2, &hi2);
+        CHECK(hi == 2 && hi2 == 4 && lo2 == 4, "gambrel: steep lower slope (2 up in the first shape), flat-ish top");
+        CHECK(core::plan_area(wide, 2, step1, 2000, R, fo(core::ROOF_MANSARD), &pl) && keepCount(pl, R) == core::fill_count(pl, R),
+              "mansard keep matches count");
+        // 3D area keeps its height (steep: columns stack)
         core::I3 tall[2] = {{0, 0, 0}, {10 * M, 8 * M, 8 * M}};
-        CHECK(core::plan_area(tall, 2, step1, 2000, core::FILL_GABLE, 0, &pl) && pl.count[1] == 9, "3D gable keeps its height");
-        long n = keepCount(pl, core::FILL_GABLE);
-        CHECK(n == core::fill_count(pl, core::FILL_GABLE), "3D gable keep matches count");
-        CHECK(core::fill_keep(pl, 0, 8, 4, core::FILL_GABLE) && core::fill_keep(pl, 0, 0, 0, core::FILL_GABLE) &&
-              core::fill_keep(pl, 0, 2, 1, core::FILL_GABLE) && core::fill_keep(pl, 0, 1, 1, core::FILL_GABLE) &&
-              !core::fill_keep(pl, 0, 0, 1, core::FILL_GABLE), "steep gable: each column stacks up to its own top");
-        // every column of a roof is connected to the next one (no holes in the slope)
-        for (int mode = core::FILL_GABLE; mode <= core::FILL_HIP; mode++) {
-            core::I3 r[2] = {{0, 0, 0}, {9 * M, 3 * M, 6 * M}};
-            CHECK(core::plan_area(r, 2, step1, 2000, mode, 0, &pl), "roof plan");
-            bool okAll = true;
-            for (int i = 0; i < pl.count[0]; i++) for (int k = 0; k < pl.count[2]; k++) {
-                int col = 0; for (int j = 0; j < pl.count[1]; j++) col += core::fill_keep(pl, i, j, k, mode);
-                if (col < 1) okAll = false;
+        CHECK(core::plan_area(tall, 2, step1, 2000, R, fo(core::ROOF_GABLE), &pl) && pl.count[1] == 9, "3D gable keeps its height");
+        CHECK(core::fill_keep(pl, 0, 8, 4, R) && core::fill_keep(pl, 0, 0, 0, R) && core::fill_keep(pl, 0, 2, 1, R) &&
+              core::fill_keep(pl, 0, 1, 1, R) && !core::fill_keep(pl, 0, 0, 1, R), "steep gable: each column stacks up to its own top");
+        // overhang: the plan widens and drops; the slope carries on down
+        CHECK(core::plan_area(flat, 2, step1, 2000, R, fo(core::ROOF_GABLE, 0, 1, 2), &pl) && pl.count[0] == 11 && pl.count[2] == 8 &&
+              pl.count[1] == 4 && pl.roofBase == 2 && pl.origin[0] == -2 * M && pl.origin[1] == -2 * M, "overhang 2 widens and drops the plan");
+        CHECK(core::fill_keep(pl, 0, 0, 0, R) && core::fill_keep(pl, 5, 2, 2, R) && core::fill_keep(pl, 5, 3, 3, R) &&
+              keepCount(pl, R) == 11 * 8, "overhang: eave 2 below the area edge, edge at the area's level");
+        // thickness
+        CHECK(core::plan_area(flat, 2, step1, 2000, R, fo(core::ROOF_GABLE, 0, 2), &pl) && pl.roofBase == 1 && pl.count[1] == 3 &&
+              keepCount(pl, R) == core::fill_count(pl, R) && !core::fill_keep(pl, 0, 0, 1, R) && core::fill_keep(pl, 0, 1, 1, R) && core::fill_keep(pl, 0, 2, 1, R) &&
+              core::fill_keep(pl, 0, 0, 0, R) && core::fill_keep(pl, 0, 1, 0, R),
+              "roof thickness 2: each step two deep");
+        core::I3 room[2] = {{0, 0, 0}, {9 * M, 9 * M, 9 * M}};
+        CHECK(core::plan_area(room, 2, step1, 2000, core::FILL_HOLLOW, fo(0, 0, 2), &pl) &&
+              core::fill_count(pl, core::FILL_HOLLOW) == 1000 - 6 * 6 * 6 && keepCount(pl, core::FILL_HOLLOW) == 1000 - 216, "hollow 2 thick");
+        CHECK(core::fill_count(pl, core::FILL_WALLS) == 1000 - 6 * 10 * 6 && keepCount(pl, core::FILL_WALLS) == 1000 - 360, "walls 2 thick");
+        // every column connected, keep == count, for every shape / turn / overhang / thickness
+        bool okAll = true;
+        core::I3 r[2] = {{0, 0, 0}, {9 * M, 3 * M, 6 * M}};
+        for (int sh = 0; sh < core::ROOF_COUNT; sh++) for (int rt = 0; rt < 4; rt++) for (int t = 1; t <= 3; t++) for (int o = 0; o <= 3; o++)
+            for (int flatToo = 0; flatToo < 2; flatToo++) {
+                core::I3 c2[2] = { r[0], r[1] }; if (flatToo) c2[1].y = 0;
+                if (!core::plan_area(c2, 2, step1, 20000, R, fo(sh, rt, t, o), &pl)) { okAll = false; continue; }
+                for (int i = 0; i < pl.count[0]; i++) for (int k = 0; k < pl.count[2]; k++) {
+                    int col = 0; for (int j = 0; j < pl.count[1]; j++) col += core::fill_keep(pl, i, j, k, R);
+                    if (col < 1) okAll = false;
+                }
+                if (keepCount(pl, R) != core::fill_count(pl, R)) okAll = false;
             }
-            CHECK(okAll && keepCount(pl, mode) == core::fill_count(pl, mode), "every roof column holds a shape");
-        }
+        CHECK(okAll, "every roof column holds a shape, keep matches count (all shapes and options)");
         // corner 2 below corner 1: the roof still rises upward
         core::I3 down[2] = {{0, 4 * M, 0}, {0, 0, 8 * M}};
-        CHECK(core::plan_area(down, 2, step1, 2000, core::FILL_GABLE, 0, &pl) && pl.stepFix[1] < 0, "downward area");
-        CHECK(core::fill_keep(pl, 0, pl.count[1] - 1, 0, core::FILL_GABLE) && core::fill_keep(pl, 0, 0, 4, core::FILL_GABLE),
-              "downward area: eaves at the bottom, ridge at the top");
-        // other fills ignore the roof
-        CHECK(core::plan_area(flat, 2, step1, 2000, core::FILL_SOLID, 1, &pl) && pl.count[1] == 1 && pl.total == 28, "solid unchanged");
+        CHECK(core::plan_area(down, 2, step1, 2000, R, fo(core::ROOF_GABLE), &pl) && pl.stepFix[1] < 0, "downward area");
+        CHECK(core::fill_keep(pl, 0, pl.count[1] - 1, 0, R) && core::fill_keep(pl, 0, 0, 4, R), "downward area: eaves at the bottom, ridge at the top");
+        // pose packing
+        bool poses = true;
+        for (int sh = 0; sh < core::ROOF_COUNT; sh++) for (int rt = 0; rt < core::roof_turns(sh); rt++) {
+            int s2, r2; int v = core::roof_pose_pack(sh, rt); core::roof_pose_unpack(v, &s2, &r2);
+            if (v > 15 || s2 != sh || r2 != rt) poses = false;
+        }
+        CHECK(poses, "roof shape + turn fit 4 bits");
+        CHECK(core::plan_area(flat, 2, step1, 2000, core::FILL_SOLID, fo(core::ROOF_GABLE, 1, 1, 3), &pl) && pl.count[1] == 1 && pl.total == 28, "solid unchanged");
     }
 
     // ----------------------------------------------------- axis lock

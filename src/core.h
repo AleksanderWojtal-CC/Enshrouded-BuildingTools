@@ -106,7 +106,14 @@ struct Plan {
     int64_t stepFix[3]; // signed spacing per axis (fixed point)
     int     count[3];   // shapes per axis (>= 1)
     long    total;
-    int     roofAcrossX; // roof fills: the slopes rise along x (ridge along z), else along z
+    // fill options (plan_area)
+    int     thick;       // wall / room / roof thickness in shapes (1..3; 0 counts as 1)
+    int     roofShape;   // ROOF_*
+    int     roofAxisX;   // the slopes rise along x (ridge along z), else along z
+    int     roofFlip;    // shed: rises toward the low end of the axis
+    int     overhang;    // shapes the roof reaches past the area on every side
+    int     roofH;       // height of the roof itself (shapes)
+    int     roofBase;    // shapes of the plan below the area's bottom (overhang drop + thickness)
 };
 
 inline int64_t iabs64(int64_t v) { return v < 0 ? -v : v; }
@@ -134,6 +141,7 @@ inline bool plan_fill(const I3* c, int n, const float step_m[3], long max_total,
         if (total > (int64_t)max_total) { out->total = total > 0x7fffffff ? 0x7fffffff : (long)total; return false; }
     }
     out->total = (long)total;
+    out->thick = 1; out->roofShape = out->roofAxisX = out->roofFlip = out->overhang = out->roofH = out->roofBase = 0;
     return true;
 }
 
@@ -158,87 +166,133 @@ inline I3 plan_pos(const Plan& p, int i, int j, int k) {
     return I3{ p.origin[0] + p.stepFix[0] * i, p.origin[1] + p.stepFix[1] * j, p.origin[2] + p.stepFix[2] * k };
 }
 
-// Fill shape of an area: solid, hollow (walls + floor + ceiling), walls only, or a roof.
-// A side that is only one or two shapes thick has no inside, so floors and walls
-// stay complete in every mode.
-enum { FILL_SOLID = 0, FILL_HOLLOW = 1, FILL_WALLS = 2, FILL_GABLE = 3, FILL_HIP = 4, FILL_COUNT = 5 };
-inline bool fill_roof(int mode) { return mode == FILL_GABLE || mode == FILL_HIP; }
+// Fill shape of an area: solid, hollow room (walls + floor + ceiling), walls only, or a
+// roof. Rooms, walls and roofs are `thick` shapes thick. A side too thin to have an inside
+// stays complete.
+enum { FILL_SOLID = 0, FILL_HOLLOW = 1, FILL_WALLS = 2, FILL_ROOF = 3, FILL_COUNT = 4 };
+enum { ROOF_GABLE = 0, ROOF_HIP = 1, ROOF_GAMBREL = 2, ROOF_MANSARD = 3, ROOF_SHED = 4, ROOF_COUNT = 5 };
+// how many ways a roof shape can be turned (gable / gambrel: ridge along either side,
+// shed: rising toward each of the four sides; hip and mansard look the same every way)
+inline int roof_turns(int shape) { return shape == ROOF_SHED ? 4 : (shape == ROOF_HIP || shape == ROOF_MANSARD) ? 1 : 2; }
 
-// Roofs. Gable = two slopes meeting at a ridge, hip = four slopes (a pyramid on a square).
-// Over a flat area the roof climbs one shape up for every shape in from the edge (45
-// degrees, the steps of the game's roof blocks) and the area grows upward to fit it. A 3D
-// area keeps its height: the slopes rise from the bottom edge to the top at the ridge.
-// A column at distance d from the eave holds the shapes from just above the previous
-// column's top to its own top, so every step touches the next one (diagonally on a 45
-// degree slope, like the game's roof blocks; straight up on steeper ones).
-// x, y, z: cell in the area (y counted up from the bottom), n*: cells per axis.
-inline int roof_top(int d, int dmax, int ny) {
-    if (dmax <= 0) return ny - 1;
-    return (2 * d * (ny - 1) + dmax) / (2 * dmax);
+struct FillOpts { int roofShape, roofRot, thick, overhang; };
+
+inline int64_t floor_div(int64_t a, int64_t b) { return a >= 0 ? a / b : -((-a + b - 1) / b); }   // b > 0
+
+// Roofs. Gable = two slopes meeting at a ridge, hip = four slopes, gambrel = a barn roof
+// (two slopes, each steep below and flatter above), mansard = the same on four sides,
+// shed = one slope. Over a flat area the roof is as high as it is deep (one shape up per
+// shape in on average; 45 degrees for gable, hip and shed) and the plan grows upward to
+// fit. A 3D area keeps its height. The surface height at distance d (in shapes) from the
+// eave, with the ridge at D and the roof h shapes high; d < 0 is the overhang, which
+// carries the slope on down past the area's edge.
+inline int roof_profile(int shape, int d, int D, int h) {
+    if (D <= 0) return d >= 0 ? h : h + d;
+    if (d > D) d = D;
+    int64_t num = d, den = 1;
+    if (shape == ROOF_GAMBREL) { num = 3 * (int64_t)d < (int64_t)D + d ? 3 * (int64_t)d : (int64_t)D + d; den = 2; }
+    if (shape == ROOF_MANSARD) { num = 8 * (int64_t)d < 3 * (int64_t)D + 2 * d ? 8 * (int64_t)d : 3 * (int64_t)D + 2 * d; den = 5; }
+    return (int)floor_div(2 * (int64_t)h * num + den * D, 2 * den * D);
 }
-inline int roof_dmax(int nx, int nz, int mode, bool acrossX) {
-    int m = mode == FILL_HIP ? (nx < nz ? nx : nz) : acrossX ? nx : nz;
-    return (m - 1) / 2;
+// distance from the eave and ridge distance of roof column (x, z) of a plan (n* = plan
+// counts including the overhang `o`)
+inline void roof_dist(int shape, bool axisX, bool flip, int o, int x, int z, int nx, int nz, int* d, int* D) {
+    int ox = nx - 2 * o, oz = nz - 2 * o;
+    int dx = (x < nx - 1 - x ? x : nx - 1 - x) - o, dz = (z < nz - 1 - z ? z : nz - 1 - z) - o;
+    if (shape == ROOF_HIP || shape == ROOF_MANSARD) {
+        *d = dx < dz ? dx : dz; *D = ((ox < oz ? ox : oz) - 1) / 2;
+    } else if (shape == ROOF_SHED) {
+        int c = axisX ? x : z, n = axisX ? nx : nz;
+        *d = (flip ? n - 1 - c : c) - o; *D = (axisX ? ox : oz) - 1;
+    } else {
+        *d = axisX ? dx : dz; *D = ((axisX ? ox : oz) - 1) / 2;
+    }
 }
-inline bool roof_keep(int x, int y, int z, int nx, int ny, int nz, int mode, bool acrossX) {
-    int dx = x < nx - 1 - x ? x : nx - 1 - x, dz = z < nz - 1 - z ? z : nz - 1 - z;
-    int d = mode == FILL_HIP ? (dx < dz ? dx : dz) : acrossX ? dx : dz;
-    int dmax = roof_dmax(nx, nz, mode, acrossX);
-    int hi = roof_top(d, dmax, ny), lo = d > 0 ? roof_top(d - 1, dmax, ny) + 1 : 0;
-    if (lo > hi) lo = hi;
-    return y >= lo && y <= hi;
+// Shapes of roof column (x, z), counted up from the plan's bottom: from just above the
+// previous column's top (so every step touches the next one) up to its own top, made
+// `thick` shapes deeper.
+inline void roof_column(const Plan& p, int x, int z, int* lo, int* hi) {
+    int d, D;
+    roof_dist(p.roofShape, p.roofAxisX != 0, p.roofFlip != 0, p.overhang, x, z, p.count[0], p.count[2], &d, &D);
+    int h = p.roofH - 1;
+    int top = roof_profile(p.roofShape, d, D, h);
+    int bot = d > -p.overhang ? roof_profile(p.roofShape, d - 1, D, h) + 1 : (p.overhang ? top : 0);
+    if (bot > top) bot = top;
+    int t = p.thick < 1 ? 1 : p.thick;
+    *lo = bot - (t - 1) + p.roofBase; *hi = top + p.roofBase;
+    if (*lo < 0) *lo = 0;
+    if (*hi > p.count[1] - 1) *hi = p.count[1] - 1;
 }
 inline bool fill_keep(const Plan& p, int i, int j, int k, int mode) {
-    if (fill_roof(mode)) {
-        int y = p.stepFix[1] >= 0 ? j : p.count[1] - 1 - j;
-        return roof_keep(i, y, k, p.count[0], p.count[1], p.count[2], mode, p.roofAcrossX != 0);
+    if (mode == FILL_ROOF) {
+        int y = p.stepFix[1] >= 0 ? j : p.count[1] - 1 - j, lo, hi;
+        roof_column(p, i, k, &lo, &hi);
+        return y >= lo && y <= hi;
     }
-    bool ex = i == 0 || i == p.count[0] - 1, ez = k == 0 || k == p.count[2] - 1;
-    bool ey = j == 0 || j == p.count[1] - 1;
+    int t = p.thick < 1 ? 1 : p.thick;
+    bool ex = i < t || i >= p.count[0] - t, ez = k < t || k >= p.count[2] - t;
+    bool ey = j < t || j >= p.count[1] - t;
     if (mode == FILL_HOLLOW) return ex || ey || ez;
     if (mode == FILL_WALLS) return ex || ez;
     return true;
 }
 inline long fill_count(const Plan& p, int mode) {
     long cx = p.count[0], cy = p.count[1], cz = p.count[2];
-    if (fill_roof(mode)) {
+    if (mode == FILL_ROOF) {
         // every column holds at least one shape: a huge area is over any limit anyway
         if (cx * cz > 1000000) return cx * cz;
-        bool ax = p.roofAcrossX != 0;
-        int dmax = roof_dmax((int)cx, (int)cz, mode, ax);
         long n = 0;
         for (int x = 0; x < cx; x++)
-            for (int z = 0; z < cz; z++) {
-                int dx = x < cx - 1 - x ? x : (int)cx - 1 - x, dz = z < cz - 1 - z ? z : (int)cz - 1 - z;
-                int d = mode == FILL_HIP ? (dx < dz ? dx : dz) : ax ? dx : dz;
-                int hi = roof_top(d, dmax, (int)cy), lo = d > 0 ? roof_top(d - 1, dmax, (int)cy) + 1 : 0;
-                n += lo > hi ? 1 : hi - lo + 1;
-            }
+            for (int z = 0; z < cz; z++) { int lo, hi; roof_column(p, x, z, &lo, &hi); if (hi >= lo) n += hi - lo + 1; }
         return n;
     }
-    long ix = cx > 2 ? cx - 2 : 0, iy = cy > 2 ? cy - 2 : 0, iz = cz > 2 ? cz - 2 : 0;
+    long t = p.thick < 1 ? 1 : p.thick;
+    long ix = cx > 2 * t ? cx - 2 * t : 0, iy = cy > 2 * t ? cy - 2 * t : 0, iz = cz > 2 * t ? cz - 2 * t : 0;
     if (mode == FILL_HOLLOW) return cx * cy * cz - ix * iy * iz;
     if (mode == FILL_WALLS) return cx * cy * cz - ix * cy * iz;
     return cx * cy * cz;
 }
 
-// plan_fill plus the fill mode: a roof's ridge runs along the longer side of the area
-// (`rot` odd: along the shorter side), and a flat area grows upward to the roof's height.
-inline bool plan_area(const I3* c, int n, const float step_m[3], long max_total, int mode, int rot, Plan* out) {
-    out->roofAcrossX = 0;
+// plan_fill plus the fill options. A roof's slopes rise across the shorter side of the
+// area (turned: the longer side; a shed's turns go round all four sides). A flat area grows
+// upward to the roof's height; the overhang widens the plan on every side and the roof's
+// drop over it (and its thickness) extend it downward.
+inline bool plan_area(const I3* c, int n, const float step_m[3], long max_total, int mode, const FillOpts& fo, Plan* out) {
     if (!plan_fill(c, n, step_m, max_total, out)) return false;
-    if (!fill_roof(mode)) return true;
-    bool acrossX = out->count[0] < out->count[2];
-    if (rot & 1) acrossX = !acrossX;
-    out->roofAcrossX = acrossX ? 1 : 0;
-    if (out->count[1] == 1) {
-        int h = roof_dmax(out->count[0], out->count[2], mode, acrossX) + 1;
-        int64_t total = (int64_t)out->count[0] * h * out->count[2];
-        out->count[1] = h;
-        out->total = total > 0x7fffffff ? 0x7fffffff : (long)total;
-        if (total > (int64_t)max_total) return false;
-    }
-    return true;
+    out->thick = fo.thick < 1 ? 1 : fo.thick > 3 ? 3 : fo.thick;
+    out->roofShape = out->roofAxisX = out->roofFlip = out->overhang = out->roofH = out->roofBase = 0;
+    if (mode != FILL_ROOF) return true;
+    const int shape = fo.roofShape >= 0 && fo.roofShape < ROOF_COUNT ? fo.roofShape : ROOF_GABLE;
+    const int o = fo.overhang < 0 ? 0 : fo.overhang > 3 ? 3 : fo.overhang;
+    const int rot = fo.roofRot & 3;
+    bool axisX = out->count[0] < out->count[2];
+    if (rot & 1) axisX = !axisX;
+    out->roofShape = shape; out->roofAxisX = axisX; out->roofFlip = shape == ROOF_SHED && (rot & 2); out->overhang = o;
+    int d, D;
+    roof_dist(shape, axisX, false, 0, 0, 0, out->count[0], out->count[2], &d, &D);
+    const int H = out->count[1] == 1 ? D + 1 : out->count[1];
+    out->roofH = H;
+    const int drop = -roof_profile(shape, -o, D, H - 1);
+    out->roofBase = (drop > 0 ? drop : 0) + out->thick - 1;
+    for (int a = 0; a < 3; a += 2) { out->origin[a] -= out->stepFix[a] * o; out->count[a] += 2 * o; }
+    if (out->stepFix[1] >= 0) out->origin[1] -= out->stepFix[1] * out->roofBase;
+    out->count[1] = H + out->roofBase;
+    int64_t total = (int64_t)out->count[0] * out->count[1] * out->count[2];
+    out->total = total > 0x7fffffff ? 0x7fffffff : (long)total;
+    return total <= (int64_t)max_total;
+}
+
+// Roof shape + turn in 4 bits (the client sends its settings in few bits)
+inline int roof_pose_pack(int shape, int rot) {
+    static const int first[ROOF_COUNT] = { 0, 2, 3, 5, 6 };
+    if (shape < 0 || shape >= ROOF_COUNT) shape = 0;
+    return first[shape] + (rot % roof_turns(shape));
+}
+inline void roof_pose_unpack(int v, int* shape, int* rot) {
+    static const int first[ROOF_COUNT] = { 0, 2, 3, 5, 6 };
+    *shape = 0; *rot = 0;
+    for (int k = ROOF_COUNT - 1; k >= 0; k--)
+        if (v >= first[k]) { *shape = k; *rot = v - first[k]; if (*rot >= roof_turns(k)) *rot = 0; return; }
 }
 
 // ------------------------------------------------------ client -> server state
@@ -261,8 +315,9 @@ enum : uint32_t {
     NET_SEQ_SHIFT = 19,          // 3 bits: area clicks so far (wraps), tells a new click from a repeat
     NET_VERSION_SHIFT = 22,      // 2 bits: format version
     NET_VERSION = 1,
-    NET_FILL_HI = 1u << 24,      // area fill bit 2 (roofs: FILL_GABLE / FILL_HIP)
-    NET_ROOF_ROT = 1u << 25,     // roof turned (ridge along the shorter side)
+    NET_ROOF_SHIFT = 24,         // 4 bits: roof shape and turn (roof_pose_pack)
+    NET_THICK_SHIFT = 28,        // 2 bits: thickness - 1
+    NET_OVERHANG_SHIFT = 30,     // 2 bits: roof overhang
 };
 inline uint32_t net_field(uint32_t s, int shift, uint32_t bits) { return (s >> shift) & ((1u << bits) - 1); }
 inline uint16_t net_check(uint32_t s) {

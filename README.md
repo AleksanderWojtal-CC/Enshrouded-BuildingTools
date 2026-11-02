@@ -14,10 +14,12 @@ A mod for **Enshrouded 1.0, Patch #1** (single player and dedicated servers) tha
 - **Area mode**: click two opposite corners and the selected shape is repeated over a
   line, floor, wall or box. You can build, replace or remove the area in one action.
   Area remove and connected delete cut building pieces (foundations...) like blocks.
-  Fills: solid, hollow room (walls + floor + ceiling), walls only, gable roof (2 slopes)
-  or hip roof (4 slopes). Over a flat area a roof climbs one shape up per shape in from
-  the edge; over a 3D area the box height is the roof height. R turns a gable roof. A live
-  size readout and a drawn 3D preview show what the next click will make.
+  Fills: solid, hollow room (walls + floor + ceiling), walls only, or roof. Roof shapes:
+  gable, hip, gambrel, mansard and shed (Shift+R cycles them, R turns the roof). Over a
+  flat area a roof climbs one shape up per shape in from the edge; over a 3D area the box
+  height is the roof height. Rooms, walls and roofs can be 1 to 3 shapes thick, and roofs
+  can overhang the area by up to 3 shapes. A live size readout and a drawn 3D preview show
+  what the next click will make.
 - **Free placement**: the block ghost hovers in front of you, snapped to the 0.5 m
   building grid, instead of sticking to surfaces. Hold Q and turn the mouse wheel to set
   the distance.
@@ -74,8 +76,9 @@ which is also shipped in the zip.
 | F8 | Clear area corners |
 | F9 | Replace style: full shape / overlap only / connected (fill bucket) |
 | F10 | Free placement on/off (Q + wheel: distance) |
-| F11 | Area fill: solid / hollow room / walls only / gable roof / hip roof |
-| R | Turn the gable roof (only in Area mode with the gable roof fill) |
+| F11 | Area fill: solid / hollow room / walls only / roof |
+| Shift+R | Next roof shape (only in Area mode with the roof fill) |
+| R | Turn the roof (only in Area mode with the roof fill) |
 | F5 | Whole mod off / on (off = vanilla game) |
 
 All keys can be changed in the menu (Keys tab), also to Shift, Ctrl or Alt combinations

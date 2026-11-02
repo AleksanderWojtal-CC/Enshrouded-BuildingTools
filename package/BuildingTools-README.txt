@@ -25,8 +25,8 @@ Keys (with the Construction Hammer)
   F10 Free placement on/off: the ghost hovers in front of you (snapped to the
       0.5 m building grid) instead of sticking to the surface you aim at
       Hold Q + mouse wheel (or Page Up / Page Down): farther / closer, 0.5 m steps
-  F11 Area fill: solid -> hollow room -> walls only -> gable roof -> hip roof
-  R   turn the gable roof (only in Area mode with the gable roof fill)
+  F11 Area fill: solid -> hollow room -> walls only -> roof
+  Shift+R  next roof shape   R  turn the roof (both only with the roof fill)
 
 Prefab mode
   Vanilla placement. With Replace on, the shape replaces the blocks you aim at
@@ -91,13 +91,16 @@ Area mode (2 corners)
   Fill (F11): solid fills the whole box; hollow room builds only the outer
   shell (walls, floor and ceiling, one shape thick); walls only leaves out the
   floor and ceiling. Floors, walls and lines come out complete in every mode.
-  Roofs: gable roof (two slopes meeting at a ridge) and hip roof (four
-  slopes). Mark a flat area (for example the top of your walls) and the roof
-  covers it, climbing one shape up for each shape in from the edge, like the
-  game's roof blocks. Mark a 3D area instead and the box height is the roof
-  height (steeper or flatter slopes). The ridge of a gable roof runs along the
-  long side; R turns it to the short side (also in the menu's Options tab).
-  The 3D preview shows the roof before you click.
+  Roof: shapes gable (two slopes), hip (four slopes), gambrel (barn: steep
+  below, flatter above), mansard (the same on four sides) and shed (one
+  slope); Shift+R cycles them. Mark a flat area (for example the top of your
+  walls) and the roof covers it, about one shape up for each shape in from
+  the edge, like the game's roof blocks. Mark a 3D area instead and the box
+  height is the roof height (steeper or flatter slopes). R turns the roof
+  (ridge along the long or short side; a shed rises toward any of the four
+  sides). Roof overhang 0-3 shapes carries the slope past the area's edge.
+  Thickness 1-3 shapes for hollow rooms, walls and roofs. All of these are
+  also in the menu's Options tab. The 3D preview shows the roof first.
   The fill applies to build, replace and remove.
   3-corner mode is still there: in BuildingTools.ini set [Area] Corners=3
   (two base corners, then a third click for the height).

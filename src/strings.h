@@ -23,10 +23,9 @@
     X(S_FILL_SOLID, "msg.fill_solid", "Area fill: solid") \
     X(S_FILL_HOLLOW, "msg.fill_hollow", "Area fill: hollow room (walls, floor, ceiling)") \
     X(S_FILL_WALLS, "msg.fill_walls", "Area fill: walls only") \
-    X(S_FILL_GABLE, "msg.fill_gable", "Area fill: gable roof (2 slopes, {0} turns it)") \
-    X(S_FILL_HIP, "msg.fill_hip", "Area fill: hip roof (4 slopes)") \
-    X(S_ROOF_LONG, "msg.roof_long", "Roof ridge along the long side") \
-    X(S_ROOF_SHORT, "msg.roof_short", "Roof ridge along the short side") \
+    X(S_FILL_ROOF, "msg.fill_roof", "Area fill: roof ({0})") \
+    X(S_ROOF_SHAPE, "msg.roof_shape", "Roof shape: {0}") \
+    X(S_ROOF_TURNED, "msg.roof_turned", "Roof turned ({0} of {1})") \
     X(S_FREE_ON, "msg.free_on", "Free placement ON (no surface snapping)") \
     X(S_FREE_OFF, "msg.free_off", "Free placement OFF") \
     X(S_FREE_DISTANCE, "msg.free_distance", "Free placement distance {0} m") \
@@ -62,8 +61,7 @@
     X(S_BAR_AREA_REMOVE, "bar.area_remove", "Area remove {0}/{1}") \
     X(S_BAR_HOLLOW, "bar.hollow", "hollow") \
     X(S_BAR_WALLS, "bar.walls", "walls") \
-    X(S_BAR_GABLE, "bar.gable", "gable roof") \
-    X(S_BAR_HIP, "bar.hip", "hip roof") \
+    X(S_BAR_ROOF, "bar.roof", "roof: {0}") \
     X(S_BAR_PREFAB, "bar.prefab", "Prefab") \
     X(S_BAR_PREFAB_REPLACE, "bar.prefab_replace", "Prefab replace") \
     X(S_BAR_FULL, "bar.full", "full shape") \
@@ -88,8 +86,8 @@
     X(S_HUD_FILL_SOLID, "hud.fill_solid", "Fill: solid") \
     X(S_HUD_FILL_HOLLOW, "hud.fill_hollow", "Fill: hollow") \
     X(S_HUD_FILL_WALLS, "hud.fill_walls", "Fill: walls") \
-    X(S_HUD_FILL_GABLE, "hud.fill_gable", "Fill: gable roof") \
-    X(S_HUD_FILL_HIP, "hud.fill_hip", "Fill: hip roof") \
+    X(S_HUD_FILL_ROOF, "hud.fill_roof", "Fill: roof") \
+    X(S_HUD_ROOF_SHAPE, "hud.roof_shape", "Roof: {0}") \
     X(S_HUD_ROOF_TURN, "hud.roof_turn", "Turn roof") \
     X(S_HUD_CLEAR, "hud.clear", "Clear corners") \
     X(S_HUD_REPLACE, "hud.replace", "Replace") \
@@ -134,7 +132,8 @@
     X(S_ACT_REPLACE, "menu.key_replace", "Replace on / off") \
     X(S_ACT_STYLE, "menu.key_style", "Replace style") \
     X(S_ACT_FILL, "menu.key_fill", "Area fill") \
-    X(S_ACT_ROOF_TURN, "menu.key_roof_turn", "Turn gable roof (Area mode)") \
+    X(S_ACT_ROOF_SHAPE, "menu.key_roof_shape", "Next roof shape (Area mode, roof fill)") \
+    X(S_ACT_ROOF_TURN, "menu.key_roof_turn", "Turn roof (Area mode, roof fill)") \
     X(S_ACT_CLEAR, "menu.key_clear", "Clear area corners") \
     X(S_ACT_FREE, "menu.key_free", "Free placement on / off") \
     X(S_ACT_FARTHER, "menu.key_farther", "Free placement farther") \
@@ -147,8 +146,7 @@
     X(S_ACT_FILL_SOLID, "menu.key_fill_solid", "Area fill: solid") \
     X(S_ACT_FILL_HOLLOW, "menu.key_fill_hollow", "Area fill: hollow room") \
     X(S_ACT_FILL_WALLS, "menu.key_fill_walls", "Area fill: walls only") \
-    X(S_ACT_FILL_GABLE, "menu.key_fill_gable", "Area fill: gable roof") \
-    X(S_ACT_FILL_HIP, "menu.key_fill_hip", "Area fill: hip roof") \
+    X(S_ACT_FILL_ROOF, "menu.key_fill_roof", "Area fill: roof") \
     X(S_ACT_CREATIVE, "menu.key_creative", "Creative building on / off") \
     X(S_ACT_REPLACE_HOLD, "menu.key_replace_hold", "Replace while held") \
     X(S_ACT_PREFAB, "menu.key_prefab", "Prefab mode (vanilla)") \
@@ -170,11 +168,17 @@
     X(S_OPT_FILL_SOLID, "option.fill_solid", "Solid") \
     X(S_OPT_FILL_HOLLOW, "option.fill_hollow", "Hollow room") \
     X(S_OPT_FILL_WALLS, "option.fill_walls", "Walls only") \
-    X(S_OPT_FILL_GABLE, "option.fill_gable", "Gable roof (2 slopes)") \
-    X(S_OPT_FILL_HIP, "option.fill_hip", "Hip roof (4 slopes)") \
-    X(S_OPT_ROOF, "option.roof", "Gable roof ridge") \
-    X(S_OPT_ROOF_LONG, "option.roof_long", "Along the long side") \
-    X(S_OPT_ROOF_SHORT, "option.roof_short", "Along the short side") \
+    X(S_OPT_FILL_ROOF, "option.fill_roof", "Roof") \
+    X(S_OPT_ROOF_SHAPE, "option.roof_shape", "Roof shape") \
+    X(S_OPT_ROOF_GABLE, "option.roof_gable", "Gable (2 slopes)") \
+    X(S_OPT_ROOF_HIP, "option.roof_hip", "Hip (4 slopes)") \
+    X(S_OPT_ROOF_GAMBREL, "option.roof_gambrel", "Gambrel (barn)") \
+    X(S_OPT_ROOF_MANSARD, "option.roof_mansard", "Mansard") \
+    X(S_OPT_ROOF_SHED, "option.roof_shed", "Shed (1 slope)") \
+    X(S_OPT_ROOF_TURN, "option.roof_turn", "Roof turn") \
+    X(S_OPT_OVERHANG, "option.overhang", "Roof overhang") \
+    X(S_OPT_THICK, "option.thick", "Thickness (rooms, walls, roofs)") \
+    X(S_OPT_NONE, "option.none", "None") \
     X(S_OPT_FREE, "option.free", "Free placement") \
     X(S_OPT_CREATIVE, "option.creative", "Creative building") \
     X(S_OPT_LANGUAGE, "option.language", "Language") \
