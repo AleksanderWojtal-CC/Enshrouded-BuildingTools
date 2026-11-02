@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.28.1"
+#define MOD_VERSION "0.28.1-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -879,6 +879,16 @@ static int64_t round_grid(double v, double grid) {           // v, grid in fixed
     return (int64_t)(r * grid);
 }
 static volatile DWORD g_buildTick = 0;   // last frame the hammer's place cursor was computed
+// The game draws its building box (undo row and the other key rows) only while the
+// hammer or a building material is in hand, every frame, also while the hammer aims at
+// the sky. The place cursor (g_buildTick) is not enough: the game also casts that ray
+// now and then with a weapon or tool in hand.
+typedef void (*HudRowFn)(uint8_t action, void* params);
+static HudRowFn g_hudRowOrig = nullptr;
+static volatile DWORD g_gameRowTick = 0;      // last time the game drew its own building box rows
+static bool building_now(DWORD window = 300) {
+    return g_hudRowOrig ? GetTickCount() - g_gameRowTick < window : GetTickCount() - g_buildTick < window + 200;
+}
 // The last place cursor each cursor system computed: the raw ray hit (not yet on the
 // 0.5 m grid), camera and view direction. Far from the character (free camera) the
 // client stops updating its cursor component, but this still runs every frame.
@@ -3091,10 +3101,30 @@ static InputEncodeFn g_inputEncodeOrig = nullptr;
 static uint64_t g_prevDigital = 0;
 static volatile LONG g_netSeq = 0;            // area clicks so far (3 bits are sent)
 
-// No in-process server world (single player / own hosted game) for two seconds: the
-// game is connected to a server elsewhere, which builds; this game keeps its own copy
-// of the area corners for the HUD, the size readout and the preview.
-static bool remote_session() { return !g_dedicated && GetTickCount() - g_serverWorldTick > 2000; }
+// The game is connected to a server elsewhere, which builds; this game keeps its own copy
+// of the area corners for the HUD, the size readout and the preview. Told from the
+// in-process server world (single player / own hosted game): it reads the building
+// cursor every frame, but only while the hammer or a material is in hand. So it is
+// decided only while building (no server world read for a second of building = remote)
+// and kept while the player holds a weapon or tool; before the first decision a server
+// world read in the last two seconds means local.
+static volatile LONG g_remoteKnown = -1;      // -1 not decided yet, 0 local, 1 remote
+static DWORD g_buildingSince = 0;              // start of the current building stretch (0: not building)
+static void remote_update() {
+    if (g_dedicated) return;
+    const DWORD now = GetTickCount();
+    if (!building_now()) { g_buildingSince = 0; return; }
+    if (!g_buildingSince) g_buildingSince = now;
+    LONG was = g_remoteKnown, is = was;
+    if (now - g_serverWorldTick < 500) is = 0;
+    else if (now - g_buildingSince > 1000) is = 1;
+    if (is != was) { g_remoteKnown = is; LOG(.str("session: ").str(is ? "remote server" : "local world")); }
+}
+static bool remote_session() {
+    if (g_dedicated) return false;
+    LONG k = g_remoteKnown;
+    return k >= 0 ? k == 1 : GetTickCount() - g_serverWorldTick > 2000;
+}
 
 static uint32_t net_client_state() {
     uint32_t s = core::NET_TAG | ((uint32_t)core::NET_VERSION << core::NET_VERSION_SHIFT);
@@ -3188,6 +3218,7 @@ static void remote_clicks(uint8_t* src, uint8_t flags) {
     const uint64_t d = *(uint64_t*)(src + 0x3a8);      // PlayerDigitalInput: bit 0 MainhandAction, bit 4 SecondaryBuildingAction
     const uint64_t rise = d & ~g_prevDigital;
     g_prevDigital = d;
+    remote_update();
     if (!remote_session()) return;
     if (g_cancelReq) {                                 // F8, mode change: in single player the server world takes it
         EnterCriticalSection(&g_stateLock);
@@ -3195,13 +3226,16 @@ static void remote_clicks(uint8_t* src, uint8_t flags) {
         LeaveCriticalSection(&g_stateLock);
     }
     if (!(rise & 0x11) || g_modOff || g_mode != MODE_AREA || !(flags & 1)) return;
+    // only with the hammer or a material in hand (a weapon or tool click is the game's):
+    // the game's building box is up, or the hammer's cursor was read this frame
+    if (!building_now() && GetTickCount() - g_liveItemTick >= 500) return;
     uint8_t* item = building_item();
     if (!item) return;                                 // no building item in hand
     remote_corner(rise & 1 ? OP_BUILD : OP_REMOVE, item, (const CursorXf*)(src + 0x2f8), (const CursorXf*)(src + 0x330));
 }
 
 static uint64_t input_encode_hook(uint8_t* out, uint8_t* src, uint8_t* flags, uint64_t a4) {
-    uint8_t* item = flags && (*flags & 1) && !g_modOff && src ? building_item() : nullptr;
+    uint8_t* item = flags && (*flags & 1) && !g_modOff && src && (building_now() || GetTickCount() - g_liveItemTick < 500) ? building_item() : nullptr;
     CursorXf saved, aim;
     const bool patch = item && freecam_aim(src, item, &aim);
     if (item) *flags |= 2;                              // send the aim too
@@ -3414,7 +3448,7 @@ got:
 static volatile LONG g_boxFill = 0;             // the box's fill options for the cell shader (see cells.vert)
 static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     core::Plan pl; float step[3]; bool ok = false;
-    if (!g_cfg.preview || !area_plan_live(&pl, step, &ok) || !ok) return false;
+    if (!g_cfg.preview || !building_now(500) || !area_plan_live(&pl, step, &ok) || !ok) return false;
     if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return false;
     g_boxFill = (pl.thick - 1) * 1024 + (g_fill == core::FILL_ROOF ? pl.roofAxisX * 32 + pl.roofFlip * 64 + pl.roofShape * 128 +
                 pl.overhang * 4096 + pl.roofBase * 16384 : 0);
@@ -4592,10 +4626,8 @@ static void mod_screen_hook(void*, void*, void*, void*) {
 // button u8 @4) plus up to three modifier inputs. The row parameters (0x78) are copied
 // from the game's own rows; label TextString @0x58, colour @0x70, @0x2f = take the
 // action's name (cleared).
-typedef void (*HudRowFn)(uint8_t action, void* params);
 typedef void (*HudFinishFn)(void* box);
 typedef void (*BindingHintFn)(const void* binding, const void* params);
-static HudRowFn g_hudRowOrig = nullptr;
 static HudFinishFn g_hudFinishOrig = nullptr;
 static BindingHintFn g_bindingHint = nullptr;
 alignas(16) static uint8_t g_hudRowTpl[0x80];
@@ -4642,7 +4674,6 @@ static bool make_binding(int code, uint8_t* b) {
     return true;
 }
 
-static volatile DWORD g_gameRowTick = 0;      // last time the game drew its own building box rows
 static void hud_row_hook(uint8_t action, void* params) {
     g_gameRowTick = GetTickCount();
     memcpy(g_hudRowTpl, params, 0x78);
@@ -4742,7 +4773,7 @@ static void draw_hud_rows() {
 static bool hud_info(char* out, int cap) {
     if (!g_cfg.hudRows || !g_active) return false;
     Buf b;
-    bool building = !g_modOff && GetTickCount() - g_buildTick < 500;
+    bool building = !g_modOff && building_now();
     if (GetTickCount() < g_flashUntil) b.str(g_flash);
     else if (building && g_mode == MODE_AREA) {
         b.fmt(T(g_scOp == OP_REMOVE ? S_BAR_AREA_REMOVE : g_replace ? S_BAR_AREA_REPLACE : S_BAR_AREA_BUILD),
@@ -5085,7 +5116,7 @@ static void radial_keys(bool focus) {
     if (!g_radialOpen) {
         bool inGame = wheel_screen(g_hudScreen) && GetTickCount() - g_hudScreenTick < 500;
         // only while building: the hammer or a building material in hand (the game draws its building box then)
-        bool building = g_hudRowOrig ? GetTickCount() - g_gameRowTick < 300 : GetTickCount() - g_buildTick < 500;
+        bool building = building_now();
         if (down && !wasDown && inGame && building && !g_menuOpen) {
             g_radialX = g_radialY = 0.f; g_radialSel = -1; g_radialClicks = 0; g_radialCancel = 0;
             g_radialPicked = false;
