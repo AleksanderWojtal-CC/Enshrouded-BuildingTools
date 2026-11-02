@@ -25,7 +25,8 @@ Keys (with the Construction Hammer)
   F10 Free placement on/off: the ghost hovers in front of you (snapped to the
       0.5 m building grid) instead of sticking to the surface you aim at
       Hold Q + mouse wheel (or Page Up / Page Down): farther / closer, 0.5 m steps
-  F11 Area fill: solid -> hollow room -> walls only
+  F11 Area fill: solid -> hollow room -> walls only -> gable roof -> hip roof
+  R   turn the gable roof (only in Area mode with the gable roof fill)
 
 Prefab mode
   Vanilla placement. With Replace on, the shape replaces the blocks you aim at
@@ -90,6 +91,13 @@ Area mode (2 corners)
   Fill (F11): solid fills the whole box; hollow room builds only the outer
   shell (walls, floor and ceiling, one shape thick); walls only leaves out the
   floor and ceiling. Floors, walls and lines come out complete in every mode.
+  Roofs: gable roof (two slopes meeting at a ridge) and hip roof (four
+  slopes). Mark a flat area (for example the top of your walls) and the roof
+  covers it, climbing one shape up for each shape in from the edge, like the
+  game's roof blocks. Mark a 3D area instead and the box height is the roof
+  height (steeper or flatter slopes). The ridge of a gable roof runs along the
+  long side; R turns it to the short side (also in the menu's Options tab).
+  The 3D preview shows the roof before you click.
   The fill applies to build, replace and remove.
   3-corner mode is still there: in BuildingTools.ini set [Area] Corners=3
   (two base corners, then a third click for the height).

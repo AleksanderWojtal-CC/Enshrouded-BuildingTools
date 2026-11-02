@@ -3,6 +3,19 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.25.0
+
+- **Roofs in Area mode** (#19). Two new area fills: **gable roof** (two slopes meeting at a
+  ridge) and **hip roof** (four slopes). Mark a flat area, for example the top of your
+  walls, and the roof covers it, climbing one shape up for every shape in from the edge,
+  like the game's roof blocks. Mark a 3D area instead and the box height becomes the roof
+  height, for steeper or flatter roofs.
+- The gable ridge runs along the long side; **R** turns it to the short side (only while
+  the gable roof fill is on, so R is free otherwise). Also in the menu's Options tab and
+  on the tools wheel. Quick keys for both roof fills can be set in the Keys tab.
+- The 3D preview shows the roof's blocks before you click. Roofs work for build, replace
+  and remove, and on dedicated servers (update the server too).
+
 ## 0.24.1
 
 - **Works with Enshrouded Patch #1** (1.0.1.0). The patch moved game code the mod hooks,

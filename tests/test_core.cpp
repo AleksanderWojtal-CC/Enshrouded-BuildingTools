@@ -241,6 +241,60 @@ int main(int argc, char** argv) {
         CHECK(!core::plan_fill(big, 2, step2, 50000000, &pl), "huge area refused without overflow");
     }
 
+    // roofs
+    {
+        const float step1[3] = { 1.f, 1.f, 1.f };
+        auto keepCount = [&](const core::Plan& p, int mode) {
+            long n = 0;
+            for (int i = 0; i < p.count[0]; i++) for (int j = 0; j < p.count[1]; j++) for (int k = 0; k < p.count[2]; k++)
+                n += core::fill_keep(p, i, j, k, mode);
+            return n;
+        };
+        // flat 7 x 4 area: gable ridge along x (the long side), slopes across z
+        core::I3 flat[2] = {{0, 0, 0}, {6 * M, 0, 3 * M}};
+        CHECK(core::plan_area(flat, 2, step1, 2000, core::FILL_GABLE, 0, &pl) && !pl.roofAcrossX && pl.count[1] == 2,
+              "flat 7x4 gable: ridge along the long side, grows to 2 high");
+        CHECK(core::fill_count(pl, core::FILL_GABLE) == 7 * 4 && keepCount(pl, core::FILL_GABLE) == 7 * 4, "45 degree gable: one shape per column");
+        CHECK(core::fill_keep(pl, 3, 0, 0, core::FILL_GABLE) && core::fill_keep(pl, 3, 1, 1, core::FILL_GABLE) &&
+              core::fill_keep(pl, 3, 1, 2, core::FILL_GABLE) && core::fill_keep(pl, 3, 0, 3, core::FILL_GABLE) &&
+              !core::fill_keep(pl, 3, 1, 0, core::FILL_GABLE), "gable steps: up one per shape in, flat 2-wide ridge");
+        CHECK(core::plan_area(flat, 2, step1, 2000, core::FILL_GABLE, 1, &pl) && pl.roofAcrossX && pl.count[1] == 4,
+              "turned gable: ridge along the short side, 4 high");
+        CHECK(core::fill_keep(pl, 3, 3, 0, core::FILL_GABLE) && core::fill_keep(pl, 0, 0, 2, core::FILL_GABLE), "turned gable peak in the middle");
+        // hip over a flat 5 x 5: a pyramid 3 high
+        core::I3 sq[2] = {{0, 0, 0}, {4 * M, 0, 4 * M}};
+        CHECK(core::plan_area(sq, 2, step1, 2000, core::FILL_HIP, 0, &pl) && pl.count[1] == 3, "hip 5x5 -> 3 high");
+        CHECK(core::fill_count(pl, core::FILL_HIP) == 25 && keepCount(pl, core::FILL_HIP) == 25 &&
+              core::fill_keep(pl, 2, 2, 2, core::FILL_HIP) && core::fill_keep(pl, 1, 1, 3, core::FILL_HIP) &&
+              core::fill_keep(pl, 0, 0, 4, core::FILL_HIP), "hip pyramid");
+        // 3D area: the box height is the roof height (9 wide, 9 high: steep, straight runs)
+        core::I3 tall[2] = {{0, 0, 0}, {10 * M, 8 * M, 8 * M}};
+        CHECK(core::plan_area(tall, 2, step1, 2000, core::FILL_GABLE, 0, &pl) && pl.count[1] == 9, "3D gable keeps its height");
+        long n = keepCount(pl, core::FILL_GABLE);
+        CHECK(n == core::fill_count(pl, core::FILL_GABLE), "3D gable keep matches count");
+        CHECK(core::fill_keep(pl, 0, 8, 4, core::FILL_GABLE) && core::fill_keep(pl, 0, 0, 0, core::FILL_GABLE) &&
+              core::fill_keep(pl, 0, 2, 1, core::FILL_GABLE) && core::fill_keep(pl, 0, 1, 1, core::FILL_GABLE) &&
+              !core::fill_keep(pl, 0, 0, 1, core::FILL_GABLE), "steep gable: each column stacks up to its own top");
+        // every column of a roof is connected to the next one (no holes in the slope)
+        for (int mode = core::FILL_GABLE; mode <= core::FILL_HIP; mode++) {
+            core::I3 r[2] = {{0, 0, 0}, {9 * M, 3 * M, 6 * M}};
+            CHECK(core::plan_area(r, 2, step1, 2000, mode, 0, &pl), "roof plan");
+            bool okAll = true;
+            for (int i = 0; i < pl.count[0]; i++) for (int k = 0; k < pl.count[2]; k++) {
+                int col = 0; for (int j = 0; j < pl.count[1]; j++) col += core::fill_keep(pl, i, j, k, mode);
+                if (col < 1) okAll = false;
+            }
+            CHECK(okAll && keepCount(pl, mode) == core::fill_count(pl, mode), "every roof column holds a shape");
+        }
+        // corner 2 below corner 1: the roof still rises upward
+        core::I3 down[2] = {{0, 4 * M, 0}, {0, 0, 8 * M}};
+        CHECK(core::plan_area(down, 2, step1, 2000, core::FILL_GABLE, 0, &pl) && pl.stepFix[1] < 0, "downward area");
+        CHECK(core::fill_keep(pl, 0, pl.count[1] - 1, 0, core::FILL_GABLE) && core::fill_keep(pl, 0, 0, 4, core::FILL_GABLE),
+              "downward area: eaves at the bottom, ridge at the top");
+        // other fills ignore the roof
+        CHECK(core::plan_area(flat, 2, step1, 2000, core::FILL_SOLID, 1, &pl) && pl.count[1] == 1 && pl.total == 28, "solid unchanged");
+    }
+
     // ----------------------------------------------------- axis lock
     {
         const int64_t T = M / 10;

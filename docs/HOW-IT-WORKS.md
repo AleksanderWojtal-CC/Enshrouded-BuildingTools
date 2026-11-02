@@ -60,6 +60,13 @@ On the last corner, the area is planned (`core::plan_fill`):
 - Shapes are laid exactly one shape size apart, starting at corner 1, with
   `round(distance / size) + 1` shapes per axis.
 - Fill modes keep the boundary cells (hollow) or only the side boundaries (walls).
+- Roof fills (`core::plan_area`, `core::roof_keep`): a gable roof's slopes rise across the
+  shorter side (turned: the longer side), a hip roof's from all four sides (distance to the
+  nearest edge). A flat area grows upward to `(span - 1) / 2 + 1` shapes, so the roof
+  climbs one shape per shape (45 degrees). A 3D area keeps its height and the column
+  tops are scaled to it. Each column holds the shapes from just above the previous
+  column's top up to its own, so the steps touch. The preview shader (`cells.vert`)
+  repeats the same rule.
 
 Every position is dry-run priced in the game's own cost list, so the normal payment step
 charges the total. The single commit is then replaced by one commit per position.
