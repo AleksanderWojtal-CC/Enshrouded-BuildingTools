@@ -3,6 +3,24 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.26.0
+
+- **Round walls in Area mode** (#17). A new area fill, **round**: a full circle, a half or a
+  quarter, solid or hollow. Your two corners bound the shape, so a square area gives a
+  circle (or half / quarter of one) and a rectangle gives an ellipse. **Shift+R** picks
+  full, half or quarter, **R** turns a half or quarter four ways (a quarter starts as a
+  curve from your first corner to your second). Both keys work only with the round or roof
+  fill on.
+- **Hollow** builds a round wall with no gaps, 1 to 3 shapes thick; a half or quarter
+  stays open on its straight sides.
+- **Standing or lying.** Standing rounds follow the ground plan (towers, round rooms); mark
+  a wall one shape thin and the round stands in it (arches). Lying turns the area into a
+  tube along its longer side: pipes, and tunnels from a half.
+- In the menu's Options tab and on the tools wheel (now up to 12 options); quick keys for
+  the round fill, solid / hollow and standing / lying, unassigned at first. The 3D preview
+  shows exactly the blocks that will be built. Works for build, replace and remove, and on
+  dedicated servers (update the server too).
+
 ## 0.25.0
 
 - **Roofs in Area mode** (#19). A new area fill, **roof**, with five shapes: gable (two
