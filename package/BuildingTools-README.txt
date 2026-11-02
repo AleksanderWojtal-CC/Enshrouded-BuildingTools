@@ -103,6 +103,12 @@ Area mode (2 corners)
   also in the menu's Options tab and on the tools wheel; thickness and
   overhang can get their own keys in the Keys tab. The 3D preview shows the
   roof first. Gable ends are left open.
+  Conical and dome roofs (after shed in the Shift+R cycle) are round: they
+  cover the circle (square area) or ellipse (rectangular area) that a full
+  round fill of the same area makes, so they sit on round walls. Conical:
+  straight sides up to a point (45 degrees over a flat circle); dome: half a
+  sphere, steep at the edge, flat on top. Overhang carries a cone's slope on
+  down and gives a dome a flat brim. They don't turn.
   Round: a full circle, a half or a quarter (Shift+R), filling the box of
   your two corners: a square gives a circle, a rectangle an ellipse. R turns
   a half or quarter four ways; a quarter starts as a curve from corner 1 to
