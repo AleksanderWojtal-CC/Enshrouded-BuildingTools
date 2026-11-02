@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.25.0-dev3"
+#define MOD_VERSION "0.25.0-dev4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -4156,6 +4156,8 @@ static void draw_tool_settings() {
     uint16_t topLeft = 0x101;
     bool scroll = ui_scroll_begin(st, sizeof st, offset, 1000);
     ui.beginBox(list, 0);
+    UiVec2 gap{ 0, 22 };                                    // rows stacked as in the menu panel
+    ui.setSpacing(ui_node(list), &gap, 0);
     ui.setLayout(ui_node(list), &topLeft);
     ui.setStretch(ui_node(list), UiVec2{ 1, 0 });
     draw_tool_rows();
