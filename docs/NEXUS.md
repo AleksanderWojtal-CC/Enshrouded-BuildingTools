@@ -44,7 +44,8 @@ or box. Left click builds (or replaces with Replace on), right click removes.
 Area remove (and connected delete) cuts building pieces such as foundations like blocks.
 Fill (F11): solid, hollow room (walls + floor + ceiling), walls only, roof, round or diagonal;
 rooms, walls, roofs, round and diagonal walls 1-3 shapes thick.
-[b]Roofs:[/b] gable, hip, gambrel, mansard and shed (Shift+R cycles, R turns). Mark a flat area
+[b]Roofs:[/b] gable, hip, gambrel, mansard, shed, conical and dome (Shift+R cycles, R turns). Conical
+and dome roofs are round: they cover the area's circle or ellipse and sit on round walls. Mark a flat area
 and the roof covers it, one shape up for every shape in from the edge; mark a 3D area and the
 box height sets the roof height. Overhang up to 3 shapes.
 [b]Round walls:[/b] full circle, half or quarter (Shift+R cycles, R turns), solid or hollow. The

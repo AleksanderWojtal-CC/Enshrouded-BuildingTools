@@ -70,6 +70,13 @@ On the last corner, the area is planned (`core::plan_fill`):
   deeper, so the steps touch. Overhang widens the plan on every side and extends the
   profile to negative `d`, so the plan also grows downward (`roofBase`). The preview shader
   (`cells.vert`) repeats the same rule from bits packed into the push constants.
+- Cone and dome roofs (`core::roof_round_span`): the outline is the full round fill's ellipse
+  of the plan (overhang included). With `r` = the column centre's distance from the middle,
+  1 on the area's ellipse, the top is `h * (1 - r)` (cone) or `h * sqrt(1 - r^2)` (dome; a flat
+  brim past `r = 1`), rounded; `h` as for the hip roof. A column runs from just above its
+  lowest 4-neighbour's top to its own top, `t` deeper. The preview computes the cells on the
+  CPU (bits). On a server they travel as the roof fill with thickness field 3 (no other roof
+  sends it) and roof pose `(shape - cone) * 3 + thickness - 1`.
 - Round fill (`core::round_inside`, `core::round_keep`): a cell of the round's plane is in
   when its centre is inside the ellipse that fills the box (half: centre on the middle of one
   side, quarter: on a corner, the ellipse twice as big). Hollow keeps inside cells within one

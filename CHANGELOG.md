@@ -3,6 +3,16 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.28.0
+
+- **Conical and dome roofs.** Two new roof shapes after shed (Shift+R). They are round:
+  they cover the circle (square area) or ellipse (rectangular area) that the round fill
+  makes over the same area, so they sit on top of round walls and towers. Conical has
+  straight sides up to a point (45 degrees over a flat circle); dome is half a sphere,
+  steep at the edge and flat on top. Thickness 1 to 3; overhang carries a cone's slope on
+  down and gives a dome a flat brim. 3D preview of the exact blocks, works for build,
+  replace and remove, and on dedicated servers (update the server too).
+
 ## 0.27.0
 
 - **Diagonal walls in Area mode.** A new area fill, **diagonal**. Standing: a wall from your

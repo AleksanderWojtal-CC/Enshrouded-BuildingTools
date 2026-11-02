@@ -15,7 +15,8 @@ A mod for **Enshrouded 1.0, Patch #1** (single player and dedicated servers) tha
   line, floor, wall or box. You can build, replace or remove the area in one action.
   Area remove and connected delete cut building pieces (foundations...) like blocks.
   Fills: solid, hollow room (walls + floor + ceiling), walls only, roof, round or diagonal. Roof shapes:
-  gable, hip, gambrel, mansard and shed (Shift+R cycles them, R turns the roof). Over a
+  gable, hip, gambrel, mansard, shed, conical and dome (Shift+R cycles them, R turns the roof;
+  conical and dome cover the area's circle or ellipse, so they sit on round walls). Over a
   flat area a roof climbs one shape up per shape in from the edge; over a 3D area the box
   height is the roof height. Rooms, walls and roofs can be 1 to 3 shapes thick, and roofs
   can overhang the area by up to 3 shapes. Round fills: a full circle, half or quarter
