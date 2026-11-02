@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.28.0"
+#define MOD_VERSION "0.28.1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -5234,9 +5234,20 @@ static volatile LONG g_crashLogs = 0;
 static void addr_desc(Buf& b, uint64_t a) {
     uint64_t gb = (uint64_t)g_base, ge = gb + g_gameSize;
     uint64_t sb = (uint64_t)g_self, se = sb + g_selfSize;
-    if (a >= gb && a < ge) b.str("game+").x(a - gb);
-    else if (a >= sb && a < se) b.str("mod+").x(a - sb);
-    else b.x(a);
+    if (a >= gb && a < ge) { b.str("game+").x(a - gb); return; }
+    if (a >= sb && a < se) { b.str("mod+").x(a - sb); return; }
+    b.x(a);
+    // another module (a system DLL, a driver, another mod): its file name and offset
+    HMODULE m = nullptr; wchar_t path[MAX_PATH];
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           (LPCWSTR)a, &m) && m) {
+        DWORD n = GetModuleFileNameW(m, path, MAX_PATH);
+        const wchar_t* name = path;
+        for (DWORD k = 0; k < n; k++) if (path[k] == L'\\' || path[k] == L'/') name = path + k + 1;
+        b.str(" (");
+        for (const wchar_t* w = name; n && *w && w < path + n; w++) b.c(*w < 0x80 ? (char)*w : '?');
+        b.c('+').x(a - (uint64_t)m).c(')');
+    } else b.str(" (no module)");
 }
 
 static LONG CALLBACK crash_handler(EXCEPTION_POINTERS* ep) {
@@ -5244,7 +5255,7 @@ static LONG CALLBACK crash_handler(EXCEPTION_POINTERS* ep) {
     if (code < 0xC0000000 || code == 0xE06D7363) return EXCEPTION_CONTINUE_SEARCH;   // not fatal / C++ throw
     if (InterlockedIncrement(&g_crashLogs) > 4) return EXCEPTION_CONTINUE_SEARCH;
     CONTEXT* c = ep->ContextRecord;
-    { Buf b; b.str("EXCEPTION ").x(code).str(" at "); addr_desc(b, c->Rip);
+    { Buf b; b.str("EXCEPTION ").x(code).str(" (" MOD_VERSION ") at "); addr_desc(b, c->Rip);
       if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2)
           b.str(ep->ExceptionRecord->ExceptionInformation[0] ? " writing " : " reading ").x(ep->ExceptionRecord->ExceptionInformation[1]);
       b.str(" thread ").u(GetCurrentThreadId());
