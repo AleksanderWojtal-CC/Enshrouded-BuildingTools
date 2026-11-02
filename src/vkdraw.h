@@ -627,11 +627,12 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
         }
         LONG op = g_scOp == OP_REMOVE ? 2 : g_replace ? 1 : 0;
         const LONG boxFill = g_boxFill;
-        push.cells[3] = (float)((g_fill == core::FILL_ROUND ? 3 : g_fill & 3) + 4 * op + boxFill);
+        push.cells[3] = (float)((g_fill >= core::FILL_ROUND ? 3 : g_fill & 3) + 4 * op + boxFill);
         if (nn <= 40000) cellN = (uint32_t)nn;
         bool onlyFull = op == 2 || (op == 1 && g_replaceStyle != STYLE_FULL);
-        if (cellN && g_fill == core::FILL_ROUND && (boxFill & (1 << 20)) && s.occMap) {
-            // round fills: the cells come from the same code that builds (core::round_keep),
+        const bool isRound = g_fill == core::FILL_ROUND && (boxFill & (1 << 20)), isDiag = g_fill == core::FILL_DIAG && (boxFill & (1 << 21));
+        if (cellN && (isRound || isDiag) && s.occMap) {
+            // round and diagonal fills: the cells come from the same code that builds (core::round_keep, diag_keep),
             // as bits (with the existing blocks when only those count); the shader draws them as solid
             int n[3];
             for (int a = 0; a < 3; a++) { int k = (int)(push.size[a] / g_cellStep[a] + 0.5f); n[a] = k < 1 ? 1 : k; }
@@ -640,14 +641,18 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
                 key = boxFill; kn[0] = n[0]; kn[1] = n[1]; kn[2] = n[2];
                 const int shape = (boxFill >> 5) & 3, side = (boxFill >> 7) & 3, axis = (boxFill >> 12) & 3, t = ((boxFill >> 10) & 3) + 1;
                 const bool hollow = (boxFill & 512) != 0;
+                const int flip = (boxFill >> 5) & 1;
                 int ua, va; core::round_axes(axis, &ua, &va);
+                if (isDiag) { ua = (boxFill >> 6) & 3; va = (boxFill >> 8) & 3; }
+                const int wa = 3 - ua - va;
                 memset(bits, 0, sizeof(bits));
                 int c[3];
                 for (c[0] = 0; c[0] < n[0]; c[0]++)
                     for (c[2] = 0; c[2] < n[2]; c[2]++) {
-                        if (axis != 1 && c[3 - ua - va] > 0) continue;            // the plane once, copied along the axis below
-                        for (c[1] = 0; c[1] < (axis == 1 ? 1 : n[1]); c[1]++) {
-                            if (!core::round_keep(shape, side, hollow, t, c[ua], c[va], n[ua], n[va])) continue;
+                        if (wa != 1 && c[wa] > 0) continue;            // the plane once, copied along the axis below
+                        for (c[1] = 0; c[1] < (wa == 1 ? 1 : n[1]); c[1]++) {
+                            if (isDiag ? !core::diag_keep(flip, t, c[ua], c[va], n[ua], n[va])
+                                       : !core::round_keep(shape, side, hollow, t, c[ua], c[va], n[ua], n[va])) continue;
                             int w = 3 - ua - va;
                             int d[3] = { c[0], c[1], c[2] };
                             for (d[w] = 0; d[w] < n[w]; d[w]++) {
