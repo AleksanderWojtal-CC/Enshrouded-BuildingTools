@@ -100,7 +100,9 @@ Area mode (2 corners)
   (ridge along the long or short side; a shed rises toward any of the four
   sides). Roof overhang 0-3 shapes carries the slope past the area's edge.
   Thickness 1-3 shapes for hollow rooms, walls and roofs. All of these are
-  also in the menu's Options tab. The 3D preview shows the roof first.
+  also in the menu's Options tab and on the tools wheel; thickness and
+  overhang can get their own keys in the Keys tab. The 3D preview shows the
+  roof first. Gable ends are left open.
   The fill applies to build, replace and remove.
   3-corner mode is still there: in BuildingTools.ini set [Area] Corners=3
   (two base corners, then a third click for the height).

@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.25.0-dev2"
+#define MOD_VERSION "0.25.0-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -133,6 +133,7 @@ struct Config {
     int keyFillSolid = 0, keyFillHollow = 0, keyFillWalls = 0, keyFillRoof = 0;
     int keyRoofTurn  = 'R';            // turn the roof (only in Area mode with the roof fill)
     int keyRoofShape = 'R' + 0x1000;   // Shift+R: next roof shape (same)
+    int keyThick = 0, keyOverhang = 0; // cycle the thickness (rooms, walls, roofs) / the roof overhang
     int keyCreative  = 0;      // creative building on / off
     int keyReplaceHold = 0;    // Replace on while this key is held
     int keyPrefab = 0, keyAreaOn = 0, keyReplaceOn = 0, keyReplaceOff = 0;   // set a mode / Replace directly
@@ -172,6 +173,8 @@ static void write_full_ini(const Config& c) {
      .t("; Area fill: solid / hollow room / walls only / roof\r\nCycleAreaFill=").i(c.keyFill).t("\r\n")
      .t("; Roof fill (only in Area mode with the roof fill): turn the roof (82 = R), next roof shape (4178 = Shift+R)\r\nTurnRoof=").i(c.keyRoofTurn)
      .t("\r\nNextRoofShape=").i(c.keyRoofShape).t("\r\n")
+     .t("; Thickness 1 -> 2 -> 3 (rooms, walls, roofs), roof overhang none -> 1 -> 2 -> 3 (0 = no key)\r\nCycleThickness=").i(c.keyThick)
+     .t("\r\nCycleOverhang=").i(c.keyOverhang).t("\r\n")
      .t("; Whole mod off / on (off = vanilla game; all other mod keys do nothing)\r\nToggleMod=").i(c.keyOff).t("\r\n")
      .t("; Free placement on/off\r\nToggleFreePlacement=").i(c.keyHover).t("\r\n")
      .t("; Free placement distance: hold this key + mouse wheel (81 = Q), or the two keys below\r\nFreePlacementWheelKey=").i(c.wheelKey).t("\r\n")
@@ -273,6 +276,8 @@ static void load_config() {
     g_cfg.keyFillRoof   = ini_int(L"Keys", L"FillRoof", 0);
     g_cfg.keyRoofTurn   = ini_int(L"Keys", L"TurnRoof", 'R');
     g_cfg.keyRoofShape  = ini_int(L"Keys", L"NextRoofShape", 'R' + 0x1000);
+    g_cfg.keyThick      = ini_int(L"Keys", L"CycleThickness", 0);
+    g_cfg.keyOverhang   = ini_int(L"Keys", L"CycleOverhang", 0);
     g_cfg.keyCreative   = ini_int(L"Keys", L"ToggleCreative", 0);
     g_cfg.keyPrefab     = ini_int(L"Keys", L"PrefabMode", 0);
     g_cfg.keyAreaOn     = ini_int(L"Keys", L"AreaMode", 0);
@@ -3617,7 +3622,8 @@ static int* const g_allKeys[] = { &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg
                                   &g_cfg.keyRadial, &g_cfg.keyStyleFull, &g_cfg.keyStyleOverlap, &g_cfg.keyStyleConnected,
                                   &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
                                   &g_cfg.keyReplaceHold, &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
-                                  &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape };
+                                  &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape,
+                                  &g_cfg.keyThick, &g_cfg.keyOverhang };
 // Down with exactly its modifiers. A key without modifiers ignores held modifiers (Shift
 // while sprinting), unless another setting uses the same key with the held ones.
 static bool key_down(int code) {
@@ -3765,7 +3771,7 @@ static void hover_step(float d) {
 // ---- tools wheel (radial menu): hold its key, move the mouse towards an option, click
 // it or let go of the key. While it is open the mouse hook below takes the mouse: the
 // moves turn the wheel's pointer instead of the camera, clicks pick instead of building.
-static const int kWheelSlots = 8;               // at most; only the options that apply are shown
+static const int kWheelSlots = 10;              // at most; only the options that apply are shown
 static volatile LONG g_radialOpen = 0;
 static volatile LONG g_wheelN = 0;               // slots shown now
 static int g_wheelAct[kWheelSlots];              // their actions (input thread)
@@ -3779,8 +3785,8 @@ static bool g_radialReady = false;              // the wheel's UI functions were
 // screen: y points down). Directions by turning (0, -1) step by step.
 static float g_slotCos[kWheelSlots], g_slotSin[kWheelSlots];
 static void wheel_layout(int n) {
-    static const float stepCos[9] = { 1.f, 1.00000000f, -1.00000000f, -0.50000000f, 0.00000000f, 0.30901699f, 0.50000000f, 0.62348980f, 0.70710678f };
-    static const float stepSin[9] = { 0.f, -0.00000000f, 0.00000000f, 0.86602540f, 1.00000000f, 0.95105652f, 0.86602540f, 0.78183148f, 0.70710678f };
+    static const float stepCos[11] = { 1.f, 1.00000000f, -1.00000000f, -0.50000000f, 0.00000000f, 0.30901699f, 0.50000000f, 0.62348980f, 0.70710678f, 0.76604444f, 0.80901699f };
+    static const float stepSin[11] = { 0.f, -0.00000000f, 0.00000000f, 0.86602540f, 1.00000000f, 0.95105652f, 0.86602540f, 0.78183148f, 0.70710678f, 0.64278761f, 0.58778525f };
     float c = 0.f, si = -1.f;
     for (int k = 0; k < n && k < kWheelSlots; k++) {
         g_slotCos[k] = c; g_slotSin[k] = si;
@@ -3884,6 +3890,7 @@ enum {
     ACT_AREA, ACT_REPLACE, ACT_CLEAR, ACT_STYLE, ACT_FREE, ACT_FARTHER, ACT_CLOSER, ACT_FILL,
     ACT_STYLE_FULL, ACT_STYLE_OVERLAP, ACT_STYLE_CONNECTED, ACT_FILL_SOLID, ACT_FILL_HOLLOW, ACT_FILL_WALLS,
     ACT_CREATIVE, ACT_PREFAB, ACT_AREA_ON, ACT_REPLACE_ON, ACT_REPLACE_OFF, ACT_FILL_ROOF, ACT_ROOF_TURN, ACT_ROOF_SHAPE,
+    ACT_THICK, ACT_OVERHANG,
     ACT_KEYED,          // the actions above have their own key
     ACT_MENU = ACT_KEYED,             // the wheel's menu entry (the menu key is handled with the menu)
 };
@@ -3893,7 +3900,7 @@ static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyStyleFull, &g_cfg.keyStyleOverlap, &g_cfg.keyStyleConnected,
     &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
     &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
-    &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape,
+    &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape, &g_cfg.keyThick, &g_cfg.keyOverhang,
 };
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
 static volatile LONG g_menuOpen = 0;
@@ -3949,6 +3956,16 @@ static void do_act(int a) {
     case ACT_ROOF_SHAPE: {
         set_roof_shape(g_roofShape + 1);
         Buf b; b.fmt(T(S_ROOF_SHAPE), T(kRoofName[g_roofShape])); flash(b.z());
+        break;
+    }
+    case ACT_THICK: {
+        set_thick(g_thick % 3 + 1);
+        Buf b; b.fmt(T(S_THICK_SET), num(g_thick).s); flash(b.z());
+        break;
+    }
+    case ACT_OVERHANG: {
+        set_overhang((g_overhang + 1) % 4);
+        Buf b; b.fmt(T(S_OVERHANG_SET), g_overhang ? num(g_overhang).s : T(S_OPT_NONE)); flash(b.z());
         break;
     }
     case ACT_ROOF_TURN: {
@@ -4130,7 +4147,22 @@ static bool ui_button(const char* text, bool enabled = true) {
 }
 
 // Options page: the hotkey settings as rows of the game's options. Changes apply at once.
+static void draw_tool_rows();
+static bool ui_scroll_begin(uint8_t* st, size_t stSize, float* offset, float width);
 static void draw_tool_settings() {
+    alignas(16) static uint8_t st[0x500];
+    alignas(16) uint8_t list[0x40] = {};
+    static float offset[4];
+    uint16_t topLeft = 0x101;
+    bool scroll = ui_scroll_begin(st, sizeof st, offset, 1000);
+    ui.beginBox(list, 0);
+    ui.setLayout(ui_node(list), &topLeft);
+    ui.setStretch(ui_node(list), UiVec2{ 1, 0 });
+    draw_tool_rows();
+    ui.endBox(list);
+    if (scroll) ui.endScroll(st);
+}
+static void draw_tool_rows() {
     const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
     const char* const modes[] = { T(S_OPT_MODE_PREFAB), T(S_OPT_MODE_AREA) };
     const char* const styles[] = { T(S_OPT_STYLE_FULL), T(S_OPT_STYLE_OVERLAP), T(S_OPT_STYLE_CONNECTED) };
@@ -4183,6 +4215,8 @@ static KeyAction g_keyActions[] = {
     { S_ACT_FILL, &g_cfg.keyFill, 0 },
     { S_ACT_ROOF_SHAPE, &g_cfg.keyRoofShape, 0 },
     { S_ACT_ROOF_TURN, &g_cfg.keyRoofTurn, 0 },
+    { S_ACT_THICK, &g_cfg.keyThick, 0 },
+    { S_ACT_OVERHANG, &g_cfg.keyOverhang, 0 },
     { S_ACT_CLEAR, &g_cfg.keyCancel, 0 },
     { S_ACT_FREE, &g_cfg.keyHover, 0 },
     { S_ACT_FARTHER, &g_cfg.keyFarther, 0 },
@@ -4252,39 +4286,47 @@ static void draw_key_rows(int page, int columns) {
 // Keys page: the tool keys, then a "Quick keys" section, in a list that scrolls like the
 // game's settings (mouse wheel or the scroll bar). Without the scroll functions the two
 // sections are drawn in two columns each.
+// A list that scrolls like the game's settings (mouse wheel or the scroll bar); `st` and
+// `offset` are kept between frames, one pair per list. False: the scroll functions were not
+// found, nothing was begun.
+static bool ui_scroll_begin(uint8_t* st, size_t stSize, float* offset, float width) {
+    if (!(ui.scrollParams && ui.beginScroll && ui.endScroll)) return false;
+    alignas(16) uint8_t prm[0x110] = {};
+    uint16_t topLeft = 0x101;
+    uint8_t* bundle = *(uint8_t**)(*g_uiCtxGlobal + 0xc8);
+    memset(st, 0, stSize);
+    ui.scrollParams(prm);                               // as the settings menu sets them
+    prm[0x2b] = 1;                                      // enableScrollbar
+    prm[0x2f] = 1;                                      // centerChildren
+    prm[0x32] = 1;                                      // useGlobalFocus
+    prm[0x40] |= 0x18;                                  // scrolling hotkeys
+    *(float*)(prm + 0x3c) = 0;                          // spacing
+    float* pad = (float*)(prm + 0x18);
+    pad[0] = 0; pad[1] = 10; pad[2] = 0; pad[3] = 0;
+    uint8_t* bar = prm + 0x44;                          // GameUiScrollbarParameterData
+    memcpy(bar + 0x04, bundle + 0xfb04, 8);             // range colour
+    memcpy(bar + 0x24, bundle + 0xfac4, 0x20);          // range texture
+    memcpy(bar + 0x44, bundle + 0xfa84, 0x20);          // slider texture
+    bar[0x7c] = 1;                                      // textured slider
+    float* w = (float*)(bar + 0x80);
+    w[0] = 24; w[1] = 24; w[2] = 24; w[3] = 20;
+    bar[0x90] = 1;
+    ui.beginScroll(st, 1, offset, nullptr, prm);
+    void* n = *(void**)(st + 8);
+    if (ui.scrollSpeed) { float sp = ui.scrollSpeed(st); if (!st[0x468]) st[0x468] = 1; *(float*)(st + 0x464) = sp; }
+    ui.setWidth(n, width);
+    ui.setStretch(n, UiVec2{ 0, 1 });                   // the rest of the menu's height
+    ui.setSelfAlign(n, &topLeft);
+    return true;
+}
+
 static void draw_keys() {
     ui_text(T(g_bindWaiting >= 0 ? S_MENU_KEYS_WAITING : S_MENU_KEYS_HELP), STYLE_BODY);
-    bool scroll = ui.scrollParams && ui.beginScroll && ui.endScroll;
     alignas(16) static uint8_t st[0x500];
-    alignas(16) uint8_t prm[0x110] = {}, list[0x40] = {};
+    alignas(16) uint8_t list[0x40] = {};
     static float offset[4];                                 // the scroll position, kept between frames
     uint16_t topLeft = 0x101;
-    if (scroll) {
-        uint8_t* bundle = *(uint8_t**)(*g_uiCtxGlobal + 0xc8);
-        memset(st, 0, sizeof st);
-        ui.scrollParams(prm);                               // as the settings menu sets them
-        prm[0x2b] = 1;                                      // enableScrollbar
-        prm[0x2f] = 1;                                      // centerChildren
-        prm[0x32] = 1;                                      // useGlobalFocus
-        prm[0x40] |= 0x18;                                  // scrolling hotkeys
-        *(float*)(prm + 0x3c) = 0;                          // spacing
-        float* pad = (float*)(prm + 0x18);
-        pad[0] = 0; pad[1] = 10; pad[2] = 0; pad[3] = 0;
-        uint8_t* bar = prm + 0x44;                          // GameUiScrollbarParameterData
-        memcpy(bar + 0x04, bundle + 0xfb04, 8);             // range colour
-        memcpy(bar + 0x24, bundle + 0xfac4, 0x20);          // range texture
-        memcpy(bar + 0x44, bundle + 0xfa84, 0x20);          // slider texture
-        bar[0x7c] = 1;                                      // textured slider
-        float* w = (float*)(bar + 0x80);
-        w[0] = 24; w[1] = 24; w[2] = 24; w[3] = 20;
-        bar[0x90] = 1;
-        ui.beginScroll(st, 1, offset, nullptr, prm);
-        void* n = *(void**)(st + 8);
-        if (ui.scrollSpeed) { float sp = ui.scrollSpeed(st); if (!st[0x468]) st[0x468] = 1; *(float*)(st + 0x464) = sp; }
-        ui.setWidth(n, 960);
-        ui.setStretch(n, UiVec2{ 0, 1 });                   // the rest of the menu's height
-        ui.setSelfAlign(n, &topLeft);
-    }
+    bool scroll = ui_scroll_begin(st, sizeof st, offset, 960);
     ui.beginBox(list, 0);
     UiVec2 gap{ 0, 22 };
     ui.setSpacing(ui_node(list), &gap, 0);
@@ -4658,7 +4700,7 @@ static uint32_t ui_image(uint8_t* bundle, uint32_t off) {
 }
 static void wheel_text_window(int id, float dx, float dy, const char* a, const char* b) {
     static const char* const names[kWheelSlots + 2] = { "btWheel0", "btWheel1", "btWheel2", "btWheel3", "btWheel4",
-                                                         "btWheel5", "btWheel6", "btWheel7", "btWheelC", "btWheelH" };
+                                                         "btWheel5", "btWheel6", "btWheel7", "btWheel8", "btWheel9", "btWheelC", "btWheelH" };
     alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, box[0x40] = {};
     UiStringView name{ names[id], 8 };
     g_beginWindow(win, &name, 1, 8, 0, 0);                 // fullscreen, above the HUD, takes no input
@@ -4852,6 +4894,8 @@ static int wheel_entries(int* act) {
     act[n++] = ACT_AREA;
     if (g_mode == MODE_AREA) act[n++] = ACT_FILL;
     if (roof_on()) act[n++] = ACT_ROOF_SHAPE;
+    if (roof_on()) act[n++] = ACT_OVERHANG;
+    if (g_mode == MODE_AREA && g_fill != core::FILL_SOLID) act[n++] = ACT_THICK;
     if (g_mode == MODE_AREA && g_corners > 0) act[n++] = ACT_CLEAR;
     act[n++] = ACT_FREE;
     act[n++] = ACT_MENU;
@@ -4861,12 +4905,15 @@ static int wheel_entries(int* act) {
 }
 static void wheel_texts(int a, char* name, char* value) {
     const char* nm = ""; const char* v = "";
+    Num numText;
     static const Str styles[] = { S_OPT_STYLE_FULL, S_OPT_STYLE_OVERLAP, S_OPT_STYLE_CONNECTED };
     static const Str fills[] = { S_OPT_FILL_SOLID, S_OPT_FILL_HOLLOW, S_OPT_FILL_WALLS, S_OPT_FILL_ROOF };
     switch (a) {
     case ACT_AREA: nm = T(S_OPT_MODE); v = T(g_mode == MODE_AREA ? S_OPT_MODE_AREA : S_OPT_MODE_PREFAB); break;
     case ACT_FILL: nm = T(S_OPT_FILL); v = T(fills[g_fill % core::FILL_COUNT]); break;
     case ACT_ROOF_SHAPE: nm = T(S_OPT_ROOF_SHAPE); v = T(kRoofName[g_roofShape % core::ROOF_COUNT]); break;
+    case ACT_OVERHANG: nm = T(S_OPT_OVERHANG); numText = num(g_overhang); v = g_overhang ? numText.s : T(S_OPT_NONE); break;
+    case ACT_THICK: nm = T(S_HUD_THICK); numText = num(g_thick); v = numText.s; break;
     case ACT_CLEAR: nm = T(S_HUD_CLEAR); break;
     case ACT_FREE: nm = T(S_OPT_FREE); v = T(g_hover ? S_OPT_ON : S_OPT_OFF); break;
     case ACT_MENU: nm = T(S_HUD_MENU); break;
