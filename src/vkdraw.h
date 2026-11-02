@@ -626,9 +626,45 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
             push.cells[a] = g_cellStep[a];
         }
         LONG op = g_scOp == OP_REMOVE ? 2 : g_replace ? 1 : 0;
-        push.cells[3] = (float)((g_fill == core::FILL_ROUND ? 3 : g_fill & 3) + 4 * op + g_boxFill);
+        const LONG boxFill = g_boxFill;
+        push.cells[3] = (float)((g_fill == core::FILL_ROUND ? 3 : g_fill & 3) + 4 * op + boxFill);
         if (nn <= 40000) cellN = (uint32_t)nn;
         bool onlyFull = op == 2 || (op == 1 && g_replaceStyle != STYLE_FULL);
+        if (cellN && g_fill == core::FILL_ROUND && (boxFill & (1 << 20)) && s.occMap) {
+            // round fills: the cells come from the same code that builds (core::round_keep),
+            // as bits (with the existing blocks when only those count); the shader draws them as solid
+            int n[3];
+            for (int a = 0; a < 3; a++) { int k = (int)(push.size[a] / g_cellStep[a] + 0.5f); n[a] = k < 1 ? 1 : k; }
+            static uint32_t bits[kOccWords]; static LONG key = -1; static int kn[3];
+            if (key != boxFill || kn[0] != n[0] || kn[1] != n[1] || kn[2] != n[2]) {
+                key = boxFill; kn[0] = n[0]; kn[1] = n[1]; kn[2] = n[2];
+                const int shape = (boxFill >> 5) & 3, side = (boxFill >> 7) & 3, axis = (boxFill >> 12) & 3, t = ((boxFill >> 10) & 3) + 1;
+                const bool hollow = (boxFill & 512) != 0;
+                int ua, va; core::round_axes(axis, &ua, &va);
+                memset(bits, 0, sizeof(bits));
+                int c[3];
+                for (c[0] = 0; c[0] < n[0]; c[0]++)
+                    for (c[2] = 0; c[2] < n[2]; c[2]++) {
+                        if (axis != 1 && c[3 - ua - va] > 0) continue;            // the plane once, copied along the axis below
+                        for (c[1] = 0; c[1] < (axis == 1 ? 1 : n[1]); c[1]++) {
+                            if (!core::round_keep(shape, side, hollow, t, c[ua], c[va], n[ua], n[va])) continue;
+                            int w = 3 - ua - va;
+                            int d[3] = { c[0], c[1], c[2] };
+                            for (d[w] = 0; d[w] < n[w]; d[w]++) {
+                                int id = d[0] + n[0] * (d[1] + n[1] * d[2]);
+                                bits[id >> 5] |= 1u << (id & 31);
+                            }
+                        }
+                    }
+            }
+            if (onlyFull && !g_occReady) cellN = 0;   // existing blocks not read yet
+            else {
+                for (uint32_t k = 0; k < kOccWords; k++) s.occMap[k] = onlyFull ? bits[k] & g_occBits[k] : bits[k];
+                push.cells[3] = (float)(4 * op + 16);   // solid fill, bits decide
+                g_vd.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, s.layout, 1, 1, &s.occSet, 0, nullptr);
+            }
+            onlyFull = false;
+        }
         if (cellN && onlyFull) {
             if (s.occMap && g_occReady) {
                 memcpy(s.occMap, (const void*)g_occBits, sizeof(g_occBits));

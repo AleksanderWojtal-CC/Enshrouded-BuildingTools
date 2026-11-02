@@ -221,11 +221,12 @@ inline bool round_keep(int shape, int side, bool hollow, int t, int u, int v, in
 // the plane of a round fill's plan: the ground plan (along y), unless the area is a
 // standing wall (one cell thin across x or z and more than one high): then the shape
 // stands in that wall
-inline void round_plane(const Plan& p, int* ua, int* va) {
-    if (p.roundAxis == 0) { *ua = 2; *va = 1; }
-    else if (p.roundAxis == 2) { *ua = 0; *va = 1; }
+inline void round_axes(int axis, int* ua, int* va) {
+    if (axis == 0) { *ua = 2; *va = 1; }
+    else if (axis == 2) { *ua = 0; *va = 1; }
     else { *ua = 0; *va = 2; }
 }
+inline void round_plane(const Plan& p, int* ua, int* va) { round_axes(p.roundAxis, ua, va); }
 
 inline int64_t floor_div(int64_t a, int64_t b) { return a >= 0 ? a / b : -((-a + b - 1) / b); }   // b > 0
 
