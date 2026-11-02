@@ -331,8 +331,8 @@ int main(int argc, char** argv) {
         const float step1[3] = { 1.f, 1.f, 1.f };
         const int O = core::FILL_ROUND;
         core::Plan pl;
-        auto ro = [](int shape, int rot, int hollow, int thick = 1) {
-            core::FillOpts f = {}; f.thick = thick; f.roundShape = shape; f.roundRot = rot; f.roundHollow = hollow; return f;
+        auto ro = [](int shape, int rot, int hollow, int thick = 1, int lying = 0) {
+            core::FillOpts f = {}; f.thick = thick; f.roundShape = shape; f.roundRot = rot; f.roundHollow = hollow; f.roundLying = lying; return f;
         };
         auto keepCount = [&](const core::Plan& p) {
             long n = 0;
@@ -399,21 +399,35 @@ int main(int argc, char** argv) {
         core::I3 wd[2] = {{8 * M, 4 * M, 0}, {0, 0, 0}};
         CHECK(core::plan_area(wd, 2, step1, 5000, O, ro(core::ROUND_HALF, 0, 1), &pl) && core::fill_keep(pl, 4, 0, 0, O) &&
               !core::fill_keep(pl, 4, 4, 0, O), "arch from the top corner: still standing on the ground");
+        // lying: a tube along the longer side, the round standing across it (half: a tunnel, flat side down)
+        core::I3 tube[2] = {{0, 0, 0}, {9 * M, 4 * M, 8 * M}};
+        CHECK(core::plan_area(tube, 2, step1, 5000, O, ro(core::ROUND_HALF, 0, 1, 1, 1), &pl) && pl.roundAxis == 0, "lying: along x");
+        bool same = true;
+        for (int i = 0; i < 10; i++) for (int j = 0; j < 5; j++) for (int k = 0; k < 9; k++)
+            if (core::fill_keep(pl, i, j, k, O) != core::fill_keep(pl, 0, j, k, O)) same = false;
+        CHECK(same && core::fill_keep(pl, 3, 0, 0, O) && core::fill_keep(pl, 3, 4, 4, O) && !core::fill_keep(pl, 3, 0, 4, O),
+              "tunnel: the same cross-section all along, feet and top in, opening below");
+        core::I3 flatTube[2] = {{0, 0, 0}, {4 * M, 0, 9 * M}};
+        CHECK(core::plan_area(flatTube, 2, step1, 5000, O, ro(core::ROUND_FULL, 0, 0, 1, 1), &pl) && pl.roundAxis == 2, "lying: along z when z is longer");
         // every pose fits the state (as the roof fill with poses 10..15) and comes back
         bool ok = true;
         for (int sh = 0; sh < core::ROUND_COUNT; sh++)
             for (int rt = 0; rt < core::round_turns(sh); rt++)
-                for (int hl = 0; hl < 2; hl++) {
-                    core::FillOpts f = ro(sh, rt, hl), back = {};
-                    uint32_t bits = core::net_fill_bits(O, f);
-                    if (core::net_fill_unpack(bits, &back) != O || back.roundShape != sh || back.roundRot != rt || back.roundHollow != hl) ok = false;
-                    if (bits & ~((3u << core::NET_FILL_SHIFT) | (15u << core::NET_ROOF_SHIFT) | (3u << core::NET_OVERHANG_SHIFT))) ok = false;
-                }
+                for (int hl = 0; hl < 2; hl++)
+                    for (int ly = 0; ly < 2; ly++)
+                        for (int t = 1; t <= 3; t++) {
+                            core::FillOpts f = ro(sh, rt, hl, t, ly), back = {};
+                            uint32_t bits = core::net_fill_bits(O, f);
+                            if (core::net_fill_unpack(bits, &back) != O || back.roundShape != sh || back.roundRot != rt ||
+                                back.roundHollow != hl || back.roundLying != ly || (hl && back.thick != t)) ok = false;
+                            if (bits & ~((3u << core::NET_FILL_SHIFT) | (15u << core::NET_ROOF_SHIFT) | (3u << core::NET_OVERHANG_SHIFT) |
+                                         (3u << core::NET_THICK_SHIFT))) ok = false;
+                        }
         for (int sh = 0; sh < core::ROOF_COUNT; sh++)
             for (int rt = 0; rt < core::roof_turns(sh); rt++) {
-                core::FillOpts f = {}, back = {}; f.roofShape = sh; f.roofRot = rt; f.overhang = 3;
+                core::FillOpts f = {}, back = {}; f.roofShape = sh; f.roofRot = rt; f.overhang = 3; f.thick = 2;
                 if (core::net_fill_unpack(core::net_fill_bits(core::FILL_ROOF, f), &back) != core::FILL_ROOF || back.roofShape != sh ||
-                    back.roofRot != rt || back.overhang != 3) ok = false;
+                    back.roofRot != rt || back.overhang != 3 || back.thick != 2) ok = false;
             }
         CHECK(ok, "round and roof settings round trip through the state");
     }

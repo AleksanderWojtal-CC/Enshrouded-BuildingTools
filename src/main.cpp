@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.26.0-dev2"
+#define MOD_VERSION "0.26.0-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -135,6 +135,7 @@ struct Config {
     int keyRoofShape = 'R' + 0x1000;   // Shift+R: next roof shape (same)
     int keyThick = 0, keyOverhang = 0; // cycle the thickness (rooms, walls, roofs) / the roof overhang
     int keyFillRound = 0, keyRoundHollow = 0;   // round fill quick key / round fill solid <-> hollow
+    int keyRoundLying = 0;                       // round fill standing <-> lying
     int keyCreative  = 0;      // creative building on / off
     int keyReplaceHold = 0;    // Replace on while this key is held
     int keyPrefab = 0, keyAreaOn = 0, keyReplaceOn = 0, keyReplaceOff = 0;   // set a mode / Replace directly
@@ -174,7 +175,8 @@ static void write_full_ini(const Config& c) {
      .t("; Area fill: solid / hollow room / walls only / roof / round\r\nCycleAreaFill=").i(c.keyFill).t("\r\n")
      .t("; Roof and round fills (only in Area mode with that fill): turn the shape (82 = R), next shape (4178 = Shift+R)\r\nTurnRoof=").i(c.keyRoofTurn)
      .t("\r\nNextRoofShape=").i(c.keyRoofShape).t("\r\n")
-     .t("; Round fill: solid <-> hollow (0 = no key)\r\nRoundHollow=").i(c.keyRoundHollow).t("\r\n")
+     .t("; Round fill: solid <-> hollow, standing <-> lying (0 = no key)\r\nRoundHollow=").i(c.keyRoundHollow)
+     .t("\r\nRoundLying=").i(c.keyRoundLying).t("\r\n")
      .t("; Thickness 1 -> 2 -> 3 (rooms, walls, roofs), roof overhang none -> 1 -> 2 -> 3 (0 = no key)\r\nCycleThickness=").i(c.keyThick)
      .t("\r\nCycleOverhang=").i(c.keyOverhang).t("\r\n")
      .t("; Whole mod off / on (off = vanilla game; all other mod keys do nothing)\r\nToggleMod=").i(c.keyOff).t("\r\n")
@@ -282,6 +284,7 @@ static void load_config() {
     g_cfg.keyOverhang   = ini_int(L"Keys", L"CycleOverhang", 0);
     g_cfg.keyFillRound  = ini_int(L"Keys", L"FillRound", 0);
     g_cfg.keyRoundHollow = ini_int(L"Keys", L"RoundHollow", 0);
+    g_cfg.keyRoundLying = ini_int(L"Keys", L"RoundLying", 0);
     g_cfg.keyCreative   = ini_int(L"Keys", L"ToggleCreative", 0);
     g_cfg.keyPrefab     = ini_int(L"Keys", L"PrefabMode", 0);
     g_cfg.keyAreaOn     = ini_int(L"Keys", L"AreaMode", 0);
@@ -851,11 +854,12 @@ static volatile LONG g_overhang = 0;          // roof: 0..3 shapes past the area
 static volatile LONG g_roundShape = 0;        // core::ROUND_*
 static volatile LONG g_roundRot = 0;          // 0..round_turns-1
 static volatile LONG g_roundHollow = 0;       // 1 = a round wall, 0 = solid
+static volatile LONG g_roundLying = 0;        // 1 = lying (a tube along the area), 0 = standing
 static const Str kRoofName[core::ROOF_COUNT] = { S_OPT_ROOF_GABLE, S_OPT_ROOF_HIP, S_OPT_ROOF_GAMBREL, S_OPT_ROOF_MANSARD, S_OPT_ROOF_SHED };
 static const Str kRoundName[core::ROUND_COUNT] = { S_OPT_ROUND_FULL, S_OPT_ROUND_HALF, S_OPT_ROUND_QUARTER };
 static core::FillOpts fill_opts() {
     return core::FillOpts{ (int)g_roofShape, (int)g_roofRot, (int)g_thick, (int)g_overhang,
-                           (int)g_roundShape, (int)g_roundRot, (int)g_roundHollow };
+                           (int)g_roundShape, (int)g_roundRot, (int)g_roundHollow, (int)g_roundLying };
 }
 static float g_hoverDist = 4.f;
 static float g_lastRot[4] = { 0.f, 0.f, 0.f, 1.f };
@@ -2627,7 +2631,7 @@ static void net_log_state(const char* what, uint8_t* input, uint32_t s) {
         .str(" (").str(styles[core::net_field(s, core::NET_STYLE_SHIFT, 2)]).str("), fill ").str(fills[fill])
         .str(", roof pose ").i((int)core::net_field(s, core::NET_ROOF_SHIFT, 4)).str(" thick ").i(1 + (int)core::net_field(s, core::NET_THICK_SHIFT, 2))
         .str(" overhang ").i((int)core::net_field(s, core::NET_OVERHANG_SHIFT, 2))
-        .str(" round ").i(fo.roundShape).c('/').i(fo.roundRot).c('/').i(fo.roundHollow)
+        .str(" round ").i(fo.roundShape).c('/').i(fo.roundRot).c('/').i(fo.roundHollow).c('/').i(fo.roundLying)
         .str(", corners ").i(s & core::NET_CORNERS3 ? 3 : 2));
 }
 // every frame, for every player holding the hammer: log when a player's settings change
@@ -2673,8 +2677,8 @@ struct NetScope {
         LONG f = (LONG)core::net_fill_unpack(s, &fo);
         g_fill = f < core::FILL_COUNT ? f : core::FILL_SOLID;
         g_roofShape = fo.roofShape; g_roofRot = fo.roofRot; g_overhang = fo.overhang;
-        g_roundShape = fo.roundShape; g_roundRot = fo.roundRot; g_roundHollow = fo.roundHollow;
-        g_thick = 1 + (LONG)core::net_field(s, core::NET_THICK_SHIFT, 2);
+        g_roundShape = fo.roundShape; g_roundRot = fo.roundRot; g_roundHollow = fo.roundHollow; g_roundLying = fo.roundLying;
+        g_thick = fo.thick;
         g_cfg.corners = s & core::NET_CORNERS3 ? 3 : 2;
         g_sc = p->sc; g_corners = p->sc; g_scOp = p->scOp;
         memcpy(g_scPos, p->scPos, sizeof(g_scPos));
@@ -3090,7 +3094,6 @@ static uint32_t net_client_state() {
     if (g_replace) s |= core::NET_REPLACE;
     s |= ((uint32_t)g_replaceStyle & 3) << core::NET_STYLE_SHIFT;
     s |= core::net_fill_bits(g_fill, fill_opts());
-    s |= ((uint32_t)(g_thick - 1) & 3) << core::NET_THICK_SHIFT;
     if (g_cfg.corners == 3) s |= core::NET_CORNERS3;
     s |= ((uint32_t)g_sc & 3) << core::NET_COUNT_SHIFT;
     if (g_scOp == OP_REMOVE) s |= core::NET_OP_REMOVE;
@@ -3638,7 +3641,7 @@ static int* const g_allKeys[] = { &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg
                                   &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
                                   &g_cfg.keyReplaceHold, &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
                                   &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape,
-                                  &g_cfg.keyThick, &g_cfg.keyOverhang, &g_cfg.keyFillRound, &g_cfg.keyRoundHollow };
+                                  &g_cfg.keyThick, &g_cfg.keyOverhang, &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying };
 // Down with exactly its modifiers. A key without modifiers ignores held modifiers (Shift
 // while sprinting), unless another setting uses the same key with the held ones.
 static bool key_down(int code) {
@@ -3788,7 +3791,7 @@ static void hover_step(float d) {
 // ---- tools wheel (radial menu): hold its key, move the mouse towards an option, click
 // it or let go of the key. While it is open the mouse hook below takes the mouse: the
 // moves turn the wheel's pointer instead of the camera, clicks pick instead of building.
-static const int kWheelSlots = 10;              // at most; only the options that apply are shown
+static const int kWheelSlots = 12;              // at most; only the options that apply are shown
 static volatile LONG g_radialOpen = 0;
 static volatile LONG g_wheelN = 0;               // slots shown now
 static int g_wheelAct[kWheelSlots];              // their actions (input thread)
@@ -3802,8 +3805,8 @@ static bool g_radialReady = false;              // the wheel's UI functions were
 // screen: y points down). Directions by turning (0, -1) step by step.
 static float g_slotCos[kWheelSlots], g_slotSin[kWheelSlots];
 static void wheel_layout(int n) {
-    static const float stepCos[11] = { 1.f, 1.00000000f, -1.00000000f, -0.50000000f, 0.00000000f, 0.30901699f, 0.50000000f, 0.62348980f, 0.70710678f, 0.76604444f, 0.80901699f };
-    static const float stepSin[11] = { 0.f, -0.00000000f, 0.00000000f, 0.86602540f, 1.00000000f, 0.95105652f, 0.86602540f, 0.78183148f, 0.70710678f, 0.64278761f, 0.58778525f };
+    static const float stepCos[13] = { 1.f, 1.00000000f, -1.00000000f, -0.50000000f, 0.00000000f, 0.30901699f, 0.50000000f, 0.62348980f, 0.70710678f, 0.76604444f, 0.80901699f, 0.84125353f, 0.86602540f };
+    static const float stepSin[13] = { 0.f, -0.00000000f, 0.00000000f, 0.86602540f, 1.00000000f, 0.95105652f, 0.86602540f, 0.78183148f, 0.70710678f, 0.64278761f, 0.58778525f, 0.54064082f, 0.50000000f };
     float c = 0.f, si = -1.f;
     for (int k = 0; k < n && k < kWheelSlots; k++) {
         g_slotCos[k] = c; g_slotSin[k] = si;
@@ -3916,7 +3919,7 @@ enum {
     ACT_AREA, ACT_REPLACE, ACT_CLEAR, ACT_STYLE, ACT_FREE, ACT_FARTHER, ACT_CLOSER, ACT_FILL,
     ACT_STYLE_FULL, ACT_STYLE_OVERLAP, ACT_STYLE_CONNECTED, ACT_FILL_SOLID, ACT_FILL_HOLLOW, ACT_FILL_WALLS,
     ACT_CREATIVE, ACT_PREFAB, ACT_AREA_ON, ACT_REPLACE_ON, ACT_REPLACE_OFF, ACT_FILL_ROOF, ACT_ROOF_TURN, ACT_ROOF_SHAPE,
-    ACT_THICK, ACT_OVERHANG, ACT_FILL_ROUND, ACT_ROUND_HOLLOW,
+    ACT_THICK, ACT_OVERHANG, ACT_FILL_ROUND, ACT_ROUND_HOLLOW, ACT_ROUND_LYING,
     ACT_KEYED,          // the actions above have their own key
     ACT_MENU = ACT_KEYED,             // the wheel's menu entry (the menu key is handled with the menu)
 };
@@ -3927,7 +3930,7 @@ static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
     &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
     &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape, &g_cfg.keyThick, &g_cfg.keyOverhang,
-    &g_cfg.keyFillRound, &g_cfg.keyRoundHollow,
+    &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying,
 };
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
 static volatile LONG g_menuOpen = 0;
@@ -3947,6 +3950,7 @@ static void fill_set(LONG f) {
 static void set_round_shape(LONG r) { g_roundShape = r % core::ROUND_COUNT; g_roundRot = 0; LOG(.str("round shape -> ").i(g_roundShape)); }
 static void set_round_rot(LONG r) { g_roundRot = r % core::round_turns(g_roundShape); LOG(.str("round turn -> ").i(g_roundRot)); }
 static void set_round_hollow(LONG h) { g_roundHollow = h ? 1 : 0; LOG(.str("round hollow -> ").i(g_roundHollow)); }
+static void set_round_lying(LONG l) { g_roundLying = l ? 1 : 0; LOG(.str("round lying -> ").i(g_roundLying)); }
 static void set_roof_shape(LONG r) { g_roofShape = r % core::ROOF_COUNT; g_roofRot = 0; LOG(.str("roof shape -> ").i(g_roofShape)); }
 static void set_roof_rot(LONG r) { g_roofRot = r % core::roof_turns(g_roofShape); LOG(.str("roof turn -> ").i(g_roofRot)); }
 static void set_thick(LONG t) { g_thick = t < 1 ? 1 : t > 3 ? 3 : t; LOG(.str("thickness -> ").i(g_thick)); }
@@ -3990,6 +3994,11 @@ static void do_act(int a) {
     case ACT_ROUND_HOLLOW: {
         set_round_hollow(!g_roundHollow);
         flash(T(g_roundHollow ? S_ROUND_HOLLOW : S_ROUND_SOLID));
+        break;
+    }
+    case ACT_ROUND_LYING: {
+        set_round_lying(!g_roundLying);
+        flash(T(g_roundLying ? S_ROUND_LYING : S_ROUND_STANDING));
         break;
     }
     case ACT_ROOF_SHAPE: {
@@ -4221,6 +4230,7 @@ static void draw_tool_rows() {
     const char* const fills[] = { T(S_OPT_FILL_SOLID), T(S_OPT_FILL_HOLLOW), T(S_OPT_FILL_WALLS), T(S_OPT_FILL_ROOF), T(S_OPT_FILL_ROUND) };
     const char* const rounds[] = { T(S_OPT_ROUND_FULL), T(S_OPT_ROUND_HALF), T(S_OPT_ROUND_QUARTER) };
     const char* const insides[] = { T(S_OPT_FILL_SOLID), T(S_OPT_ROUND_HOLLOW) };
+    const char* const dirs[] = { T(S_OPT_ROUND_STANDING), T(S_OPT_ROUND_LYING) };
     const char* roofs[core::ROOF_COUNT];
     for (int r = 0; r < core::ROOF_COUNT; r++) roofs[r] = T(kRoofName[r]);
     static const char* const digits[] = { "1", "2", "3", "4" };
@@ -4240,6 +4250,7 @@ static void draw_tool_rows() {
         if (ui_option(T(S_OPT_ROUND_SHAPE), rounds, core::ROUND_COUNT, g_roundShape, &v)) set_round_shape(v);
         if (core::round_turns(g_roundShape) > 1 && ui_option(T(S_OPT_ROUND_TURN), digits, core::round_turns(g_roundShape), g_roundRot, &v)) set_round_rot(v);
         if (ui_option(T(S_OPT_ROUND_FILL), insides, 2, g_roundHollow ? 1 : 0, &v)) set_round_hollow(v);
+        if (ui_option(T(S_OPT_ROUND_DIR), dirs, 2, g_roundLying ? 1 : 0, &v)) set_round_lying(v);
     }
     if (g_fill != core::FILL_SOLID && !(g_fill == core::FILL_ROUND && !g_roundHollow) &&
         ui_option(T(S_OPT_THICK), digits, 3, g_thick - 1, &v)) set_thick(v + 1);
@@ -4277,6 +4288,7 @@ static KeyAction g_keyActions[] = {
     { S_ACT_THICK, &g_cfg.keyThick, 0 },
     { S_ACT_OVERHANG, &g_cfg.keyOverhang, 0 },
     { S_ACT_ROUND_HOLLOW, &g_cfg.keyRoundHollow, 0 },
+    { S_ACT_ROUND_LYING, &g_cfg.keyRoundLying, 0 },
     { S_ACT_CLEAR, &g_cfg.keyCancel, 0 },
     { S_ACT_FREE, &g_cfg.keyHover, 0 },
     { S_ACT_FARTHER, &g_cfg.keyFarther, 0 },
@@ -4668,6 +4680,7 @@ static void draw_hud_rows() {
             hud_key_row(g_cfg.keyRoofShape, r.z());
             if (round_turn_on() && g_cfg.keyRoofTurn > 0) hud_key_row(g_cfg.keyRoofTurn, T(S_HUD_ROUND_TURN));
             if (g_cfg.keyRoundHollow > 0) hud_key_row(g_cfg.keyRoundHollow, T(g_roundHollow ? S_HUD_ROUND_HOLLOW : S_HUD_ROUND_SOLID));
+            if (g_cfg.keyRoundLying > 0) hud_key_row(g_cfg.keyRoundLying, T(g_roundLying ? S_HUD_ROUND_LYING : S_HUD_ROUND_STANDING));
         }
         if (g_corners > 0) hud_key_row(g_cfg.keyCancel, T(S_HUD_CLEAR));
     }
@@ -4767,7 +4780,8 @@ static uint32_t ui_image(uint8_t* bundle, uint32_t off) {
 }
 static void wheel_text_window(int id, float dx, float dy, const char* a, const char* b) {
     static const char* const names[kWheelSlots + 2] = { "btWheel0", "btWheel1", "btWheel2", "btWheel3", "btWheel4",
-                                                         "btWheel5", "btWheel6", "btWheel7", "btWheel8", "btWheel9", "btWheelC", "btWheelH" };
+                                                         "btWheel5", "btWheel6", "btWheel7", "btWheel8", "btWheel9", "btWheelA", "btWheelB",
+                                                         "btWheelC", "btWheelH" };
     alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, box[0x40] = {};
     UiStringView name{ names[id], 8 };
     g_beginWindow(win, &name, 1, 8, 0, 0);                 // fullscreen, above the HUD, takes no input
@@ -4964,6 +4978,7 @@ static int wheel_entries(int* act) {
     if (roof_on()) act[n++] = ACT_OVERHANG;
     if (round_on()) act[n++] = ACT_ROOF_SHAPE;
     if (round_on()) act[n++] = ACT_ROUND_HOLLOW;
+    if (round_on()) act[n++] = ACT_ROUND_LYING;
     if (thick_on()) act[n++] = ACT_THICK;
     if (g_mode == MODE_AREA && g_corners > 0) act[n++] = ACT_CLEAR;
     act[n++] = ACT_FREE;
@@ -4984,6 +4999,7 @@ static void wheel_texts(int a, char* name, char* value) {
         if (g_fill == core::FILL_ROUND) { nm = T(S_OPT_ROUND_SHAPE); v = T(kRoundName[g_roundShape % core::ROUND_COUNT]); break; }
         nm = T(S_OPT_ROOF_SHAPE); v = T(kRoofName[g_roofShape % core::ROOF_COUNT]); break;
     case ACT_ROUND_HOLLOW: nm = T(S_OPT_ROUND_FILL); v = T(g_roundHollow ? S_OPT_ROUND_HOLLOW : S_OPT_FILL_SOLID); break;
+    case ACT_ROUND_LYING: nm = T(S_OPT_ROUND_DIR); v = T(g_roundLying ? S_OPT_ROUND_LYING : S_OPT_ROUND_STANDING); break;
     case ACT_OVERHANG: nm = T(S_OPT_OVERHANG); numText = num(g_overhang); v = g_overhang ? numText.s : T(S_OPT_NONE); break;
     case ACT_THICK: nm = T(S_HUD_THICK); numText = num(g_thick); v = numText.s; break;
     case ACT_CLEAR: nm = T(S_HUD_CLEAR); break;
