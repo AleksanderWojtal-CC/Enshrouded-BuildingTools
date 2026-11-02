@@ -14,8 +14,9 @@ changelog on Nexus Mods, so keep it short and written for players.
   instead and the box height becomes the roof height, for steeper or flatter roofs.
 - **Roof overhang** (none to 3 shapes) carries the slope past the area's edge.
 - **Thickness** 1 to 3 shapes for hollow rooms, walls and roofs.
-- All of it is in the menu's Options tab; the roof shape is also on the tools wheel. The
-  3D preview shows the result before you click. Works for build, replace and remove, and on
+- All of it is in the menu's Options tab (which now scrolls) and on the tools wheel.
+  Thickness and overhang also have their own keys, unassigned at first (set them in the
+  Keys tab). The 3D preview shows the result before you click. Gable ends stay open. Works for build, replace and remove, and on
   dedicated servers (update the server too).
 
 ## 0.24.1

@@ -26,6 +26,8 @@
     X(S_FILL_ROOF, "msg.fill_roof", "Area fill: roof ({0})") \
     X(S_ROOF_SHAPE, "msg.roof_shape", "Roof shape: {0}") \
     X(S_ROOF_TURNED, "msg.roof_turned", "Roof turned ({0} of {1})") \
+    X(S_THICK_SET, "msg.thick", "Thickness: {0}") \
+    X(S_OVERHANG_SET, "msg.overhang", "Roof overhang: {0}") \
     X(S_FREE_ON, "msg.free_on", "Free placement ON (no surface snapping)") \
     X(S_FREE_OFF, "msg.free_off", "Free placement OFF") \
     X(S_FREE_DISTANCE, "msg.free_distance", "Free placement distance {0} m") \
@@ -89,6 +91,7 @@
     X(S_HUD_FILL_ROOF, "hud.fill_roof", "Fill: roof") \
     X(S_HUD_ROOF_SHAPE, "hud.roof_shape", "Roof: {0}") \
     X(S_HUD_ROOF_TURN, "hud.roof_turn", "Turn roof") \
+    X(S_HUD_THICK, "hud.thick", "Thickness") \
     X(S_HUD_CLEAR, "hud.clear", "Clear corners") \
     X(S_HUD_REPLACE, "hud.replace", "Replace") \
     X(S_HUD_REPLACE_ON, "hud.replace_on", "Replace: on") \
@@ -134,6 +137,8 @@
     X(S_ACT_FILL, "menu.key_fill", "Area fill") \
     X(S_ACT_ROOF_SHAPE, "menu.key_roof_shape", "Next roof shape (Area mode, roof fill)") \
     X(S_ACT_ROOF_TURN, "menu.key_roof_turn", "Turn roof (Area mode, roof fill)") \
+    X(S_ACT_THICK, "menu.key_thick", "Thickness 1 / 2 / 3 (rooms, walls, roofs)") \
+    X(S_ACT_OVERHANG, "menu.key_overhang", "Roof overhang none / 1 / 2 / 3") \
     X(S_ACT_CLEAR, "menu.key_clear", "Clear area corners") \
     X(S_ACT_FREE, "menu.key_free", "Free placement on / off") \
     X(S_ACT_FARTHER, "menu.key_farther", "Free placement farther") \

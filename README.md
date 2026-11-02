@@ -84,7 +84,8 @@ which is also shipped in the zip.
 All keys can be changed in the menu (Keys tab), also to Shift, Ctrl or Alt combinations
 and to the middle or side mouse buttons. The Keys tab scrolls; its Quick keys section adds Replace while held and keys
 that set one option directly (Prefab or Area mode, Replace on or off, each replace style,
-each area fill, creative building).
+each area fill, creative building). Thickness and roof overhang have their own keys too,
+unassigned at first.
 
 What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
