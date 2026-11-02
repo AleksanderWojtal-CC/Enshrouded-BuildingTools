@@ -3,6 +3,15 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.24.1
+
+- **Works with Enshrouded Patch #1** (1.0.1.0). The patch moved game code the mod hooks,
+  so 0.24.0 turned itself off ("game version not supported"). Everything is back: area
+  building, Replace, fill delete, the menu, the tools wheel, the 3D preview, the game's
+  own sounds and the dedicated server support.
+- Update the server too: the patched `enshrouded_server.exe` needs this version.
+- This version needs the patched game; keep 0.24.0 for the original 1.0 client.
+
 ## 0.24.0
 
 - **3D area preview.** While you set up an area, the mod draws its own see-through box

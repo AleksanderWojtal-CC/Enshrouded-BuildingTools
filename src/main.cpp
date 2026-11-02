@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.24.0"
+#define MOD_VERSION "0.24.1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -516,13 +516,13 @@ static const char* SIG_PAY = "40 55 56 48 83 EC 78 48 8B F2 48 8B E9 0F B6 11 85
 // The real voxel writes. The PlaceShape/RemoveShape functions above are dry runs
 // (they price an action); after payment the game commits it with these.
 static const char* SIG_PLACE_COMMIT  = "48 8B C4 55 53 56 57 41 54 41 56 41 57 48 8D A8 88 FD FF FF 48 81 EC 40 03 00 00";
-static const char* SIG_REMOVE_COMMIT = "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 55 41 56 41 57 48 8D AC 24 E0 E5 FF FF";
+static const char* SIG_REMOVE_COMMIT = "48 89 5C 24 18 55 56 57 41 56 41 57 48 8D AC 24 E0 E5 FF FF B8 20 1B 00 00";
 // The "may remove" material table (48f1c0) as RemoveShape and RemoveCommit build it
 // (connected delete narrows it to the clicked material).
 static const char* SIG_REMOVE_TABLE_DRY = "E8 ?? ?? ?? ?? 48 8B 85 D0 00 00 00 4C 8D 4C 24 50 4C 8B 46 30 33 D2 48 8B 8E 30 01 00 00";
 static const char* SIG_REMOVE_TABLE_COMMIT = "E8 ?? ?? ?? ?? 66 0F 6F 05 ?? ?? ?? ?? 48 8D 85 90 00 00 00 4C 8B 47 30 4C 8D 4C 24 50";
 // Turns per-material removed volumes into refund entries (called by RemoveShape).
-static const char* SIG_REFUND_BUILD = "4C 8B DC 55 53 56 57 41 55 41 57 49 8D 6B A1 48 81 EC E8 00 00 00 49 8B 58 08";
+static const char* SIG_REFUND_BUILD = "48 8B C4 48 89 48 08 55 56 57 41 55 41 56 41 57 48 8D 68 A1 48 81 EC E8 00 00 00";
 // Density check inside the voxel blit callback; patched to run src/cave.S.
 static const char* SIG_BLIT_CHECK =
     "41 8B 4F 08 41 8B 47 04 41 03 CD 41 0F AF C8 03 C5 41 0F AF 44 24 10 4D 8B 04 24 03 C8 41 03 0F 03 CF 8B D1 "
@@ -547,7 +547,7 @@ static const char* SIG_SCREEN_DISPATCH = "48 8B 45 80 0F B6 08 83 E9 34 0F 84 ??
 // toggleHudScreen(ui ctx, screen): queues a screen change ("[GameUi] toggleHudScreen to
 // %k" in the game log); the game then switches input and cursor like for its own menus.
 static const char* SIG_TOGGLE_SCREEN =
-    "48 89 5C 24 10 48 89 74 24 18 57 48 81 EC 80 00 00 00 48 8B 81 D0 00 00 00 0F B6 F2 48 8B 98 C0 3C 03 00";
+    "48 89 5C 24 10 48 89 74 24 18 57 48 81 EC 80 00 00 00 48 8B 81 D0 00 00 00 0F B6 F2 48 8B 98 E0 3C 03 00";
 // beginWindow(window, name, fullscreen, layer, inputMask, flags). Flags bit 0 makes the
 // window modal: windows on lower layers (the game world among them) get no input.
 static const char* SIG_BEGIN_WINDOW = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 50 48 8B 05 ?? ?? ?? ?? 45 8B D9";
@@ -570,7 +570,7 @@ static const char* SIG_UI_BEGIN_TEXT   = "48 89 5C 24 08 48 89 74 24 10 48 89 7C
 static const char* SIG_UI_END_TEXT     = "40 55 56 57 48 8D 6C 24 B9 48 81 EC F0 00 00 00 0F 29 BC 24 B0 00 00 00";
 // settingOption(params, u8* value): a settings row with arrows, as in the game's options.
 // Its start is not unique (an identical copy exists), so it is found by a call: E8 at +7.
-static const char* SIG_UI_SETTING_OPTION_CALL = "48 8D 8D 20 04 00 00 E8 ?? ?? ?? ?? 0F B6 8D B0 66 00 00 44 0A E0 8B C1";
+static const char* SIG_UI_SETTING_OPTION_CALL = "48 8D 8D 50 04 00 00 E8 ?? ?? ?? ?? 0F B6 8D 58 73 00 00 44 0A E8 8B C1";
 // settingHeader(TextString* title, float gap): section title of the game's options.
 static const char* SIG_UI_SETTING_HEADER = "48 81 EC A8 01 00 00 48 83 79 08 00 0F 29 B4 24 90 01 00 00 0F 28 F1 0F 84 ?? ?? ?? ??";
 // doButton(params 0xa8): the game's button; true when clicked.
@@ -596,22 +596,22 @@ static const char* SIG_UI_DRAW_HINTS   = "48 8B C4 48 89 58 10 48 89 70 18 55 57
 // the second signature. bindingHint (b2f8b0) draws one key icon with a label.
 // The small on/off mark of the bottom-left HUD slots (c28190): image context getter (E8 at
 // +0x40), resolveImage (E8 at +0x52), drawImage (E8 at +0x62); textures fancyToggleSmallOn
-// bundle+0xfed4 (colour white), fancyToggleSmallOff bundle+0xfec4 (colour bundle+0xd4d8).
-static const char* SIG_UI_SMALL_TOGGLE = "48 81 C3 D4 FE 00 00 C7 85 B0 00 00 00 FF FF FF FF C7 85 B4 00 00 00 00 00 80 3F EB 23 48 8B 88 C8 00 00 00 "
-    "48 8D B5 B8 00 00 00 48 8B 81 D8 D4 00 00 48 8D 99 C4 FE 00 00 48 89 85 B8 00 00 00 E8 ?? ?? ?? ?? 4C 8B C3 48 8D 95 A8 00 00 00 "
+// bundle+0x10084 (colour white), fancyToggleSmallOff bundle+0x10074 (colour bundle+0xd658).
+static const char* SIG_UI_SMALL_TOGGLE = "48 81 C3 84 00 01 00 C7 85 B0 00 00 00 FF FF FF FF C7 85 B4 00 00 00 00 00 80 3F EB 23 48 8B 88 C8 00 00 00 "
+    "48 8D B5 B8 00 00 00 48 8B 81 58 D6 00 00 48 8D 99 74 00 01 00 48 89 85 B8 00 00 00 E8 ?? ?? ?? ?? 4C 8B C3 48 8D 95 A8 00 00 00 "
     "48 8B C8 E8 ?? ?? ?? ?? 48 8B D0 48 8D 4C 24 50 4C 8B C6 E8";
 // The building box's toggle row (ccff30, "first person view"): after the key row a
 // stretcher (b1af90(box, {1,1}), E8 at +0xf) and the switch (ccfd00(bool on), E8 at +0x18).
 static const char* SIG_HUD_TOGGLE_ROW = "0F 28 C7 48 8D 4D B0 0F 14 C7 66 48 0F 7E C2 E8 ?? ?? ?? ?? 40 0F B6 CE E8 ?? ?? ?? ?? 48 8D 4D B0 E8";
 // The snapping hint's soft backdrop (cab59c): draw pass check, blend mode, then a nine-slice
 // (118bc50(list, rect {x,y,w,h}, image, borders, corner radii, colour)) of the texture at
-// bundle+0xd3b0 with borders bundle+0xd3c0. E8s: pass getter +0x7, pass id +0xf (4 = draw),
+// bundle+0xd530 with borders bundle+0xd540. E8s: pass getter +0x7, pass id +0xf (4 = draw),
 // draw list +0x28, blend +0x32, nine-slice +0xf4.
 static const char* SIG_UI_SOFT_BACKDROP =
     "48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B C8 E8 ?? ?? ?? ?? 83 F8 04 75 1E 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? "
     "?? 48 8B C8 E8 ?? ?? ?? ?? B2 03 48 8B C8 E8 ?? ?? ?? ?? F3 0F 10 45 98 F3 0F 5D 45 9C 48 8B 0D ?? ?? ?? ?? "
     "C7 85 28 02 00 00 FF FF FF FF C7 85 2C 02 00 00 00 00 80 3F 48 8B 81 C8 00 00 00 F3 0F 59 C6 0F C6 C0 00 0F "
-    "11 44 24 40 0F 10 88 B0 D3 00 00 0F 10 90 C0 D3 00 00 0F 29 4C 24 60 0F 29 54 24 70 66 0F 7F 44 24 40 E8 ?? "
+    "11 44 24 40 0F 10 88 30 D5 00 00 0F 10 90 40 D5 00 00 0F 29 4C 24 60 0F 29 54 24 70 66 0F 7F 44 24 40 E8 ?? "
     "?? ?? ?? 48 8B C8 E8 ?? ?? ?? ?? 83 F8 04 75 59 E8 ?? ?? ?? ?? 4C 8D 44 24 60 48 8B C8 48 8D 95 20 02 00 00 "
     "E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 8B 18 E8 ?? ?? ?? ?? 48 8B C8 E8 ?? ?? ?? ?? 48 8B 8D 28 02 00 00 4C 8D "
     "4C 24 70 48 89 4C 24 28 48 8D 55 90 48 8D 4C 24 40 44 8B C3 48 89 4C 24 20 48 8B C8 E8";
@@ -627,28 +627,29 @@ static const char* SIG_UI_BOX_BLEND    = "48 8B 41 08 48 8B 48 50 4C 8B 41 18 4D
 static const char* SIG_UI_SCROLL_PARAMS = "48 89 5C 24 10 55 48 8D 6C 24 A9 48 81 EC E0 00 00 00 48 8B D9 E8 ?? ?? ?? ??";
 static const char* SIG_UI_SCROLL_BEGIN  = "48 8B C4 55 57 41 54 41 55 41 57 48 8D A8 C8 FD FF FF 48 81 EC 10 03 00 00";
 static const char* SIG_UI_SCROLL_END    = "48 8B C4 55 53 56 57 41 56 41 57 48 8D A8 D8 FC FF FF 48 81 EC F8 03 00 00";
-static const char* SIG_UI_SCROLL_SPEED  = "48 89 5C 24 10 57 48 81 EC 50 01 00 00 48 8B F9 41 B8 90 2C 03 00 48 8B 0D ?? ?? ?? ??";
+static const char* SIG_UI_SCROLL_SPEED  = "48 89 5C 24 10 57 48 81 EC 50 01 00 00 48 8B F9 41 B8 A8 2C 03 00 48 8B 0D ?? ?? ?? ??";
 static const char* SIG_UI_SIZE = "48 89 54 24 08 0F 57 C0 F3 0F 10 54 24 08 33 C0";
 static const char* SIG_HUD_ROW_CALL1 = "0F 29 85 B0 00 00 00 F2 0F 11 8D C0 00 00 00 E8 ?? ?? ?? ?? 48 8B 3D ?? ?? ?? ?? E9";
 static const char* SIG_HUD_ROW_CALL2 = "F2 0F 11 8D C0 00 00 00 0F 29 85 B0 00 00 00 E8 ?? ?? ?? ?? 80 7D 36 00";
 static const char* SIG_BINDING_HINT  = "40 55 56 57 48 8D AC 24 E0 FC FF FF 48 81 EC 20 04 00 00 44 8B 0A 48 8B FA 4C 8B C1";
-static const char* SIG_HUD_UPDATE = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 88 FE FF FF 48 81 EC 78 02 00 00";
+static const char* SIG_HUD_UPDATE = "48 8B C4 55 53 56 57 41 54 41 55 48 8D A8 48 FE FF FF 48 81 EC 88 02 00 00";
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
-static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 DC 1B 03 00 40 88 B3 D9 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 88 2B 01 00 0F 29 44 24 20 E8";
+static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 F4 1B 03 00 40 88 B3 F1 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 38 2D 01 00 0F 29 44 24 20 E8";
 // place cursor transform from the aim ray
 static const char* SIG_CURSOR_XF = "48 8B C4 55 53 56 57 41 56 48 8D 6C 24 90 48 81 EC 70 01 00 00 0F 29 70 C8";
 // System dependency copy, and the dismantle system's call of it (writer at +0x180)
 static const char* SIG_SYS_DEPS = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 60 4C 8B 09 48 8B D9";
-// Dismantle system: 9b83c0 call right before the aimed-entity check (piece or blocks)
-static const char* SIG_PIECE_CHECK_CALL = "48 8B 95 F0 02 00 00 49 8B CD E8 ?? ?? ?? ?? 8B D8 85 C0 0F 85 ?? ?? ?? ?? 48 8B 85 F8 01 00 00";
-static const char* SIG_DISM_DEPS = "41 B8 90 01 00 00 48 8D 95 F0 01 00 00 4C 8B E9 E8";
+// Dismantle system: 9b83c0 call right before the aimed-entity check (piece or blocks); the
+// state pointer's frame offset (rbp+0x1f8 on 1.0, 0x1d8 on patch 1) is read from the mov at +0x19
+static const char* SIG_PIECE_CHECK_CALL = "48 8B 95 ?? ?? ?? ?? 49 8B CD E8 ?? ?? ?? ?? 8B D8 85 C0 0F 85 ?? ?? ?? ?? 48 8B 85 ?? ?? ?? ?? 48 8B 58 78";
+static const char* SIG_DISM_DEPS = "41 B8 90 01 00 00 48 8D 95 ?? ?? ?? ?? 4C 8B E9 E8";
 // Client cursor hover highlight (runs every frame)
 static const char* SIG_HOVER_FX = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 70 F2 FF FF";
 // Creative building: the PayCost calls of the building systems (blueprints = place,
 // dismantle = remove a shape / a prefab, undo) and the preview's missing-materials check.
 static const char* SIG_PAY_PLACE   = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 4D F8 48 8B 45 B8 48 89 85 98 01 00 00";
-static const char* SIG_PAY_REMOVE  = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 44 8B 06 48 8D 54 24 70 0F 57 C0";
-static const char* SIG_PAY_REMOVE_PREFAB = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 44 8B 07 48 8D 54 24 70 48 8D 4D 30";
+static const char* SIG_PAY_REMOVE  = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 44 8B 06 48 8D 54 24 50 0F 57 C0";
+static const char* SIG_PAY_REMOVE_PREFAB = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 44 8B 07 48 8D 54 24 50 48 8D 4D 50";
 static const char* SIG_PAY_UNDO    = "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 8D 40 01 00 00 E8 ?? ?? ?? ??";
 // Magic chests of all bases. ChestList (468660): chest ids of the base at a position;
 // ClientStock (4680b0): the client stock cache's chest iterator; DepositChests: the
@@ -660,13 +661,13 @@ static const char* SIG_DEPOSIT_CHESTS = "E8 ?? ?? ?? ?? 45 32 E4 48 8D 4D 10 44 
 static const char* SIG_STOCK_COUNT  = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 41 8B D8 48 8B FA 4C 8B D1";
 static const char* SIG_BASE_AT      = "48 89 5C 24 08 57 48 83 EC 10 8B 7A 24 45 33 DB 48 8B DA 4C 8B D1 48 85 FF";
 // The material picker's item lists (g38_items::updateInventoryStocks)
-static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56";
+static const char* SIG_STOCKS = "48 89 5C 24 08 44 88 44 24 18 48 89 54 24 10 55 56 57 41 54 41 55 41 56 41 57 48 81 EC 90 01 00 00 33 ED";
 // The picker's "selected material is not in the list" fallback, called by
 // client_cycle_inventory_stock (it sends the chosen material like a scroll)
 static const char* SIG_PICK_CALL = "E8 ?? ?? ?? ?? 80 7D 00 00 75 59 48 8B CE E8 ?? ?? ?? ?? 48 8B 4D C0 44 8B F0";
 // The build preview's missing-materials check, called from the cursor systems
 // Zone visualization renderer (~856150): reads the client world's BuildZoneVisualizationState
-// (world+0xffc0) through a getter (3a4620: lea rax,[rcx+0xffc0]; ret) called once per frame.
+// (world+0xffd0, 0xffc0 before patch 1) through a getter (3aa8a0: lea rax,[rcx+0xffd0]; ret) called once per frame.
 // State: byte +0 = draw build zone borders, +0x10 min / +0x20 max (world metres, float4),
 // byte +0x30 = preview box valid (the flame altar's base-area preview, client_cursor_entity 2919b0).
 static const char* SIG_ZONE_VIS_CALL = "48 8B 8E E0 D4 47 00 E8 ?? ?? ?? ?? 0F 10 0D ?? ?? ?? ?? 45 33 F6 C6 85 A8 00 00 00 01";
@@ -779,15 +780,15 @@ static PlayUiSoundFn g_playUiSound = nullptr;
 static volatile LONG g_sndQueue[SND_COUNT];      // pending plays per sound
 static volatile DWORD g_sndTick[SND_COUNT];      // when each was queued
 static volatile DWORD g_hudTick = 0;             // last HUD update (the game sounds play there)
-// offsets inside FbUiBundle (sounds @0x12060: menu @+0x1e0, hud @+0x9e0)
+// offsets inside FbUiBundle (sounds @0x12210: menu @+0x1e0, hud @+0x9e0)
 static const uint32_t kSndOffset[SND_COUNT] = {
-    0x12320,    // menu.highlightChange
-    0x12330,    // menu.entryTrigger
-    0x12b70,    // hud.buildActionFailed
-    0x12310,    // menu.tabChange
-    0x12a10,    // itemWheel.open
-    0x12a20,    // itemWheel.close
-    0x12a30,    // itemWheel.changeHighlight
+    0x124d0,    // menu.highlightChange
+    0x124e0,    // menu.entryTrigger
+    0x12d20,    // hud.buildActionFailed
+    0x124c0,    // menu.tabChange
+    0x12bc0,    // itemWheel.open
+    0x12bd0,    // itemWheel.close
+    0x12be0,    // itemWheel.changeHighlight
 };
 // a game sound only (no Windows sound for these)
 static void game_sound(int k) {
@@ -1195,7 +1196,7 @@ static UndoRefund* undo_refund_find(CostList* list) {
 }
 // ---- PickupEvent writer for refund pop-ups
 // The placement system has no PickupEvent writer; the dismantle system gets one as a
-// system dependency (block copied by 9bc1a0 to rbp+0x1f0, writer at +0x180). The mod
+// system dependency (block copied by 9bc1a0 to rbp+0x1d0 (0x1f0 on 1.0), writer at +0x180). The mod
 // records it per world (*system context) every time the dismantle system runs.
 struct WriterRec { void* world; void* writer; };
 static WriterRec g_pickWriters[8];
@@ -1261,7 +1262,7 @@ static bool small_item(void* item) {
 
 // ---- building pieces as blocks (Area remove, connected delete)
 // The dismantle system removes a building piece (foundation, stairs...) as one entity
-// when the aimed entity flag of its state at [rbp+0x1f8] is set (+0x80 == 1, entity at
+// when the aimed entity flag of its state at [rbp+0x1d8] is set (+0x80 == 1, entity at
 // +0x78); otherwise it takes the block path (RemoveShape, RemoveCommit with the hammer's
 // shape). In Area mode and connected delete the mod clears the flag between the
 // dismantle's 9b83c0 call and its read at 2d43de, so pieces are cut like blocks. The
@@ -1270,6 +1271,7 @@ static bool small_item(void* item) {
 typedef uint64_t (*PieceCheckFn)(void*, void*, uint64_t, void*);
 static PieceCheckFn g_pieceCheckOrig = nullptr;
 static uint8_t* volatile g_pieceFlag = nullptr;     // cleared flag byte to put back
+static int32_t g_pieceStateOff = 0x1d8;             // frame offset of the aim state pointer (from the code)
 static void piece_target_restore() {
     uint8_t* f = (uint8_t*)InterlockedExchangePointer((void* volatile*)&g_pieceFlag, nullptr);
     if (f && *f == 0) *f = 1;
@@ -1284,7 +1286,7 @@ extern "C" uint64_t bt_piece_check(void* a, void* b, uint64_t c, void* d, uint8_
     log_item("dismantle", item);
     if (kind != ITEM_SHAPE && kind != ITEM_TERRAIN) return r;
     if (g_mode != MODE_AREA && !small_item(item)) return r;
-    uint8_t* st = frame && readable(frame + 0x1f8, 8) ? *(uint8_t**)(frame + 0x1f8) : nullptr;
+    uint8_t* st = frame && readable(frame + g_pieceStateOff, 8) ? *(uint8_t**)(frame + g_pieceStateOff) : nullptr;
     if (!st || !readable(st, 0x88)) { LOG(.str("dismantle: aim state not readable")); return r; }
     if (st[0x80] != 1 || !*(uint64_t*)(st + 0x78)) return r;
     st[0x80] = 0;
@@ -4022,7 +4024,7 @@ static struct {
     void (*endScroll)(void* state);
     float (*scrollSpeed)(void* state);
 } ui;
-enum { STYLE_TITLE = 0x11b94, STYLE_BODY = 0x10a0c };   // text styles in the UI bundle
+enum { STYLE_TITLE = 0x11d44, STYLE_BODY = 0x10bbc };   // text styles in the UI bundle
 
 static UiTextString ui_str(const char* t) {
     UiTextString s{ t, 0, 0xcbf29ce484222325ull };          // FNV-1a 64, as the game hashes it
@@ -4203,9 +4205,9 @@ static void draw_keys() {
         float* pad = (float*)(prm + 0x18);
         pad[0] = 0; pad[1] = 10; pad[2] = 0; pad[3] = 0;
         uint8_t* bar = prm + 0x44;                          // GameUiScrollbarParameterData
-        memcpy(bar + 0x04, bundle + 0xf954, 8);             // range colour
-        memcpy(bar + 0x24, bundle + 0xf914, 0x20);          // range texture
-        memcpy(bar + 0x44, bundle + 0xf8d4, 0x20);          // slider texture
+        memcpy(bar + 0x04, bundle + 0xfb04, 8);             // range colour
+        memcpy(bar + 0x24, bundle + 0xfac4, 0x20);          // range texture
+        memcpy(bar + 0x44, bundle + 0xfa84, 0x20);          // slider texture
         bar[0x7c] = 1;                                      // textured slider
         float* w = (float*)(bar + 0x80);
         w[0] = 24; w[1] = 24; w[2] = 24; w[3] = 20;
@@ -4274,7 +4276,7 @@ static const Str g_pageNames[kMenuPages] = { S_MENU_KEYS, S_MENU_OPTIONS };
 static bool g_modTabs = false;                       // the tab bar being drawn is the mod's
 
 // Tab list of the game's tab bar: the mod's pages while it draws its bar. A tab is 0x40
-// bytes: shortcut @+1 (0x8b none), label TextString @+0x18, active @+0x30, hover and
+// bytes: shortcut @+1 (0x8c none; 0x8b before patch 1), label TextString @+0x18, active @+0x30, hover and
 // interactive @+0x31/+0x32, opacity @+0x34. The list grows like the game's vectors:
 // {data, count, capacity, grow fn}; the bar passes inline room for 10.
 static void* mod_tab_list(uint8_t menu, void* list, void* state) {
@@ -4286,7 +4288,7 @@ static void* mod_tab_list(uint8_t menu, void* list, void* state) {
         if (n >= (uint64_t)v[2]) break;
         uint8_t* t = v[0] + n * 0x40;
         memset(t, 0, 0x40);
-        t[1] = 0x8b;
+        t[1] = 0x8c;                              // GameplayAction::Count (0x8b before patch 1)
         *(UiTextString*)(t + 0x18) = ui_str(T(g_pageNames[k]));
         t[0x30] = g_menuPage == k;
         t[0x31] = 1; t[0x32] = 1;
@@ -4438,9 +4440,9 @@ static void hud_mark(bool on) {
     ui.beginBox(box, 0);
     ui.setSize(ui_node(box), UiVec2{ 21.f, 21.f });
     UiColor white{ 0xffffffff, 1.0f };
-    const void* color = on ? (const void*)&white : (const void*)(bundle + 0xd4d8);
+    const void* color = on ? (const void*)&white : (const void*)(bundle + 0xd658);
     uint32_t handle = 0;
-    uint32_t* h = ui.resolveImage(ui.imageCtx(), &handle, bundle + (on ? 0xfed4 : 0xfec4));
+    uint32_t* h = ui.resolveImage(ui.imageCtx(), &handle, bundle + (on ? 0x10084 : 0x10074));
     ui.drawImage(box, h, color);
     ui.endBox(box);
 }
@@ -4534,8 +4536,8 @@ static void soft_backdrop(const float* node) {
     const float rect[4] = { node[0] - 8, node[1] - 4, node[2] + 16, node[3] + 8 };
     float c = (rect[2] < rect[3] ? rect[2] : rect[3]) * 0.5f;
     alignas(16) const float radii[4] = { c, c, c, c };
-    alignas(16) uint8_t tex[16]; memcpy(tex, bundle + 0xd3b0, 16);
-    alignas(16) float borders[4]; memcpy(borders, bundle + 0xd3c0, 16);
+    alignas(16) uint8_t tex[16]; memcpy(tex, bundle + 0xd530, 16);
+    alignas(16) float borders[4]; memcpy(borders, bundle + 0xd540, 16);
     ui.blurBehind(ctx, rect, 0x3f800000ffffffffull);
     bool draw = ui.passId(ui.passObj(ctx)) == 4;
     if (draw) ui.blend(ui.drawList(ui.passObj(ctx)), 3);
@@ -4632,20 +4634,20 @@ static void draw_radial() {
         ui.blurBehind(*g_uiCtxGlobal, big, white);
         ui.drawRect(wheel, big, 0, 0x3f80000040000000ull);        // 25% black
         ui.boxBlend(wheel, 3);
-        ui.drawRect(wheel, big, ui_image(bundle, 0xdbe0), white); // itemWheel.blurredBackgroundMask
+        ui.drawRect(wheel, big, ui_image(bundle, 0xdd60), white); // itemWheel.blurredBackgroundMask
         ui.boxBlend(wheel, 0);
         const float cd[4] = { x + w * (0.5f - kWheelDisc * 0.5f), y + h * (0.5f - kWheelDisc * 0.5f), w * kWheelDisc, h * kWheelDisc };
-        ui.drawRect(wheel, cd, ui_image(bundle, 0xdb80), *(uint64_t*)(bundle + 0xdb78));   // background, previewCenterColor
-        uint64_t accent = *(uint64_t*)(bundle + 0xd4c0);
+        ui.drawRect(wheel, cd, ui_image(bundle, 0xdd00), *(uint64_t*)(bundle + 0xdcf8));   // background, previewCenterColor
+        uint64_t accent = *(uint64_t*)(bundle + 0xd640);
         float cx = x + w * 0.5f, cy = y + h * 0.5f;
         LONG sel = g_radialSel;
         if (sel >= 0 && sel < count) {                    // itemWheel.direction, turned to the slot
             float s = w * kWheelDisc * 1.16f;
             const float ar[4] = { cx - s * 0.5f, cy - s * 0.5f, s, s };
-            ui.drawRotated(wheel, ar, slot_angle(sel, count), ui_image(bundle, 0xdb90), accent);
+            ui.drawRotated(wheel, ar, slot_angle(sel, count), ui_image(bundle, 0xdd10), accent);
         }
         float rd = w * kWheelDisc * 0.62f;
-        uint32_t dot = ui_image(bundle, 0xb9e8);
+        uint32_t dot = ui_image(bundle, 0xbb68);
         for (int k = 0; k < count; k++) {
             const float dr[4] = { cx + g_slotCos[k] * rd - 12.f, cy + g_slotSin[k] * rd - 12.f, 24.f, 24.f };
             uint64_t c = k == sel ? accent : (accent & 0xffffffff00ffffffull) | 0x80000000ull;   // others at half alpha
@@ -5030,7 +5032,7 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* pcommit = find_hookable("PlaceCommit", SIG_PLACE_COMMIT, 5);
     uint8_t* rcommit = find_hookable("RemoveCommit", SIG_REMOVE_COMMIT, 5);
     uint8_t* matItem = find_unique("MaterialItem", SIG_MATERIAL_ITEM);
-    uint8_t* refundBuild = find_hookable("RefundBuild", SIG_REFUND_BUILD, 5);
+    uint8_t* refundBuild = find_hookable("RefundBuild", SIG_REFUND_BUILD, 7);
     uint8_t* blit = find_unique("BlitCheck", SIG_BLIT_CHECK);
     uint8_t* popUndo = find_hookable("PopUndo", SIG_POP_UNDO, 5);
     uint8_t* hudUpd = find_hookable("HudUpdate", SIG_HUD_UPDATE, 5);
@@ -5190,7 +5192,7 @@ static DWORD WINAPI init_thread(void*) {
             g_matConfig = (MatConfigFn)rel(tb + 0xe0);
         LOG(.str("diagonal roof fill: ").str(g_matConfig ? "available" : "not available"));
     }
-    g_refundBuildOrig = (RefundBuildFn)hook(refundBuild, 5, (void*)&refund_build_hook);
+    g_refundBuildOrig = (RefundBuildFn)hook(refundBuild, 7, (void*)&refund_build_hook);
     if (!g_refundBuildOrig) { LOG(.str("refund hook failed; mod disabled")); return 0; }
     if (!install_cave(blit)) { LOG(.str("blit patch failed; mod disabled")); return 0; }
     if (popUndo) g_popUndoOrig = (PopUndoFn)hook(popUndo, 5, (void*)&pop_undo_hook);
@@ -5216,6 +5218,7 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* pcall = g_depsOrig ? find_unique("PieceCheckCall", SIG_PIECE_CHECK_CALL) : nullptr;
     if (pcall) {
         uint8_t* site = pcall + 10;
+        g_pieceStateOff = *(int32_t*)(pcall + 0x1c);      // mov rax, [rbp + off]
         uint8_t* target = site + 5 + *(int32_t*)(site + 1);
         g_pieceCheckOrig = (PieceCheckFn)target;
         if (hook_calls(target, (void*)piece_check_thunk, &site, 1) != 1) g_pieceCheckOrig = nullptr;
@@ -5251,8 +5254,8 @@ static DWORD WINAPI init_thread(void*) {
         if (zc && zc[7] == 0xE8) {
             uint8_t* site = zc + 7;
             uint8_t* fn = site + 5 + *(int32_t*)(site + 1);
-            // the getter must still be "lea rax, [rcx + 0xffc0]; ret"
-            if (memcmp(fn, "\x48\x8D\x81\xC0\xFF\x00\x00\xC3", 8) == 0) {
+            // the getter must still be "lea rax, [rcx + disp32]; ret" (0xffc0 on 1.0, 0xffd0 on patch 1)
+            if (memcmp(fn, "\x48\x8D\x81", 3) == 0 && fn[7] == 0xC3) {
                 g_zoneVisOrig = (ZoneVisGetFn)fn;
                 if (hook_calls(fn, (void*)&zone_vis_hook, &site, 1) != 1) g_zoneVisOrig = nullptr;
             }

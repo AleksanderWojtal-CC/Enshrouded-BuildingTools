@@ -757,3 +757,48 @@ v0.13.3 falls back to the client cursor component's live aim (+0x338) when it li
   Per voxel (a83ac0): blueprint voxel set and world voxel byte >= 0x80 -> taken.
   a8d280 (the other branch) is `xor al,al; ret`.
 
+
+## 0.24.1: Patch #1 (1.0.1.0, build 1283531, 2026-11-02)
+
+The patch rebuilt both executables. 14 of the client's 81 signatures stopped matching, and
+the server lost 6 of its own; the mod refused to start ("RemoveCommit / RefundBuild /
+HudUpdate / UiSound: not found"). How it was redone: the 1.0 and patched executables were
+compared function by function (`.pdata` functions near the old address, instruction
+sequences aligned with difflib, immediates and rip/rel32 displacements ignored), and the
+reflection dumps (`refl.py`) of both were diffed.
+
+What moved (patched client RVAs):
+
+| What | 1.0 | Patch #1 | Change |
+|---|---|---|---|
+| RemoveCommit | 487af0 | 48ee40 | new prologue (`mov [rsp+18],rbx; push rbp...`), still 5 bytes stolen |
+| RefundBuild | 48ae10 | 4920f0 | new prologue `mov rax,rsp; mov [rax+8],rcx`: **7 bytes stolen** |
+| HUD building update | b25350 | b34c20 | new prologue `mov rax,rsp; push rbp; push rbx` |
+| Dismantle system | 2d3c80 | 2d8da0 | frame shrank by 0x20: deps copy rbp+0x1d0, aim state [rbp+0x1d8] (read from the code now), pickup writer rbp+0x350 |
+| Zone state getter | 3a4620 (world+0xffc0) | 3aa8a0 (world+0xffd0) | check accepts any `lea rax,[rcx+disp32]; ret` |
+| UI ctx [+0xd0] state | +0x33cc0 / +0x31bdc / +0x32c90 | +0x33ce0 / +0x31bf4 / +0x32ca8 | only inside signatures |
+| GameplayAction::Count | 0x8b | 0x8c | VoiceChatMute added at 125; the tab "no shortcut" value |
+
+FbUiBundle grew from 0x13e88 to 0x14038 bytes (logos +0x180 onward, menu/sounds/styles
++0x1b0). Every bundle offset the mod uses was converted by field path:
+
+| Field | 1.0 | Patch #1 |
+|---|---|---|
+| sounds (menu.tabChange / highlightChange / entryTrigger) | 0x12310 / 0x12320 / 0x12330 | 0x124c0 / 0x124d0 / 0x124e0 |
+| sounds.itemWheel.open / close / changeHighlight | 0x12a10 / 0x12a20 / 0x12a30 | 0x12bc0 / 0x12bd0 / 0x12be0 |
+| sounds.hud.buildActionFailed | 0x12b70 | 0x12d20 |
+| namedStyles.defaultStyle / menu.header1 | 0x10a0c / 0x11b94 | 0x10bbc / 0x11d44 |
+| menu.scrollbar slider / range / rangeTint | 0xf8d4 / 0xf914 / 0xf954 | 0xfa84 / 0xfac4 / 0xfb04 |
+| menu.fancyToggleSmallOff / On | 0xfec4 / 0xfed4 | 0x10074 / 0x10084 |
+| globalColors.attentionColor / warningColor | 0xd4c0 / 0xd4d8 | 0xd640 / 0xd658 |
+| primitives.glowBoxLarge / border | 0xd3b0 / 0xd3c0 | 0xd530 / 0xd540 |
+| hud.itemWheel previewCenterColor / background / direction / blurredBackgroundMask | 0xdb78 / 0xdb80 / 0xdb90 / 0xdbe0 | 0xdcf8 / 0xdd00 / 0xdd10 / 0xdd60 |
+| icons.genericIcons.arrowRight | 0xb9e8 | 0xbb68 |
+
+Unchanged (checked): PlaceShape, RemoveShape, ShapeBounds, PayCost, PopUndo, the cursor
+transform (registers swapped only), HoverFx and its VFX calls, InputEncode, the blit check,
+the material picker functions, the magic chest functions, every UI building block, the
+building/item/cursor reflection types (EquipmentSetup, cursor components, base records).
+PlaceCommit was changed inside (its stack layout), but its arguments and Commit layout are
+the same. The patched dedicated server matches the same signatures (dismantle aim state
+also at rbp+0x1d8).
