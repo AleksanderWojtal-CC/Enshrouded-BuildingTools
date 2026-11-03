@@ -254,16 +254,16 @@ option.language_game = Igual ao jogo
 
 # Exact mode window
 exact.title = Medidas exatas
-exact.help = Medidas em formas, contadas a partir do bloco clicado. Clique nas setas (Shift: de 10 em 10) ou digite um número na linha escolhida; Cima / Baixo ou Tab escolhe. Uma medida negativa cresce para o outro lado.
+exact.help = Medidas em blocos a partir do bloco clicado (largura para a sua direita, profundidade para longe de você); negativo = para o outro lado. Clique nas setas ou use Esquerda / Direita (Shift ou Page Up / Down: de 10 em 10), ou digite um número na linha marcada com >; Cima / Baixo escolhe a linha. Segure o botão direito para olhar em volta e andar.
 exact.reference = Bloco clicado
 exact.ref_centre = Meio (embaixo)
 exact.ref_front_left = Canto frontal esquerdo
 exact.ref_front_right = Canto frontal direito
 exact.ref_back_left = Canto traseiro esquerdo
 exact.ref_back_right = Canto traseiro direito
-exact.width = Largura (esquerda - direita)
-exact.depth = Profundidade (para longe de você)
-exact.height = Altura (para cima)
+exact.width = Largura
+exact.depth = Profundidade
+exact.height = Altura
 exact.size = {0} x {1}, a {2} = {3} formas
 exact.build = Construir
 exact.remove = Remover

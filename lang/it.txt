@@ -254,16 +254,16 @@ option.language_game = Come nel gioco
 
 # Exact mode window
 exact.title = Misure esatte
-exact.help = Misure in forme, contate dal blocco cliccato. Clicca le frecce (Maiusc: 10 alla volta) o scrivi un numero nella riga scelta; Su / Giù o Tab sceglie. Una misura negativa cresce dall'altra parte.
+exact.help = Misure in blocchi dal blocco cliccato (larghezza verso destra, profondità lontano da te); negativo = dall'altra parte. Clicca le frecce o usa Sinistra / Destra (Maiusc o Pag su / giù: 10 alla volta), o scrivi un numero nella riga con >; Su / Giù sceglie la riga. Tieni premuto il tasto destro per guardarti intorno e camminare.
 exact.reference = Blocco cliccato
 exact.ref_centre = Centro (in basso)
 exact.ref_front_left = Angolo anteriore sinistro
 exact.ref_front_right = Angolo anteriore destro
 exact.ref_back_left = Angolo posteriore sinistro
 exact.ref_back_right = Angolo posteriore destro
-exact.width = Larghezza (sinistra - destra)
-exact.depth = Profondità (lontano da te)
-exact.height = Altezza (in alto)
+exact.width = Larghezza
+exact.depth = Profondità
+exact.height = Altezza
 exact.size = {0} x {1}, a {2} = {3} forme
 exact.build = Costruisci
 exact.remove = Rimuovi

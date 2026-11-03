@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev1"
+#define MOD_VERSION "0.29.0-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -675,6 +675,9 @@ static const char* SIG_HUD_UPDATE = "48 8B C4 55 53 56 57 41 54 41 55 48 8D A8 4
 // mov rcx,[rip+uiCtx] ... movups xmm0,[rax+12B88h] (buildUndoSuccessful) ... call PlayUiSound
 static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 F4 1B 03 00 40 88 B3 F1 1B 03 00 48 8B 81 C8 00 00 00 0F 10 80 38 2D 01 00 0F 29 44 24 20 E8";
 // place cursor transform from the aim ray
+// Render frame function (13fe20 in 1.0.1.1): arg3 + 0xad0 is the frame's ClientCamera (int64[3]
+// position, quaternion). Used for the drawn box while the cursor system pauses (exact window).
+static const char* SIG_RENDER_FRAME = "4C 89 44 24 18 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 A8 9D FF FF B8 58 63 00 00 E8 ?? ?? ?? ?? 48 2B E0 48 8B 5A 08 48 8B F1 4C 8B B5 C8 62 00 00 48 8B CA 0F 29 B4 24";
 static const char* SIG_CURSOR_XF = "48 8B C4 55 53 56 57 41 56 48 8D 6C 24 90 48 81 EC 70 01 00 00 0F 29 70 C8";
 // System dependency copy, and the dismantle system's call of it (writer at +0x180)
 static const char* SIG_SYS_DEPS = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 60 4C 8B 09 48 8B D9";
@@ -933,6 +936,41 @@ static void cam_ring_push(uint8_t* sys, const int64_t* cam, const float* rot, DW
     g_camN = n + 1;
 }
 static volatile LONG g_cxLast = -1;
+static volatile DWORD g_cursorCamTick = 0;     // last time the cursor system pushed its camera
+// The render frame's camera: while the cursor system pauses (the game's menu screens, which the
+// exact window is), the drawn box follows the camera the frame is rendered with. It lags the
+// cursor camera by a few frames, which only matters while it moves.
+static bool readable(const void* p, size_t n);
+typedef uint64_t (*RenderFrameFn)(void*, void*, uint8_t*, void*, void*, void*);
+static RenderFrameFn g_renderFrameOrig = nullptr;
+static uint64_t render_frame_hook(void* a, void* b, uint8_t* c, void* d, void* e, void* f) {
+    const DWORD now = GetTickCount();
+    static LONG checks = 0;
+    if (c && now - g_cursorCamTick < 50 && checks < 3 && g_camN > 0 && readable(c + 0xad0, 0x28)) {   // check once: near the cursor camera?
+        static DWORD at = 0;
+        if (now - at > 2000) {
+            at = now; checks++;
+            const int64_t* rp = (const int64_t*)(c + 0xad0); const CamSnap& l = g_camRing[(g_camN - 1) & 15];
+            LOG(.str("render camera check: (").fix(rp[0]).c(',').fix(rp[1]).c(',').fix(rp[2]).str(") cursor camera (")
+                .fix(l.cam[0]).c(',').fix(l.cam[1]).c(',').fix(l.cam[2]).c(')'));
+        }
+    }
+    if (c && now - g_cursorCamTick > 100 && g_camSys && readable(c + 0xad0, 0x28)) {
+        const uint8_t* cam = c + 0xad0;
+        const float* q = (const float*)(cam + 0x18);
+        float n = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+        LONG last = g_camN;
+        const CamSnap& l = g_camRing[(last - 1) & 15];
+        int64_t dx = ((const int64_t*)cam)[0] - l.cam[0], dz = ((const int64_t*)cam)[2] - l.cam[2];
+        const int64_t lim = (int64_t)200 << 32;                    // within 200 m of the last cursor camera
+        if (n > 0.98f && n < 1.02f && last > 0 && dx < lim && dx > -lim && dz < lim && dz > -lim) {
+            static bool logged = false;
+            if (!logged) { logged = true; LOG(.str("render camera used (cursor camera paused)")); }
+            cam_ring_push(g_camSys, (const int64_t*)cam, q, now);
+        }
+    }
+    return g_renderFrameOrig(a, b, c, d, e, f);
+}
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
     uint8_t* r = g_cxOrig(out, sys, q, ray);
     if (!out || !sys || !q || q[3] != 4) return r;
@@ -947,6 +985,7 @@ static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* 
         const float* cq = (const float*)(sys + 0x658);
         memcpy(e.camRot, cq, 16);
         cam_ring_push(sys, (const int64_t*)(sys + 0x640), cq, g_buildTick);
+        g_cursorCamTick = g_buildTick;
         { float dd = *(const float*)(sys + 0x678); g_camDist = dd >= 0.f && dd < 50.f ? dd : 0.f; }   // camera to its look-at point (the character)
         float x = cq[0], y = cq[1], z = cq[2], w = cq[3];
         e.fwd[0] = 2.f * (x * z + w * y); e.fwd[1] = 2.f * (y * z - w * x); e.fwd[2] = 1.f - 2.f * (x * x + y * y);
@@ -2434,6 +2473,7 @@ static volatile LONG g_exactSel = 1;          // row typed into: 0 reference, 1 
 static char g_exactTyped[8];                  // the number being typed ("" = not typing)
 static volatile LONG g_exactShown = 0;        // the window was on screen (its screen came up)
 static volatile DWORD g_exactReqTick = 0;
+static volatile LONG g_exactLook = 0;         // right button held: the game has the input (look, walk)
 static void exact_cancel(const char* why);
 static int g_exFAxis = 2, g_exFSign = 1, g_exRAxis = 0, g_exRSign = 1;   // the facing at the click
 // The sizes for this click (core::exact_corners) from the clicked shape and the entered values.
@@ -2938,7 +2978,7 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
     if (InterlockedExchange(&g_cancelReq, 0)) reset_corners();
     if (g_scOp != OP_REMOVE) { reset_corners(); g_scOp = OP_REMOVE; }
     g_rpend.ctx = ctx; g_rpend.tid = GetCurrentThreadId(); g_rpend.tick = GetTickCount(); g_rpend.n = 0; g_rpend.only = 0;
-    if (!net_area_click(OP_REMOVE)) {
+    if (g_exactOpen || !net_area_click(OP_REMOVE)) {          // a right click to look around behind the exact window removes nothing
         g_rpend.suppress = true;
         LeaveCriticalSection(&g_stateLock);
         return 0;
@@ -3132,6 +3172,7 @@ static uint8_t place_hook_body(CostList* list, void* ctx, void* state, void* pda
     }
 
     // ---- area mode (build / replace)
+    if (g_exactOpen) { LOG(.str("  exact window open: click ignored")); LeaveCriticalSection(&g_stateLock); return 0; }
     if (!net_area_click(OP_BUILD)) { LeaveCriticalSection(&g_stateLock); return 0; }
     if (g_scOp != OP_BUILD) { reset_corners(); g_scOp = OP_BUILD; }
     LONG n = g_sc;
@@ -3314,7 +3355,7 @@ static void remote_clicks(uint8_t* src, uint8_t flags) {
         if (InterlockedExchange(&g_cancelReq, 0)) reset_corners();
         LeaveCriticalSection(&g_stateLock);
     }
-    if (!(rise & 0x11) || g_modOff || g_mode != MODE_AREA || !(flags & 1)) return;
+    if (!(rise & 0x11) || g_modOff || g_mode != MODE_AREA || !(flags & 1) || g_exactOpen) return;
     // only with the hammer or a material in hand (a weapon or tool click is the game's):
     // the game's building box is up, or the hammer's cursor was read this frame
     if (!building_now() && GetTickCount() - g_liveItemTick >= 500) return;
@@ -3567,7 +3608,10 @@ static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     core::Plan pl; float step[3]; bool ok = false;
     if (!g_cfg.preview || !(building_now(500) || g_exactOpen || g_exactArmed) || !area_plan_live(&pl, step, &ok) || !ok) return false;
     if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return false;
-    g_boxFill = (pl.thick - 1) * 1024 + (g_fill == core::FILL_ROOF ? pl.roofAxisX * 32 + pl.roofFlip * 64 + pl.roofShape * 128 +
+    // the shader counts cells from the box's low corner, the plan from corner 1: a plan running
+    // toward -x / -z on the slope axis turns the shed around
+    const int shedFlip = pl.roofFlip ^ (pl.stepFix[pl.roofAxisX ? 0 : 2] < 0 ? 1 : 0);
+    g_boxFill = (pl.thick - 1) * 1024 + (g_fill == core::FILL_ROOF ? pl.roofAxisX * 32 + (pl.roofShape == core::ROOF_SHED ? shedFlip : pl.roofFlip) * 64 + pl.roofShape * 128 +
                 pl.overhang * 4096 + pl.roofBase * 16384 : 0);
     if (g_fill == core::FILL_ROOF && core::roof_is_round(pl.roofShape)) g_boxFill += 1 << 22;   // cells from the CPU (vkdraw)
     if (g_fill == core::FILL_ROUND)
@@ -4820,6 +4864,18 @@ static void exact_key(int vk) {
         bool back = vk == VK_UP || (vk == VK_TAB && (GetAsyncKeyState(VK_SHIFT) & 0x8000));
         g_exactSel = (sel + (back ? 3 : 1)) % 4; g_exactTyped[0] = 0; return;
     }
+    if (vk == VK_LEFT || vk == VK_RIGHT || vk == VK_PRIOR || vk == VK_NEXT) {   // step: 1, Shift or Page Up / Down 10
+        int d = (vk == VK_RIGHT || vk == VK_PRIOR) ? 1 : -1;
+        if (sel == 0) { g_cfg.exactRef = (g_cfg.exactRef + core::EXACT_REF_COUNT + d) % core::EXACT_REF_COUNT; return; }
+        if (vk == VK_PRIOR || vk == VK_NEXT || (GetAsyncKeyState(VK_SHIFT) & 0x8000)) d *= 10;
+        int* f = exact_field(sel); int v = *f + d;
+        if (*f > 0 && v <= 0) v -= 1;             // 0 is skipped
+        if (*f < 0 && v >= 0) v += 1;
+        if (v > core::kExactMax) v = core::kExactMax;
+        if (v < -core::kExactMax) v = -core::kExactMax;
+        *f = v; g_exactTyped[0] = 0;
+        return;
+    }
     if (sel == 0) {                               // reference: 1..5
         if (dg >= 1 && dg <= core::EXACT_REF_COUNT) g_cfg.exactRef = dg - 1;
         return;
@@ -4875,7 +4931,11 @@ static bool ui_number(const char* label, int cur, bool typing, int* out) {
 static void draw_exact_window() {
     alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, btns[0x40] = {};
     UiStringView name{ "buildingToolsExact", 18 };
-    g_beginWindow(win, &name, 1, 9, -1, 1);               // full screen, modal: the mouse shows, the camera stops
+    // modal (the camera and the character stand still, the mouse works the window); while the
+    // right button is held the game gets the input: look around and walk
+    const bool look = game_focused() && (GetAsyncKeyState(VK_RBUTTON) & 0x8000);
+    g_exactLook = look;
+    g_beginWindow(win, &name, 1, 9, -1, look ? 0 : 1);
     ui.beginRoot(root, ui.windowContext(win));
     ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
     const float rpad[4] = { 60, 60, 80, 60 };
@@ -4884,14 +4944,14 @@ static void draw_exact_window() {
 
     ui.beginBox(panel, 0);
     void* n = ui_node(panel);
-    const float pad[4] = { 50, 40, 50, 40 };
+    const float pad[4] = { 40, 30, 40, 30 };
     ui.setPadding(n, pad);
-    UiVec2 gap{ 0, 16 };
+    UiVec2 gap{ 0, 14 };
     ui.setSpacing(n, &gap, 0);
     uint16_t rightMid = 0x203, topLeft = 0x101;
     ui.setSelfAlign(n, &rightMid);
     ui.setLayout(n, &topLeft);
-    ui.setWidth(n, 860);
+    ui.setWidth(n, 1000);
     alignas(16) uint8_t fb[0xc0] = {};
     *(uint32_t*)fb = 8;                                   // the game's popup frame (reportSharedWorldPopup)
     *(float*)(fb + 4) = 1.0f;
@@ -5558,11 +5618,16 @@ static DWORD WINAPI input_thread(void*) {
             if (g_menuOpen && g_exactOpen) {     // the exact window: numbers, rows, Enter
                 static const int keys[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                     VK_NUMPAD0, VK_NUMPAD1, VK_NUMPAD2, VK_NUMPAD3, VK_NUMPAD4, VK_NUMPAD5, VK_NUMPAD6, VK_NUMPAD7, VK_NUMPAD8, VK_NUMPAD9,
-                    VK_OEM_MINUS, VK_SUBTRACT, VK_BACK, VK_RETURN, VK_UP, VK_DOWN, VK_TAB };
-                static bool held[sizeof keys / sizeof keys[0]] = {};
-                for (size_t k = 0; k < sizeof keys / sizeof keys[0]; k++) {
+                    VK_OEM_MINUS, VK_SUBTRACT, VK_BACK, VK_RETURN, VK_UP, VK_DOWN, VK_TAB,
+                    VK_LEFT, VK_RIGHT, VK_PRIOR, VK_NEXT };
+                const size_t nk = sizeof keys / sizeof keys[0];
+                static bool held[nk] = {}; static DWORD since[nk] = {}, rep[nk] = {};
+                const DWORD now = GetTickCount();
+                for (size_t k = 0; k < nk; k++) {
                     bool d = focus && (GetAsyncKeyState(keys[k]) & 0x8000);
-                    if (d && !held[k]) exact_key(keys[k]);
+                    bool step = keys[k] == VK_LEFT || keys[k] == VK_RIGHT || keys[k] == VK_PRIOR || keys[k] == VK_NEXT;
+                    if (d && !held[k]) { exact_key(keys[k]); since[k] = rep[k] = now; }
+                    else if (d && step && now - since[k] > 400 && now - rep[k] > 70) { exact_key(keys[k]); rep[k] = now; }   // held: repeats
                     held[k] = d;
                 }
                 for (bool& p : prev) p = true;
@@ -5936,6 +6001,8 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
+    if (!g_dedicated) if (uint8_t* rf = find_hookable("RenderFrame", SIG_RENDER_FRAME, 5)) g_renderFrameOrig = (RenderFrameFn)hook(rf, 5, (void*)&render_frame_hook);
+    if (!g_renderFrameOrig) LOG(.str("render camera: not available (the box may sit off behind the exact window)"));
     if (g_dedicated) {
         LOG(.str("dedicated server: every player builds with the settings of their own Building Tools (players without it build vanilla); ")
             .str("aim from the players' input ").str(g_cursorGetOrig ? "yes" : "NO (cursor read hook missing)"));

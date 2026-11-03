@@ -254,16 +254,16 @@ option.language_game = เหมือนในเกม
 
 # Exact mode window
 exact.title = ขนาดแม่นยำ
-exact.help = ขนาดนับเป็นจำนวนชิ้น นับจากบล็อกที่คลิก คลิกลูกศร (Shift: ทีละ 10) หรือพิมพ์ตัวเลขในแถวที่เลือก ใช้ขึ้น / ลง หรือ Tab เพื่อเลือกแถว ค่าติดลบจะขยายไปอีกด้าน
+exact.help = ขนาดเป็นจำนวนบล็อกนับจากบล็อกที่คลิก (กว้างไปทางขวา ลึกออกไปข้างหน้า) ค่าลบ = อีกด้าน คลิกลูกศรหรือใช้ ซ้าย / ขวา (Shift หรือ Page Up / Down: ทีละ 10) หรือพิมพ์ตัวเลขในแถวที่มี > ใช้ ขึ้น / ลง เพื่อเลือกแถว กดเมาส์ขวาค้างไว้เพื่อมองรอบและเดิน
 exact.reference = บล็อกที่คลิก
 exact.ref_centre = กึ่งกลาง (ด้านล่าง)
 exact.ref_front_left = มุมหน้าซ้าย
 exact.ref_front_right = มุมหน้าขวา
 exact.ref_back_left = มุมหลังซ้าย
 exact.ref_back_right = มุมหลังขวา
-exact.width = ความกว้าง (ซ้าย - ขวา)
-exact.depth = ความลึก (ออกไปข้างหน้า)
-exact.height = ความสูง (ขึ้น)
+exact.width = ความกว้าง
+exact.depth = ความลึก
+exact.height = ความสูง
 exact.size = {0} x {1}, สูง {2} = {3} ชิ้น
 exact.build = สร้าง
 exact.remove = ลบ

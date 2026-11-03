@@ -245,16 +245,16 @@
     X(S_OPT_LANGUAGE_GAME, "option.language_game", "Same as the game") \
     /* exact mode window */ \
     X(S_EXACT_TITLE, "exact.title", "Exact size") \
-    X(S_EXACT_HELP, "exact.help", "Sizes in shapes, counted from the block you clicked. Click the arrows (Shift: 10 at a time) or type a number into the selected row; Up / Down or Tab selects. A negative size grows the other way.") \
+    X(S_EXACT_HELP, "exact.help", "Sizes in blocks from the clicked block (width to your right, depth away from you); negative = the other way. Click the arrows or use Left / Right (Shift or Page Up / Down: 10 at a time), or type a number into the row marked >; Up / Down picks the row. Hold the right mouse button to look around and walk.") \
     X(S_EXACT_REF, "exact.reference", "Clicked block") \
     X(S_EXACT_REF_CENTRE, "exact.ref_centre", "Middle (bottom)") \
     X(S_EXACT_REF_FL, "exact.ref_front_left", "Front left corner") \
     X(S_EXACT_REF_FR, "exact.ref_front_right", "Front right corner") \
     X(S_EXACT_REF_BL, "exact.ref_back_left", "Back left corner") \
     X(S_EXACT_REF_BR, "exact.ref_back_right", "Back right corner") \
-    X(S_EXACT_WIDTH, "exact.width", "Width (left - right)") \
-    X(S_EXACT_DEPTH, "exact.depth", "Depth (away from you)") \
-    X(S_EXACT_HEIGHT, "exact.height", "Height (up)") \
+    X(S_EXACT_WIDTH, "exact.width", "Width") \
+    X(S_EXACT_DEPTH, "exact.depth", "Depth") \
+    X(S_EXACT_HEIGHT, "exact.height", "Height") \
     X(S_EXACT_SIZE, "exact.size", "{0} x {1}, h {2} = {3} shapes") \
     X(S_EXACT_BUILD, "exact.build", "Build") \
     X(S_EXACT_REMOVE, "exact.remove", "Remove") \

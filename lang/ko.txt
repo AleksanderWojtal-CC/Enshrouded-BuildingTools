@@ -254,16 +254,16 @@ option.language_game = 게임과 같게
 
 # Exact mode window
 exact.title = 정확한 크기
-exact.help = 크기는 클릭한 블록부터 센 모양의 개수입니다. 화살표를 클릭하거나 (Shift: 10씩) 선택한 줄에 숫자를 입력하세요. 위 / 아래 키나 Tab으로 줄을 고릅니다. 음수 크기는 반대쪽으로 커집니다.
+exact.help = 크기는 클릭한 블록부터의 블록 수입니다 (너비는 오른쪽, 깊이는 앞쪽). 음수는 반대쪽. 화살표를 클릭하거나 왼쪽 / 오른쪽 키 (Shift 또는 Page Up / Down: 10씩)를 쓰거나, > 표시된 줄에 숫자를 입력하세요. 위 / 아래 키로 줄을 고릅니다. 오른쪽 버튼을 누르고 있으면 둘러보고 걸을 수 있습니다.
 exact.reference = 클릭한 블록
 exact.ref_centre = 가운데 (아래)
 exact.ref_front_left = 앞쪽 왼쪽 모서리
 exact.ref_front_right = 앞쪽 오른쪽 모서리
 exact.ref_back_left = 뒤쪽 왼쪽 모서리
 exact.ref_back_right = 뒤쪽 오른쪽 모서리
-exact.width = 너비 (왼쪽 - 오른쪽)
-exact.depth = 깊이 (앞쪽으로)
-exact.height = 높이 (위로)
+exact.width = 너비
+exact.depth = 깊이
+exact.height = 높이
 exact.size = {0} x {1}, 높이 {2} = {3}개
 exact.build = 건설
 exact.remove = 제거
