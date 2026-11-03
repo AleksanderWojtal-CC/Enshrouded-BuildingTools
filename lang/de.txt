@@ -254,7 +254,9 @@ option.language_game = Wie im Spiel
 
 # Exact mode window
 exact.title = Exakte Größe
-exact.help = Maße in Blöcken ab dem angeklickten Block (Breite nach rechts, Tiefe von dir weg); negativ = andere Richtung. Pfeile klicken oder Links / Rechts (Umschalt oder Bild auf / ab: 10 auf einmal), oder eine Zahl in die Zeile mit > tippen; Hoch / Runter wählt die Zeile. Rechte Maustaste halten, um dich umzusehen und zu laufen.
+exact.help = Blöcke ab dem angeklickten. Breite: nach rechts, Tiefe: von dir weg. Negativ: andere Richtung.
+exact.help2 = Links / Rechts: 1, mit Umschalt oder Bild auf / ab: 10, oder Zahl tippen. Hoch / Runter: Zeile.
+exact.help3 = Rechte Maustaste halten: Fenster ausblenden, umsehen und laufen.
 exact.reference = Angeklickter Block
 exact.ref_centre = Mitte (unten)
 exact.ref_front_left = Vordere linke Ecke

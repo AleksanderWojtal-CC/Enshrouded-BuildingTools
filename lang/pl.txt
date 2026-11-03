@@ -254,7 +254,9 @@ option.language_game = Użyj języka gry
 
 # Exact mode window
 exact.title = Dokładne wymiary
-exact.help = Wymiary w blokach od klikniętego bloku (szerokość w prawo, głębokość od ciebie); ujemne = w drugą stronę. Klikaj strzałki albo używaj Lewo / Prawo (Shift lub Page Up / Down: po 10), albo wpisz liczbę w wierszu z >; Góra / Dół wybiera wiersz. Przytrzymaj prawy przycisk myszy, aby się rozglądać i chodzić.
+exact.help = Bloki liczone od klikniętego. Szerokość: w prawo, głębokość: od ciebie. Ujemne: w drugą stronę.
+exact.help2 = Lewo / Prawo: 1, z Shift lub Page Up / Down: 10, albo wpisz liczbę. Góra / Dół: wiersz.
+exact.help3 = Przytrzymaj prawy przycisk myszy, aby schować okno, rozglądać się i chodzić.
 exact.reference = Kliknięty blok
 exact.ref_centre = Środek (na dole)
 exact.ref_front_left = Lewy przedni narożnik

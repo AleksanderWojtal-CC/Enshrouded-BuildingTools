@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev2"
+#define MOD_VERSION "0.29.0-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -943,30 +943,58 @@ static volatile DWORD g_cursorCamTick = 0;     // last time the cursor system pu
 static bool readable(const void* p, size_t n);
 typedef uint64_t (*RenderFrameFn)(void*, void*, uint8_t*, void*, void*, void*);
 static RenderFrameFn g_renderFrameOrig = nullptr;
-static uint64_t render_frame_hook(void* a, void* b, uint8_t* c, void* d, void* e, void* f) {
-    const DWORD now = GetTickCount();
-    static LONG checks = 0;
-    if (c && now - g_cursorCamTick < 50 && checks < 3 && g_camN > 0 && readable(c + 0xad0, 0x28)) {   // check once: near the cursor camera?
-        static DWORD at = 0;
-        if (now - at > 2000) {
-            at = now; checks++;
-            const int64_t* rp = (const int64_t*)(c + 0xad0); const CamSnap& l = g_camRing[(g_camN - 1) & 15];
-            LOG(.str("render camera check: (").fix(rp[0]).c(',').fix(rp[1]).c(',').fix(rp[2]).str(") cursor camera (")
-                .fix(l.cam[0]).c(',').fix(l.cam[1]).c(',').fix(l.cam[2]).c(')'));
+// The camera's place in the render frame's arguments moves between game builds (1.0: arg3 +
+// 0xad0), so it is found at run time: while the cursor camera is live, the arguments are scanned
+// for its position (int64[3]) with its quaternion right after; an offset that matches in three
+// checks is kept.
+static volatile LONG g_rcArg = -1, g_rcOff = -1;
+static bool cam_match(const uint8_t* p, const CamSnap& l) {
+    const int64_t* v = (const int64_t*)p; const float* q = (const float*)(p + 0x18);
+    const int64_t tol = (int64_t)1 << 31;                          // 0.5 m (the render camera lags a few frames)
+    for (int a = 0; a < 3; a++) { int64_t d = v[a] - l.cam[a]; if (d > tol || d < -tol) return false; }
+    float dot = q[0] * l.rot[0] + q[1] * l.rot[1] + q[2] * l.rot[2] + q[3] * l.rot[3];
+    return dot > 0.995f || dot < -0.995f;
+}
+static void render_cam_find(void* const* args, const CamSnap& l) {
+    static LONG candArg = -1, candOff = -1, hits = 0, scans = 0;
+    if (scans > 400) return;                                       // give up quietly after a while
+    scans++;
+    const int span = 0x8000;
+    for (int k = 0; k < 4; k++) {
+        const uint8_t* b = (const uint8_t*)args[k];
+        if (!b || ((uintptr_t)b & 7) || !readable(b, span)) continue;
+        for (int o = 0; o + 0x28 <= span; o += 8) {
+            if (!cam_match(b + o, l)) continue;
+            if (candArg == k && candOff == o) { if (++hits >= 3) { g_rcOff = o; g_rcArg = k; LOG(.str("render camera: arg ").i(k + 1).str(" +").x(o)); } }
+            else { candArg = k; candOff = o; hits = 1; }
+            return;
         }
     }
-    if (c && now - g_cursorCamTick > 100 && g_camSys && readable(c + 0xad0, 0x28)) {
-        const uint8_t* cam = c + 0xad0;
-        const float* q = (const float*)(cam + 0x18);
-        float n = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
-        LONG last = g_camN;
+}
+static uint64_t render_frame_hook(void* a, void* b, uint8_t* c, void* d, void* e, void* f) {
+    const DWORD now = GetTickCount();
+    void* args[4] = { a, b, c, d };
+    LONG last = g_camN;
+    if (last > 0 && g_camSys) {
         const CamSnap& l = g_camRing[(last - 1) & 15];
-        int64_t dx = ((const int64_t*)cam)[0] - l.cam[0], dz = ((const int64_t*)cam)[2] - l.cam[2];
-        const int64_t lim = (int64_t)200 << 32;                    // within 200 m of the last cursor camera
-        if (n > 0.98f && n < 1.02f && last > 0 && dx < lim && dx > -lim && dz < lim && dz > -lim) {
-            static bool logged = false;
-            if (!logged) { logged = true; LOG(.str("render camera used (cursor camera paused)")); }
-            cam_ring_push(g_camSys, (const int64_t*)cam, q, now);
+        if (now - g_cursorCamTick < 50) {
+            if (g_rcOff < 0) {
+                static DWORD at = 0;
+                if (now - at > 250) { at = now; render_cam_find(args, l); }
+            }
+        } else if (now - g_cursorCamTick > 100 && g_rcOff >= 0) {
+            const uint8_t* cam = (const uint8_t*)args[g_rcArg] + g_rcOff;
+            if (args[g_rcArg] && readable(cam, 0x28)) {
+                const float* q = (const float*)(cam + 0x18);
+                float n = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+                int64_t dx = ((const int64_t*)cam)[0] - l.cam[0], dz = ((const int64_t*)cam)[2] - l.cam[2];
+                const int64_t lim = (int64_t)200 << 32;            // within 200 m of the last camera
+                if (n > 0.98f && n < 1.02f && dx < lim && dx > -lim && dz < lim && dz > -lim) {
+                    static bool logged = false;
+                    if (!logged) { logged = true; LOG(.str("render camera used (cursor camera paused)")); }
+                    cam_ring_push(g_camSys, (const int64_t*)cam, q, now);
+                }
+            }
         }
     }
     return g_renderFrameOrig(a, b, c, d, e, f);
@@ -2473,7 +2501,8 @@ static volatile LONG g_exactSel = 1;          // row typed into: 0 reference, 1 
 static char g_exactTyped[8];                  // the number being typed ("" = not typing)
 static volatile LONG g_exactShown = 0;        // the window was on screen (its screen came up)
 static volatile DWORD g_exactReqTick = 0;
-static volatile LONG g_exactLook = 0;         // right button held: the game has the input (look, walk)
+static volatile LONG g_exactHidden = 0;       // right button held: the window is down, the game has the input
+static uint8_t g_exactFrom = 1;  // the screen the window came from (and goes back to while hidden)
 static void exact_cancel(const char* why);
 static int g_exFAxis = 2, g_exFSign = 1, g_exRAxis = 0, g_exRSign = 1;   // the facing at the click
 // The sizes for this click (core::exact_corners) from the clicked shape and the entered values.
@@ -4318,6 +4347,7 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
         if (InterlockedExchange(&g_exactReq, 0)) {        // exact mode: corner 1 clicked, the window opens
             if (openable && !g_exactOpen) {
                 g_exactSel = 1; g_exactTyped[0] = 0; g_exactShown = 0; g_exactReqTick = GetTickCount();
+                g_exactHidden = 0; g_exactFrom = *scr;
                 g_exactOpen = 1;
                 lang_update();
                 g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD); LOG(.str("exact: window open"));
@@ -4325,7 +4355,21 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
             } else if (!g_exactOpen) exact_cancel("window could not open");
         }
         if (g_exactOpen) {                                // closed (Build, Cancel, Esc, the menu key) or never came up
-            if (*scr == SCREEN_MOD) g_exactShown = 1;
+            const bool rmb = game_focused() && (GetAsyncKeyState(VK_RBUTTON) & 0x8000);
+            if (*scr == SCREEN_MOD && g_exactShown && rmb && !g_exactHidden && req != 2) {
+                // right button: the window goes down while it is held (look around, walk away and back)
+                g_exactHidden = 1;
+                g_toggleScreen(*g_uiCtxGlobal, g_exactFrom);
+                LOG(.str("exact: window hidden (right button)"));
+            } else if (g_exactHidden && !rmb && *scr == g_exactFrom) {
+                g_exactHidden = 0; g_exactShown = 0; g_exactReqTick = GetTickCount();
+                g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD);
+                LOG(.str("exact: window back"));
+            }
+            if (*scr == SCREEN_MOD) { if (!g_exactHidden) g_exactShown = 1; }
+            else if (g_exactHidden) {
+                if (*scr != g_exactFrom && GetTickCount() - g_exactReqTick > 300) { g_exactHidden = 0; g_exactOpen = 0; exact_cancel("other screen while hidden"); }
+            }
             else if (g_exactShown || GetTickCount() - g_exactReqTick > 1500) {
                 g_exactOpen = 0;
                 if (!g_exactArmed) exact_cancel(g_exactShown ? "window closed" : "window did not come up");
@@ -4931,11 +4975,7 @@ static bool ui_number(const char* label, int cur, bool typing, int* out) {
 static void draw_exact_window() {
     alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, btns[0x40] = {};
     UiStringView name{ "buildingToolsExact", 18 };
-    // modal (the camera and the character stand still, the mouse works the window); while the
-    // right button is held the game gets the input: look around and walk
-    const bool look = game_focused() && (GetAsyncKeyState(VK_RBUTTON) & 0x8000);
-    g_exactLook = look;
-    g_beginWindow(win, &name, 1, 9, -1, look ? 0 : 1);
+    g_beginWindow(win, &name, 1, 9, -1, 1);               // full screen, modal: the mouse shows, the camera stops
     ui.beginRoot(root, ui.windowContext(win));
     ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
     const float rpad[4] = { 60, 60, 80, 60 };
@@ -4958,7 +4998,9 @@ static void draw_exact_window() {
     ui.fancyBox(panel, fb);
 
     ui_text(T(S_EXACT_TITLE), STYLE_TITLE);
-    ui_text(T(S_EXACT_HELP), STYLE_BODY);
+    ui_text(T(S_EXACT_HELP), STYLE_BODY);                 // short lines: game text does not wrap here
+    ui_text(T(S_EXACT_HELP2), STYLE_BODY);
+    ui_text(T(S_EXACT_HELP3), STYLE_BODY);
     const LONG sel = g_exactSel;
     const bool typing = g_exactTyped[0] != 0;
     {

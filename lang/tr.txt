@@ -254,7 +254,9 @@ option.language_game = Oyunla aynı
 
 # Exact mode window
 exact.title = Tam ölçü
-exact.help = Ölçüler tıklanan bloktan blok sayısıdır (genişlik sağınıza, derinlik sizden uzağa); eksi = diğer yöne. Okları tıklayın veya Sol / Sağ kullanın (Shift ya da Page Up / Down: 10'ar), ya da > işaretli satıra bir sayı yazın; Yukarı / Aşağı satırı seçer. Etrafa bakmak ve yürümek için sağ fare tuşunu basılı tutun.
+exact.help = Bloklar tıklanandan sayılır. Genişlik: sağınıza, derinlik: sizden uzağa. Eksi: diğer yöne.
+exact.help2 = Sol / Sağ: 1, Shift veya Page Up / Down ile: 10, ya da sayı yazın. Yukarı / Aşağı: satır.
+exact.help3 = Pencereyi gizlemek, etrafa bakmak ve yürümek için sağ fare tuşunu basılı tutun.
 exact.reference = Tıklanan blok
 exact.ref_centre = Orta (alt)
 exact.ref_front_left = Ön sol köşe

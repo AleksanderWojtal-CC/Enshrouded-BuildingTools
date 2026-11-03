@@ -254,7 +254,9 @@ option.language_game = Como el juego
 
 # Exact mode window
 exact.title = Medidas exactas
-exact.help = Medidas en bloques desde el bloque pulsado (ancho hacia tu derecha, fondo alejándose de ti); negativo = hacia el otro lado. Pulsa las flechas o usa Izquierda / Derecha (Mayús o Re Pág / Av Pág: de 10 en 10), o escribe un número en la fila marcada con >; Arriba / Abajo elige la fila. Mantén el botón derecho para mirar alrededor y caminar.
+exact.help = Bloques contados desde el pulsado. Ancho: a tu derecha, fondo: alejándose de ti. Negativo: al otro lado.
+exact.help2 = Izquierda / Derecha: 1, con Mayús o Re Pág / Av Pág: 10, o escribe un número. Arriba / Abajo: fila.
+exact.help3 = Mantén el botón derecho para ocultar la ventana, mirar alrededor y caminar.
 exact.reference = Bloque pulsado
 exact.ref_centre = Centro (abajo)
 exact.ref_front_left = Esquina delantera izquierda
