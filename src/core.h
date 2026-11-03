@@ -651,4 +651,54 @@ inline int net_corner_index(int serverCount, int lastSeq, int seq, int count, in
     return serverCount == expect ? expect : 0;
 }
 
+// ---- Exact mode: one click, then sizes entered in a window
+// The clicked shape (p, a shape centre) is the reference point of a box `w` wide, `d` deep
+// and `h` high, counted in shapes. Width runs along the player's right, depth along the view
+// (both snapped to world x / z), height up (y). The reference is the bottom centre or one of
+// the bottom corners; front = the side toward the player. A negative size grows the other
+// way (left instead of right, toward the player, downward); 0 counts as 1. Out: the two
+// opposite corners (shape centres) as an Area click pair would give them: corner 1 is the
+// box corner at the reference's side, so turns of roofs, rounds and diagonals keep meaning
+// "from corner 1".
+enum { EXACT_CENTRE = 0, EXACT_FRONT_LEFT, EXACT_FRONT_RIGHT, EXACT_BACK_LEFT, EXACT_BACK_RIGHT, EXACT_REF_COUNT };
+static const int kExactMax = 999;
+// shapes along one axis: from a to b (inclusive) in steps from the reference cell
+inline void exact_span(int n, int mode, int* a, int* b) {
+    // mode: 0 = centred, 1 = grows to + from the reference, -1 = grows to -
+    if (n == 0) n = 1;
+    int s = n < 0 ? -1 : 1, m = n < 0 ? -n : n;
+    if (mode == 0) { *a = -((m - 1) / 2); *b = *a + m - 1; return; }
+    *a = 0; *b = mode * s * (m - 1);
+}
+// fAxis / rAxis: 0 = x, 2 = z; fSign / rSign: +1 or -1 (world direction of forward / right).
+inline void exact_corners(const I3& p, int ref, int w, int d, int h, int fAxis, int fSign, int rAxis, int rSign,
+                          const float step_m[3], I3 out[2]) {
+    int rm = ref == EXACT_CENTRE ? 0 : (ref == EXACT_FRONT_LEFT || ref == EXACT_BACK_LEFT) ? 1 : -1;
+    int fm = ref == EXACT_CENTRE ? 0 : (ref == EXACT_FRONT_LEFT || ref == EXACT_FRONT_RIGHT) ? 1 : -1;
+    int ra, rb, fa, fb, ha, hb;
+    exact_span(w, rm, &ra, &rb);
+    exact_span(d, fm, &fa, &fb);
+    exact_span(h, 1, &ha, &hb);
+    int64_t sf[3];
+    for (int k = 0; k < 3; k++) sf[k] = (int64_t)(step_m[k] * kFix + 0.5);
+    const int64_t pv[3] = { p.x, p.y, p.z };
+    int64_t c[2][3];
+    for (int e = 0; e < 2; e++) {
+        for (int k = 0; k < 3; k++) c[e][k] = pv[k];
+        c[e][rAxis] += (int64_t)rSign * (e ? rb : ra) * sf[rAxis];
+        c[e][fAxis] += (int64_t)fSign * (e ? fb : fa) * sf[fAxis];
+        c[e][1] += (int64_t)(e ? hb : ha) * sf[1];
+    }
+    out[0] = I3{ c[0][0], c[0][1], c[0][2] };
+    out[1] = I3{ c[1][0], c[1][1], c[1][2] };
+}
+// The view direction snapped to world x / z: forward and right axes and signs from the
+// camera's forward and right vectors (y up). Right is the one of the two directions across
+// forward that the camera's right points to.
+inline void exact_facing(const float fwd[3], const float right[3], int* fAxis, int* fSign, int* rAxis, int* rSign) {
+    float ax = fwd[0] < 0 ? -fwd[0] : fwd[0], az = fwd[2] < 0 ? -fwd[2] : fwd[2];
+    if (ax >= az) { *fAxis = 0; *fSign = fwd[0] < 0 ? -1 : 1; *rAxis = 2; *rSign = right[2] < 0 ? -1 : 1; }
+    else          { *fAxis = 2; *fSign = fwd[2] < 0 ? -1 : 1; *rAxis = 0; *rSign = right[0] < 0 ? -1 : 1; }
+}
+
 } // namespace core

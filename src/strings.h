@@ -38,6 +38,11 @@
     X(S_FILL_DIAG, "msg.fill_diag", "Area fill: diagonal ({0})") \
     X(S_DIAG_TURNED, "msg.diag_turned", "Diagonal turned ({0} of {1})") \
     X(S_DIAG_STANDING, "msg.diag_standing", "Diagonal fill: standing (a wall from corner to corner)") \
+    X(S_EXACT_ON, "msg.exact_on", "Exact mode ON: click once, then enter the sizes") \
+    X(S_EXACT_OFF, "msg.exact_off", "Exact mode OFF (corner clicks)") \
+    X(S_EXACT_CANCELLED, "msg.exact_cancelled", "Exact area cancelled") \
+    X(S_EXACT_CLICK, "msg.exact_click", "Click to build the exact area") \
+    X(S_EXACT_TOO_BIG, "msg.exact_too_big", "Too big: more than {0} shapes") \
     X(S_DIAG_LYING, "msg.diag_lying", "Diagonal fill: lying (a ramp)") \
     X(S_FREE_ON, "msg.free_on", "Free placement ON (no surface snapping)") \
     X(S_FREE_OFF, "msg.free_off", "Free placement OFF") \
@@ -166,6 +171,7 @@
     X(S_ACT_ROUND_HOLLOW, "menu.key_round_hollow", "Round fill: solid / hollow") \
     X(S_ACT_ROUND_LYING, "menu.key_round_lying", "Round and diagonal fills: standing / lying") \
     X(S_ACT_CLEAR, "menu.key_clear", "Clear area corners") \
+    X(S_ACT_EXACT, "menu.key_exact", "Exact mode on / off (one click, enter the sizes)") \
     X(S_ACT_FREE, "menu.key_free", "Free placement on / off") \
     X(S_ACT_FARTHER, "menu.key_farther", "Free placement farther") \
     X(S_ACT_CLOSER, "menu.key_closer", "Free placement closer") \
@@ -197,6 +203,10 @@
     X(S_OPT_STYLE_FULL, "option.style_full", "Full shape") \
     X(S_OPT_STYLE_OVERLAP, "option.style_overlap", "Overlap only") \
     X(S_OPT_STYLE_CONNECTED, "option.style_connected", "Connected (fill bucket)") \
+    X(S_OPT_CORNERS, "option.corners", "Area corners") \
+    X(S_OPT_CORNERS_2, "option.corners_2", "Two corners") \
+    X(S_OPT_CORNERS_3, "option.corners_3", "Base corners + height") \
+    X(S_OPT_CORNERS_EXACT, "option.corners_exact", "Exact (enter the sizes)") \
     X(S_OPT_FILL, "option.fill", "Area fill") \
     X(S_OPT_FILL_SOLID, "option.fill_solid", "Solid") \
     X(S_OPT_FILL_HOLLOW, "option.fill_hollow", "Hollow room") \
@@ -232,7 +242,24 @@
     X(S_OPT_FREE, "option.free", "Free placement") \
     X(S_OPT_CREATIVE, "option.creative", "Creative building") \
     X(S_OPT_LANGUAGE, "option.language", "Language") \
-    X(S_OPT_LANGUAGE_GAME, "option.language_game", "Same as the game")
+    X(S_OPT_LANGUAGE_GAME, "option.language_game", "Same as the game") \
+    /* exact mode window */ \
+    X(S_EXACT_TITLE, "exact.title", "Exact size") \
+    X(S_EXACT_HELP, "exact.help", "Sizes in shapes, counted from the block you clicked. Click the arrows (Shift: 10 at a time) or type a number into the selected row; Up / Down or Tab selects. A negative size grows the other way.") \
+    X(S_EXACT_REF, "exact.reference", "Clicked block") \
+    X(S_EXACT_REF_CENTRE, "exact.ref_centre", "Middle (bottom)") \
+    X(S_EXACT_REF_FL, "exact.ref_front_left", "Front left corner") \
+    X(S_EXACT_REF_FR, "exact.ref_front_right", "Front right corner") \
+    X(S_EXACT_REF_BL, "exact.ref_back_left", "Back left corner") \
+    X(S_EXACT_REF_BR, "exact.ref_back_right", "Back right corner") \
+    X(S_EXACT_WIDTH, "exact.width", "Width (left - right)") \
+    X(S_EXACT_DEPTH, "exact.depth", "Depth (away from you)") \
+    X(S_EXACT_HEIGHT, "exact.height", "Height (up)") \
+    X(S_EXACT_SIZE, "exact.size", "{0} x {1}, h {2} = {3} shapes") \
+    X(S_EXACT_BUILD, "exact.build", "Build") \
+    X(S_EXACT_REMOVE, "exact.remove", "Remove") \
+    X(S_EXACT_REPLACE, "exact.replace", "Replace") \
+    X(S_EXACT_CANCEL, "exact.cancel", "Cancel")
 
 enum Str {
 #define BT_STR_ID(id, key, en) id,
