@@ -256,9 +256,6 @@ option.language_game = Comme le jeu
 exact.title = Dimensions exactes
 exact.help = Formes au-delà de celle cliquée : 0 = elle seule, négatif = l'autre sens.
 exact.key_look = Maintenir : masquer la fenêtre, regarder, marcher
-exact.key_step = Changer de 1 (Gauche / Droite)
-exact.key_step10 = Changer de 10 (Page préc. / suiv.)
-exact.key_row = Choisir une ligne (Haut / Bas), puis taper un nombre
 exact.material = Matériau
 exact.reference = Bloc cliqué
 exact.ref_centre = Milieu (en bas)

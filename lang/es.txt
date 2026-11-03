@@ -256,9 +256,6 @@ option.language_game = Como el juego
 exact.title = Medidas exactas
 exact.help = Formas más allá de la pulsada: 0 = solo ella, negativo = al otro lado.
 exact.key_look = Mantener: ocultar la ventana, mirar, caminar
-exact.key_step = Cambiar en 1 (Izquierda / Derecha)
-exact.key_step10 = Cambiar en 10 (Re Pág / Av Pág)
-exact.key_row = Elige una fila (Arriba / Abajo) y escribe un número
 exact.material = Material
 exact.reference = Bloque pulsado
 exact.ref_centre = Centro (abajo)

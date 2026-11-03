@@ -256,9 +256,6 @@ option.language_game = 与游戏相同
 exact.title = 精确尺寸
 exact.help = 点击的形状之外的数量：0 = 仅它，负数 = 另一方向。
 exact.key_look = 按住：隐藏窗口、环顾、行走
-exact.key_step = 改变 1（左 / 右）
-exact.key_step10 = 改变 10（Page Up / Down）
-exact.key_row = 选择行（上 / 下），然后输入数字
 exact.material = 材料
 exact.reference = 点击的方块
 exact.ref_centre = 中间（底部）

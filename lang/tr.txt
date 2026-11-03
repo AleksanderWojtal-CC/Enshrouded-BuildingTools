@@ -256,9 +256,6 @@ option.language_game = Oyunla aynı
 exact.title = Tam ölçü
 exact.help = Tıklanandan sonraki şekiller: 0 = yalnız o, eksi = diğer yöne.
 exact.key_look = Basılı tut: pencereyi gizle, etrafa bak, yürü
-exact.key_step = 1 değiştir (Sol / Sağ)
-exact.key_step10 = 10 değiştir (Page Up / Down)
-exact.key_row = Bir satır seçin (Yukarı / Aşağı), sonra sayı yazın
 exact.material = Malzeme
 exact.reference = Tıklanan blok
 exact.ref_centre = Orta (alt)

@@ -256,9 +256,6 @@ option.language_game = Wie im Spiel
 exact.title = Exakte Größe
 exact.help = Formen über die angeklickte hinaus: 0 = nur sie, negativ = andere Richtung.
 exact.key_look = Halten: Fenster ausblenden, umsehen, laufen
-exact.key_step = Um 1 ändern (Links / Rechts)
-exact.key_step10 = Um 10 ändern (Bild auf / ab)
-exact.key_row = Zeile wählen (Hoch / Runter), dann Zahl tippen
 exact.material = Material
 exact.reference = Angeklickter Block
 exact.ref_centre = Mitte (unten)

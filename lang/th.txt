@@ -256,9 +256,6 @@ option.language_game = เหมือนในเกม
 exact.title = ขนาดแม่นยำ
 exact.help = จำนวนชิ้นเกินจากชิ้นที่คลิก: 0 = เฉพาะชิ้นนั้น ค่าลบ = อีกด้าน
 exact.key_look = กดค้าง: ซ่อนหน้าต่าง มองรอบ เดิน
-exact.key_step = เปลี่ยนทีละ 1 (ซ้าย / ขวา)
-exact.key_step10 = เปลี่ยนทีละ 10 (Page Up / Down)
-exact.key_row = เลือกแถว (ขึ้น / ลง) แล้วพิมพ์ตัวเลข
 exact.material = วัสดุ
 exact.reference = บล็อกที่คลิก
 exact.ref_centre = กึ่งกลาง (ด้านล่าง)
