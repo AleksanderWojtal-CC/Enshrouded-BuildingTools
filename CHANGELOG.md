@@ -3,6 +3,27 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.29.0
+
+- **Exact mode** (#46). A third choice for Area corners (two corners, base + height,
+  exact), on the tools wheel and its key. Click once (left builds or replaces, right
+  removes) and a window opens next to the area: pick where the clicked block sits (the
+  middle of the bottom or a bottom corner, front and left as you look) and set width, depth
+  and height as shapes past the clicked one (0 = only it, negative = the other way) with
+  the arrows or the -10 / +10 buttons. The fill and its options and the game's material
+  picker are in the window, and the 3D preview follows every change. Hold the right mouse
+  button to hide the window, look around and walk; let go and it is back. Build (Enter)
+  or Cancel (Esc). Works while flying; the last sizes are kept.
+- **Options tab: pick your tools.** It now switches whole tools on or off: Building Tools
+  itself, Replace, Area mode, Area shapes (roof, round and diagonal fills), Free placement,
+  Creative building and Magic chests of all bases (plus the language). A tool that is off
+  does nothing: its keys are the game's again and it leaves the building box hints and the
+  tools wheel. The tools' own settings stay on their keys and the wheel.
+- The old info panel window at the bottom of the screen is gone (it still showed at game
+  start and exit); the building box rows and the floating text show everything.
+- The shed roof preview now always matches what is built.
+- The Keys tab is wider, so long (translated) action names are no longer under the keys.
+
 ## 0.28.1
 
 - **Area clicks only while building.** With Area mode (and Replace) on, attacking or

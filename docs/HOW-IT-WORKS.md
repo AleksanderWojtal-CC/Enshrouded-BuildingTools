@@ -14,8 +14,8 @@ a *proxy DLL*. It exports `DirectInput8Create`, which loads the real
 - an **init thread**, which waits for the game to unpack, finds all code by byte signatures
   and installs the hooks. If any required signature is missing, the mod does nothing and
   logs why.
-- an **input thread** for the hotkeys, an **overlay thread** for the info bar, and a
-  **mouse hook thread** for Q + wheel.
+- an **input thread** for the hotkeys and a **mouse hook thread** for Q + wheel and the
+  tools wheel.
 
 No C runtime is linked. The DLL has its own entry point, `memcpy`/`memset` and a stack probe.
 Hooks are 5–10 byte inline jumps to a relay within ±2 GB of the target, plus a
@@ -350,16 +350,37 @@ same functions, found by signatures, so everything looks like the game.
   input and draws a centred box below the crosshair like the game's snapping hint: blur
   behind, the soft nine-slice frame, body text.
 
-## Sounds and info bar
+- **Exact window.** In exact mode the first area click only notes corner 1 and the facing
+  (camera forward and right snapped to world x / z) and opens screen 52, which then draws
+  the exact window instead of the menu: a full-height panel at the left with its own
+  backdrop and no blur, so the drawn box stays visible beside it (the box is clipped to the
+  right of the panel). `core::exact_corners` turns reference + sizes into the two corners.
+  While the right button is held the mod toggles back to the screen it came from (the game
+  has the camera and movement), and back to 52 on release; Material toggles screen 30
+  (BlueprintMultiToolMaterialCatalog) and returns when it closes. Build fixes the corners,
+  closes the window and the input thread sends a real mouse click (left build / replace,
+  right remove; sent again up to twice if the game drops it); the click hooks substitute
+  the fixed corners. While that click is on its way the cursor read keeps the ghost valid
+  in the air, else the game drops clicks while flying. On a dedicated server the client
+  sends two clicks and patches their cursors to the corners.
+- **Render camera.** Menu screens pause the cursor system, so the drawn box would lose its
+  camera behind the exact window. A hook on the frame render function (13fe20 on
+  1.0.1.1) finds the camera in its arguments at run time (arg 2 + 0x8d0 on 1.0.1.1) while
+  the cursor camera is live, and feeds the box from it while the cursor camera is paused.
+  The detour is an asm thunk that saves rcx..r9 and xmm0..3 and jumps to the original with
+  the stack untouched (the function reads eight arguments; a C detour forwarding six
+  broke the pickaxe's aim circle).
+- **Tools in use.** The Options tab switches tools on or off (ini [Tools]). `act_allowed`
+  gates every action, so keys of tools that are off are not read (they stay the game's),
+  their wheel entries and hint rows are left out, and switching a tool off puts its state
+  back to the game's (Prefab mode, Replace off, a plain fill, free placement off).
+
+## Sounds
 
 UI sounds come from the game's UI bundle (`FbUiBundle.sounds`). They are played through
 the game's UI sound function (a429f0) from a hook on the HUD building update (b25350),
-because that function is not thread safe.
-
-The info bar is a transparent, click-through, top-most window over the game's client
-area. It scales with the window height and hides after a few seconds without changes. It
-stays hidden while the floating text is shown (HudRows=1), so it is mainly the fallback
-when the game UI hooks are off or not found.
+because that function is not thread safe. (The separate info panel window of the early
+versions was removed in 0.29.0; the game UI shows everything.)
 
 ## Files written
 

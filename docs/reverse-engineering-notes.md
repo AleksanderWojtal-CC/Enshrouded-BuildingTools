@@ -820,3 +820,22 @@ Reflection: FbUiBundle is still 0x14038 bytes and every bundle field the mod use
 Patch #1 offset (checked by field path, e.g. sounds.hud.buildActionFailed 0x12d20,
 namedStyles.menu.header1 0x11d44, hud.itemWheel.background 0xdd00). The startup log on
 the hotfix client shows every feature available.
+
+## 0.29.0: exact mode
+
+- HudScreenType values (from the enum's strings in the exe, counted back from the end):
+  1 InGame, 2 SystemMenu, 29 BlueprintMultiTool (hammer building), 30
+  BlueprintMultiToolMaterialCatalog, 31 OvergrowthMultiTool, 32 DecayMultiTool, 33-35
+  ScrewdriverMultiTool BuildingMode / GraphManager / EntityConfig, 36 TerraformingSideMenu,
+  52 TechGallery (the mod's screen), 53 YcPlayground (Creative Mode's).
+- Frame render function 13fe20 (1.0.1.1, size 0x838d): `SIG_RENDER_FRAME`, prologue
+  `mov [rsp+18],r8; mov [rsp+8],rcx; push rbp..r15; lea rbp,[rsp-0x6258]; sub rsp,0x6358`.
+  It reads stack arguments 5-8 ([rbp+0x62c0..0x62d8]), so it is hooked through a
+  register- and stack-preserving thunk. The render camera (int64[3] position, then the
+  rotation quaternion) is at arg 2 + 0x8d0 on 1.0.1.1; the mod scans for it at run time
+  (the 1.0 build had it at arg 3 + 0xad0).
+- The game drops a hammer click while its ghost is invalid (flying, aiming at the sky):
+  PlaceShape is not called. Forcing the cursor read's valid byte (out+0x28) with a
+  position in front of the camera, as free placement does, lets the click through.
+- Material catalog: toggling screen 30 from screen 52 opens the game's picker for the
+  item in hand (its category only); closing it returns to 29.
