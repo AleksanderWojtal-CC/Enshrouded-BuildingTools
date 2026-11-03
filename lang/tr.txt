@@ -249,6 +249,11 @@ option.thick = Kalınlık (odalar, duvarlar, çatılar)
 option.none = Yok
 option.free = Serbest yerleştirme
 option.creative = Yaratıcı inşa
+option.tools_help = Kullanılan araçlar. Kapalı bir araç tuşlarını oyuna bırakır, ipuçlarından ve çarktan kalkar.
+option.mod = Building Tools (tüm mod)
+option.tool_area = Alan modu
+option.tool_shapes = Alan şekilleri (çatılar, yuvarlak, çapraz)
+option.global_chests = Tüm üslerin büyülü sandıkları
 option.language = Dil
 option.language_game = Oyunla aynı
 

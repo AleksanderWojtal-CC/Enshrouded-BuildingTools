@@ -249,6 +249,11 @@ option.thick = 厚度（房間、牆壁、屋頂）
 option.none = 無
 option.free = 自由放置
 option.creative = 創造建造
+option.tools_help = 使用的工具。關閉的工具會把按鍵交還給遊戲，並從提示與輪盤中消失。
+option.mod = Building Tools（整個模組）
+option.tool_area = 區域模式
+option.tool_shapes = 區域形狀（屋頂、圓形、斜向）
+option.global_chests = 所有基地的魔法箱
 option.language = 語言
 option.language_game = 與遊戲相同
 

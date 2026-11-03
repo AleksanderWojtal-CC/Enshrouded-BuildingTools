@@ -249,6 +249,11 @@ option.thick = Épaisseur (pièces, murs, toits)
 option.none = Aucun
 option.free = Placement libre
 option.creative = Construction créative
+option.tools_help = Outils utilisés. Un outil désactivé laisse ses touches au jeu et disparaît des aides et de la roue.
+option.mod = Building Tools (tout le mod)
+option.tool_area = Mode zone
+option.tool_shapes = Formes de zone (toits, rondes, diagonales)
+option.global_chests = Coffres magiques de toutes les bases
 option.language = Langue
 option.language_game = Comme le jeu
 

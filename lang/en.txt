@@ -253,6 +253,11 @@ option.thick = Thickness (rooms, walls, roofs)
 option.none = None
 option.free = Free placement
 option.creative = Creative building
+option.tools_help = Tools in use. A tool that is off leaves its keys to the game and leaves the hints and the wheel.
+option.mod = Building Tools (whole mod)
+option.tool_area = Area mode
+option.tool_shapes = Area shapes (roofs, round, diagonal)
+option.global_chests = Magic chests of all bases
 option.language = Language
 option.language_game = Same as the game
 

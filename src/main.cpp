@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev8"
+#define MOD_VERSION "0.29.0-dev9"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -143,6 +143,7 @@ struct Config {
     int keyCreative  = 0;      // creative building on / off
     int keyReplaceHold = 0;    // Replace on while this key is held
     int keyPrefab = 0, keyAreaOn = 0, keyReplaceOn = 0, keyReplaceOff = 0;   // set a mode / Replace directly
+    int toolReplace = 1, toolArea = 1, toolShapes = 1, toolFree = 1;   // tools on (Options page); off = no keys, hints or wheel entries
     char language[16] = "auto";  // text language: auto (as the game), or a file code (pl, de, ...)
 };
 static Config g_cfg;
@@ -194,11 +195,18 @@ static void write_full_ini(const Config& c) {
      .t("StyleFull=").i(c.keyStyleFull).t("\r\nStyleOverlap=").i(c.keyStyleOverlap).t("\r\nStyleConnected=").i(c.keyStyleConnected).t("\r\n")
      .t("FillSolid=").i(c.keyFillSolid).t("\r\nFillHollow=").i(c.keyFillHollow).t("\r\nFillWalls=").i(c.keyFillWalls).t("\r\n")
      .t("FillRoof=").i(c.keyFillRoof).t("\r\nFillRound=").i(c.keyFillRound).t("\r\nFillDiagonal=").i(c.keyFillDiag).t("\r\n")
-     .t("; Exact mode on / off (one click, then the sizes in a window)\r\nToggleExact=").i(c.keyExact).t("\r\n")
+     .t("; Area corners: two -> base + height -> exact (one click, then the sizes in a window)\r\nToggleExact=").i(c.keyExact).t("\r\n")
      .t("ToggleCreative=").i(c.keyCreative).t("\r\n")
      .t("PrefabMode=").i(c.keyPrefab).t("\r\nAreaMode=").i(c.keyAreaOn).t("\r\n")
      .t("ReplaceOn=").i(c.keyReplaceOn).t("\r\nReplaceOff=").i(c.keyReplaceOff).t("\r\n")
      .t("; Replace is on while this key is held, back as it was when you let go\r\nHoldReplace=").i(c.keyReplaceHold).t("\r\n")
+     .t("\r\n[Tools]\r\n")
+     .t("; Tools in use (1) or not (0). A tool that is off does nothing: its keys are free for the\r\n")
+     .t(";     game and it leaves the building box hints and the tools wheel. AreaShapes = the roof,\r\n")
+     .t(";     round and diagonal fills of Area mode. (Creative building and the\r\n")
+     .t(";     magic chests of all bases have their own sections below.)\r\n")
+     .t("Replace=").i(c.toolReplace).t("\r\nAreaMode=").i(c.toolArea).t("\r\nAreaShapes=").i(c.toolShapes)
+     .t("\r\nFreePlacement=").i(c.toolFree).t("\r\n")
      .t("\r\n[Creative]\r\n")
      .t("; 1 = creative building: blocks cost nothing, removing or undoing gives nothing back,\r\n")
      .t(";     so your inventory is never touched (props, crafting and chests stay normal)\r\n")
@@ -310,6 +318,10 @@ static void load_config() {
     g_cfg.keyReplaceOn  = ini_int(L"Keys", L"ReplaceOn", 0);
     g_cfg.keyReplaceOff = ini_int(L"Keys", L"ReplaceOff", 0);
     g_cfg.keyReplaceHold = ini_int(L"Keys", L"HoldReplace", 0);
+    g_cfg.toolReplace  = ini_int(L"Tools", L"Replace", 1) != 0;
+    g_cfg.toolArea     = ini_int(L"Tools", L"AreaMode", 1) != 0;
+    g_cfg.toolShapes   = ini_int(L"Tools", L"AreaShapes", 1) != 0;
+    g_cfg.toolFree     = ini_int(L"Tools", L"FreePlacement", 1) != 0;
     bool noLanguage;
     {
         wchar_t p[MAX_PATH], w[16];
@@ -331,7 +343,8 @@ static void load_config() {
         ini_int(L"Keys", L"ToggleMod", -1) == -1 || ini_int(L"Limits", L"FillLimit", -1) == -1 ||
         ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1 || noLanguage ||
         ini_int(L"Keys", L"RadialMenu", -1) == -1 || ini_int(L"Keys", L"HoldReplace", -1) == -1 ||
-        ini_int(L"Area", L"DrawBoxBlocks", -1) == -1 || ini_int(L"Area", L"ExactWidth", -9999) == -9999)
+        ini_int(L"Area", L"DrawBoxBlocks", -1) == -1 || ini_int(L"Area", L"ExactWidth", -9999) == -9999 ||
+        ini_int(L"Tools", L"AreaShapes", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -3975,11 +3988,13 @@ static void compose_overlay(char* out, int cap) {
             if (g_cfg.wheelKey > 0) vk_name(g_cfg.wheelKey, k[7]);
             named = g_keysVersion;
         }
-        b.str("\n").str(k[0]).c(' ').str(T(S_BAR_KEY_AREA)).str("  ").str(k[1]).c(' ').str(T(S_BAR_KEY_REPLACE))
-         .str("  ").str(k[2]).c(' ').str(T(S_BAR_KEY_CLEAR)).str("  ").str(k[3]).c(' ').str(T(S_BAR_KEY_STYLE))
-         .str("  ").str(k[4]).c(' ').str(T(S_BAR_KEY_FREE)).str("  ").str(k[5]).c(' ').str(T(S_BAR_KEY_FILL));
-        if (g_hover && g_cfg.wheelKey > 0) b.str("  ").str(k[7]).str(T(S_BAR_KEY_WHEEL));
-        if (g_cfg.keyOff > 0) b.str("  ").str(k[6]).c(' ').str(T(S_BAR_KEY_OFF));
+        b.str("\n");                                  // only the tools in use (Options page)
+        auto key = [&](bool on, int i, Str t) { if (on) b.str(k[i]).c(' ').str(T(t)).str("  "); };
+        key(g_cfg.toolArea, 0, S_BAR_KEY_AREA); key(g_cfg.toolReplace, 1, S_BAR_KEY_REPLACE);
+        key(g_cfg.toolArea, 2, S_BAR_KEY_CLEAR); key(g_cfg.toolReplace, 3, S_BAR_KEY_STYLE);
+        key(g_cfg.toolFree, 4, S_BAR_KEY_FREE); key(g_cfg.toolArea, 5, S_BAR_KEY_FILL);
+        if (g_hover && g_cfg.wheelKey > 0) b.str(k[7]).str(T(S_BAR_KEY_WHEEL)).str("  ");
+        if (g_cfg.keyOff > 0) b.str(k[6]).c(' ').str(T(S_BAR_KEY_OFF));
     }
     copy_text(out, b.z(), cap);
 }
@@ -4160,6 +4175,8 @@ static void set_replace_style(LONG st) {
     LOG(.str("replace style -> ").str(st == STYLE_FULL ? "full" : st == STYLE_OVERLAP ? "overlap" : "connected"));
 }
 static void set_fill(LONG f) { g_fill = f; LOG(.str("fill -> ").i(f)); }
+// Fills that can be picked: solid, hollow and walls always; roof, round and diagonal with Area shapes.
+static int fill_n() { return g_cfg.toolShapes ? core::FILL_COUNT : core::FILL_ROOF; }
 // the roof keys work (and show) only in Area mode with the roof fill; turning only when the
 // shape has more than one way
 static bool roof_on() { return g_mode == MODE_AREA && g_fill == core::FILL_ROOF; }
@@ -4203,6 +4220,7 @@ static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying, &g_cfg.keyFillDiag, &g_cfg.keyExact,
 };
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
+static volatile LONG g_offReq = 0;                  // the Options page switched the whole mod off
 static volatile LONG g_menuOpen = 0;
 static void style_set(LONG st) {
     set_replace_style(st);
@@ -4228,7 +4246,29 @@ static void set_roof_shape(LONG r) { g_roofShape = r % core::ROOF_COUNT; g_roofR
 static void set_roof_rot(LONG r) { g_roofRot = r % core::roof_turns(g_roofShape); LOG(.str("roof turn -> ").i(g_roofRot)); }
 static void set_thick(LONG t) { g_thick = t < 1 ? 1 : t > 3 ? 3 : t; LOG(.str("thickness -> ").i(g_thick)); }
 static void set_overhang(LONG o) { g_overhang = o < 0 ? 0 : o > 3 ? 3 : o; LOG(.str("overhang -> ").i(g_overhang)); }
+// Whether an action belongs to a tool that is on (Options page). Keys of tools that are off
+// stay the game's, and those actions leave the hints and the wheel.
+static bool act_allowed(int a) {
+    switch (a) {
+    case ACT_REPLACE: case ACT_STYLE: case ACT_STYLE_FULL: case ACT_STYLE_OVERLAP: case ACT_STYLE_CONNECTED:
+    case ACT_REPLACE_ON: case ACT_REPLACE_OFF: return g_cfg.toolReplace != 0;
+    case ACT_FREE: case ACT_FARTHER: case ACT_CLOSER: return g_cfg.toolFree != 0;
+    case ACT_FILL_ROOF: case ACT_FILL_ROUND: case ACT_FILL_DIAG: case ACT_ROOF_TURN: case ACT_ROOF_SHAPE:
+    case ACT_OVERHANG: case ACT_ROUND_HOLLOW: case ACT_ROUND_LYING: return g_cfg.toolArea && g_cfg.toolShapes;
+    case ACT_AREA: case ACT_CLEAR: case ACT_FILL: case ACT_FILL_SOLID: case ACT_FILL_HOLLOW: case ACT_FILL_WALLS:
+    case ACT_PREFAB: case ACT_AREA_ON: case ACT_THICK: case ACT_EXACT: return g_cfg.toolArea != 0;
+    default: return true;
+    }
+}
+// A tool switched off: its state back to the game's.
+static void tools_apply() {
+    if (!g_cfg.toolArea && g_mode == MODE_AREA) set_mode(MODE_PREFAB);
+    if (!g_cfg.toolReplace && g_replace) set_replace(0);
+    if (g_fill >= fill_n()) set_fill(core::FILL_SOLID);
+    if (!g_cfg.toolFree && g_hover) set_hover(0);
+}
 static void do_act(int a) {
+    if (!act_allowed(a)) return;
     switch (a) {
     case ACT_AREA: {
         LONG m = g_mode == MODE_PREFAB ? MODE_AREA : MODE_PREFAB;
@@ -4248,7 +4288,7 @@ static void do_act(int a) {
         break;
     }
     case ACT_STYLE: style_set(g_replaceStyle == STYLE_FULL ? STYLE_OVERLAP : g_replaceStyle == STYLE_OVERLAP ? STYLE_CONNECTED : STYLE_FULL); break;
-    case ACT_FILL: fill_set((g_fill + 1) % core::FILL_COUNT); break;
+    case ACT_FILL: fill_set((g_fill + 1) % fill_n()); break;
     case ACT_FARTHER: case ACT_CLOSER: hover_step(a == ACT_FARTHER ? 0.5f : -0.5f); return;   // no sound: held keys repeat
     case ACT_FREE: { LONG h = !g_hover; set_hover(h); flash(T(h ? S_FREE_ON : S_FREE_OFF)); break; }
     case ACT_CLEAR:
@@ -4265,7 +4305,12 @@ static void do_act(int a) {
     case ACT_FILL_ROOF: fill_set(core::FILL_ROOF); break;
     case ACT_FILL_ROUND: fill_set(core::FILL_ROUND); break;
     case ACT_FILL_DIAG: fill_set(core::FILL_DIAG); break;
-    case ACT_EXACT: set_corners_mode(g_cfg.exact ? 2 : 1); flash(T(g_cfg.exact ? S_EXACT_ON : S_EXACT_OFF)); break;
+    case ACT_EXACT: {                              // area corners: two -> base + height -> exact
+        set_corners_mode(g_cfg.exact ? 2 : g_cfg.corners == 3 ? 1 : 3);
+        if (g_cfg.exact) flash(T(S_EXACT_ON));
+        else { Buf b; b.str(T(S_OPT_CORNERS)).str(": ").str(T(g_cfg.corners == 3 ? S_OPT_CORNERS_3 : S_OPT_CORNERS_2)); flash(b.z()); }
+        break;
+    }
     case ACT_ROUND_HOLLOW: {
         set_round_hollow(!g_roundHollow);
         flash(T(g_roundHollow ? S_ROUND_HOLLOW : S_ROUND_SOLID));
@@ -4570,7 +4615,7 @@ static void draw_fill_rows() {
     static const char* const digits[] = { "1", "2", "3", "4" };
     const char* const overhangs[] = { T(S_OPT_NONE), "1", "2", "3" };
     LONG v;
-    if (ui_option(T(S_OPT_FILL), fills, core::FILL_COUNT, g_fill, &v)) set_fill(v);
+    if (ui_option(T(S_OPT_FILL), fills, fill_n(), g_fill < fill_n() ? g_fill : 0, &v)) set_fill(v);
     if (g_fill == core::FILL_ROOF) {
         if (ui_option(T(S_OPT_ROOF_SHAPE), roofs, core::ROOF_COUNT, g_roofShape, &v)) set_roof_shape(v);
         if (core::roof_turns(g_roofShape) > 1 && ui_option(T(S_OPT_ROOF_TURN), digits, core::roof_turns(g_roofShape), g_roofRot, &v)) set_roof_rot(v);
@@ -4589,25 +4634,33 @@ static void draw_fill_rows() {
     if (g_fill != core::FILL_SOLID && !(g_fill == core::FILL_ROUND && !g_roundHollow) &&
         ui_option(T(S_OPT_THICK), digits, 3, g_thick - 1, &v)) set_thick(v + 1);
 }
+// Options page: which tools are in use (the tools' own settings are on their keys, the wheel
+// and the exact window), then the language.
+static void tool_toggle(Str label, int* flag) {
+    const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
+    LONG v;
+    if (ui_option(T(label), offOn, 2, *flag ? 1 : 0, &v) && (v != 0) != (*flag != 0)) {
+        *flag = v != 0;
+        tools_apply();
+        write_full_ini(g_cfg);
+        LOG(.str("tool ").str(kStrKey[label]).str(" -> ").i(v));
+    }
+}
 static void draw_tool_rows() {
     const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
-    const char* const modes[] = { T(S_OPT_MODE_PREFAB), T(S_OPT_MODE_AREA) };
-    const char* const styles[] = { T(S_OPT_STYLE_FULL), T(S_OPT_STYLE_OVERLAP), T(S_OPT_STYLE_CONNECTED) };
-    static const LONG styleIds[] = { STYLE_FULL, STYLE_OVERLAP, STYLE_CONNECTED };
     LONG v;
-    if (ui_option(T(S_OPT_MODE), modes, 2, g_mode, &v)) set_mode(v);
-    if (ui_option(T(S_OPT_REPLACE), offOn, 2, g_replace ? 1 : 0, &v)) set_replace(v);
-    int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
-    if (ui_option(T(S_OPT_STYLE), styles, 3, st, &v)) set_replace_style(styleIds[v]);
-    {
-        const char* const cms[] = { T(S_OPT_CORNERS_2), T(S_OPT_CORNERS_3), T(S_OPT_CORNERS_EXACT) };
-        int cm = g_cfg.exact ? 2 : g_cfg.corners == 3 ? 1 : 0;
-        if (ui_option(T(S_OPT_CORNERS), cms, 3, cm, &v)) set_corners_mode(v == 2 ? 1 : v == 1 ? 3 : 2);
-    }
-    draw_fill_rows();
-    if (ui_option(T(S_OPT_FREE), offOn, 2, g_hover ? 1 : 0, &v)) set_hover(v);
+    ui_text(T(S_OPT_TOOLS_HELP), STYLE_BODY);
+    if (ui_option(T(S_OPT_MOD), offOn, 2, g_modOff ? 0 : 1, &v) && v == 0) g_offReq = 1;
+    tool_toggle(S_OPT_REPLACE, &g_cfg.toolReplace);
+    tool_toggle(S_OPT_TOOL_AREA, &g_cfg.toolArea);
+    if (g_cfg.toolArea) tool_toggle(S_OPT_TOOL_SHAPES, &g_cfg.toolShapes);
+    tool_toggle(S_OPT_FREE, &g_cfg.toolFree);
     if (ui_option(T(S_OPT_CREATIVE), offOn, 2, g_cfg.creative ? 1 : 0, &v) && set_creative(v != 0))
         flash(T(g_cfg.creative ? S_CREATIVE_ON : S_CREATIVE_OFF));
+    if (ui_option(T(S_OPT_GLOBAL_CHESTS), offOn, 2, g_cfg.globalChests ? 1 : 0, &v) && (v != 0) != (g_cfg.globalChests != 0)) {
+        g_cfg.globalChests = v != 0; write_full_ini(g_cfg);
+        LOG(.str("magic chests of all bases -> ").i(v));
+    }
     // language: as the game, or one by hand (saved as Language= in the ini)
     const char* langs[1 + kLanguageCount];
     langs[0] = T(S_OPT_LANGUAGE_GAME);
@@ -5192,7 +5245,7 @@ static void draw_hud_rows() {
     static const Str styles[] = { S_HUD_STYLE_FULL, S_HUD_STYLE_OVERLAP, S_HUD_STYLE_CONNECTED };
     static const Str fills[] = { S_HUD_FILL_SOLID, S_HUD_FILL_HOLLOW, S_HUD_FILL_WALLS, S_HUD_FILL_ROOF, S_HUD_FILL_ROUND, S_HUD_FILL_DIAG };
     bool sw = ui.hudSwitch || ui.imageCtx;
-    hud_key_row(g_cfg.keyStructure, T(sw ? S_HUD_AREA : g_mode == MODE_AREA ? S_HUD_AREA_ON : S_HUD_AREA_OFF), g_mode == MODE_AREA);
+    if (g_cfg.toolArea) hud_key_row(g_cfg.keyStructure, T(sw ? S_HUD_AREA : g_mode == MODE_AREA ? S_HUD_AREA_ON : S_HUD_AREA_OFF), g_mode == MODE_AREA);
     if (g_mode == MODE_AREA) {
         hud_key_row(g_cfg.keyFill, T(fills[g_fill % core::FILL_COUNT]));
         if (roof_on()) { Buf r; r.fmt(T(S_HUD_ROOF_SHAPE), T(kRoofName[g_roofShape % core::ROOF_COUNT])); hud_key_row(g_cfg.keyRoofShape, r.z()); }
@@ -5210,12 +5263,12 @@ static void draw_hud_rows() {
         }
         if (g_corners > 0) hud_key_row(g_cfg.keyCancel, T(S_HUD_CLEAR));
     }
-    hud_key_row(g_cfg.keyReplace, T(sw ? S_HUD_REPLACE : g_replace ? S_HUD_REPLACE_ON : S_HUD_REPLACE_OFF), g_replace != 0);
+    if (g_cfg.toolReplace) hud_key_row(g_cfg.keyReplace, T(sw ? S_HUD_REPLACE : g_replace ? S_HUD_REPLACE_ON : S_HUD_REPLACE_OFF), g_replace != 0);
     if (g_replace) {
         int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
         hud_key_row(g_cfg.keyStyle, T(styles[st]));
     }
-    hud_key_row(g_cfg.keyHover, T(sw ? S_HUD_FREE : g_hover ? S_HUD_FREE_ON : S_HUD_FREE_OFF), g_hover != 0);
+    if (g_cfg.toolFree) hud_key_row(g_cfg.keyHover, T(sw ? S_HUD_FREE : g_hover ? S_HUD_FREE_ON : S_HUD_FREE_OFF), g_hover != 0);
     if (g_hover && g_cfg.wheelKey > 0) {
         Buf h; h.fmt(T(S_HUD_WHEEL), tenths((int)(g_hoverDist * 10.f + 0.5f)).s); hud_key_row(g_cfg.wheelKey, h.z());
     }
@@ -5498,6 +5551,8 @@ static void install_menu() {
 // area fill and the corners in Area mode).
 static int wheel_entries(int* act) {
     int n = 0;
+    int all[kWheelSlots + 8];
+    int& m = n; int* out = act; act = all;
     act[n++] = ACT_AREA;
     if (g_mode == MODE_AREA) act[n++] = ACT_FILL;
     if (roof_on()) act[n++] = ACT_ROOF_SHAPE;
@@ -5514,7 +5569,9 @@ static int wheel_entries(int* act) {
     act[n++] = ACT_MENU;
     if (g_replace) act[n++] = ACT_STYLE;
     act[n++] = ACT_REPLACE;
-    return n;
+    int k = 0;
+    for (int i = 0; i < m; i++) if (act_allowed(all[i]) && k < kWheelSlots) out[k++] = all[i];
+    return k;
 }
 static void wheel_texts(int a, char* name, char* value) {
     const char* nm = ""; const char* v = "";
@@ -5639,7 +5696,9 @@ static DWORD WINAPI input_thread(void*) {
         if (g_radialOpen && (g_modOff || !focus)) radial_close(false);
         {   // whole mod off / on
             bool down = focus && key_down(g_cfg.keyOff);
-            if (down && !prevOff) {
+            bool req = InterlockedExchange(&g_offReq, 0) && !g_modOff;
+            if (req) g_menuReq = 2;                  // off from the Options page: the menu closes (F5 brings the mod back)
+            if ((down && !prevOff) || req) {
                 LONG off = !g_modOff;
                 if (off) {      // back to the vanilla game
                     g_mode = MODE_PREFAB; g_replace = 0; g_hover = 0; g_corners = 0; g_cancelReq = 1;
@@ -5708,7 +5767,7 @@ static DWORD WINAPI input_thread(void*) {
         if (g_radialOpen) { for (bool& p : prev) p = true; continue; }   // the wheel has the mouse
         {   // Replace while a key is held; as it was when let go (unless changed meanwhile)
             static bool held = false; static LONG before = 0;
-            bool down = focus && key_down(g_cfg.keyReplaceHold);
+            bool down = focus && g_cfg.toolReplace && key_down(g_cfg.keyReplaceHold);
             if (down && !held) {
                 before = g_replace;
                 if (!g_replace) { set_replace(1); flash(T(S_REPLACE_ON)); beep(MB_ICONQUESTION); }
@@ -5718,7 +5777,7 @@ static DWORD WINAPI input_thread(void*) {
             held = down;
         }
         for (int k = 0; k < ACT_KEYED; k++) {
-            int code = *kActKey[k];
+            int code = act_allowed(k) ? *kActKey[k] : 0;
             if ((k == ACT_FARTHER || k == ACT_CLOSER) && !g_hover) code = 0;
             if ((k == ACT_ROOF_TURN && !shape_turn_on()) || (k == ACT_ROOF_SHAPE && !shape_on())) code = 0;   // R stays the game's key otherwise
             bool down = focus && key_down(code);

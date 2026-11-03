@@ -249,6 +249,11 @@ option.thick = Spessore (stanze, pareti, tetti)
 option.none = Nessuna
 option.free = Posizionamento libero
 option.creative = Costruzione creativa
+option.tools_help = Strumenti in uso. Uno strumento disattivato lascia i suoi tasti al gioco e sparisce dai suggerimenti e dalla ruota.
+option.mod = Building Tools (tutta la mod)
+option.tool_area = Modalità area
+option.tool_shapes = Forme dell'area (tetti, curve, diagonali)
+option.global_chests = Forzieri magici di tutte le basi
 option.language = Lingua
 option.language_game = Come nel gioco
 

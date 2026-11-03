@@ -249,6 +249,11 @@ option.thick = Dicke (Räume, Wände, Dächer)
 option.none = Keiner
 option.free = Freies Platzieren
 option.creative = Kreatives Bauen
+option.tools_help = Verwendete Werkzeuge. Ein ausgeschaltetes Werkzeug überlässt seine Tasten dem Spiel und verschwindet aus Hinweisen und Rad.
+option.mod = Building Tools (ganze Mod)
+option.tool_area = Flächenmodus
+option.tool_shapes = Flächenformen (Dächer, rund, diagonal)
+option.global_chests = Magische Truhen aller Basen
 option.language = Sprache
 option.language_game = Wie im Spiel
 

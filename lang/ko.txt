@@ -249,6 +249,11 @@ option.thick = 두께 (방, 벽, 지붕)
 option.none = 없음
 option.free = 자유 배치
 option.creative = 창작 건축
+option.tools_help = 사용할 도구. 꺼진 도구는 키를 게임에 돌려주고 힌트와 휠에서 사라집니다.
+option.mod = Building Tools (모드 전체)
+option.tool_area = 영역 모드
+option.tool_shapes = 영역 모양 (지붕, 원형, 대각선)
+option.global_chests = 모든 기지의 마법 상자
 option.language = 언어
 option.language_game = 게임과 같게
 
