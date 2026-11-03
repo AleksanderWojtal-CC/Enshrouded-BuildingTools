@@ -123,7 +123,7 @@ decides creative building, chests of all bases, MaxShapes and FillLimit for ever
 Server and players should run the same version of the mod.
 
 [b]Compatibility[/b]
-Built for Patch #1 (1.0.1.0, 2026-11-02); use 0.24.0 or older only with the original 1.0 client. After a game update the mod disables itself
+Built for Patch #1 (1.0.1.0, 2026-11-02), also works with Hotfix #4 (1.0.1.1, 2026-11-03); use 0.24.0 or older only with the original 1.0 client. After a game update the mod disables itself
 safely if the game code changed; check BuildingTools.log.
 Multiplayer: dedicated servers are supported (see Install). In a game hosted by a player
 (not a dedicated server) the mod runs in the host's game, and per-player settings are not

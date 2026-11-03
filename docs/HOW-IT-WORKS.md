@@ -3,7 +3,7 @@
 This is the design overview. Exact addresses and the research history are in
 [reverse-engineering-notes.md](reverse-engineering-notes.md). All addresses are RVAs in the
 2026-10-20 1.0 client unless noted; the 0.24.1 section of the notes lists what moved in
-Patch #1 (1.0.1.0).
+Patch #1 (1.0.1.0); Hotfix #4 (1.0.1.1) needed no changes.
 
 ## Loading
 

@@ -55,12 +55,12 @@ static void binary_checks(const char* exe) {
         {"SIG_PLACE", 0x491930}, {"SIG_REMOVE", 0x492410}, {"SIG_BOUNDS", 0x495830},
         {"SIG_CURSOR_CALL", 0x2d851b}, {"SIG_PLACE_CALL", 0x2d8863},
         {"SIG_SERVER_CHECK", 0x2d8812}, {"SIG_PAY", 0x495e40},
-        {"SIG_PLACE_COMMIT", 0x48e610}, {"SIG_REMOVE_COMMIT", 0x48ee40}, {"SIG_MATERIAL_ITEM", 0xe8c1b0}, {"SIG_REFUND_BUILD", 0x4920f0}, {"SIG_BLIT_CHECK", 0xa8e1e7}, {"SIG_POP_UNDO", 0x499460}, {"SIG_HUD_UPDATE", 0xb34c20}, {"SIG_UI_SOUND", 0xb3645a}, {"SIG_CURSOR_XF", 0x2904e0}, {"SIG_SYS_DEPS", 0x9c7ac0}, {"SIG_HOVER_FX", 0x292b70}, {"SIG_DISM_DEPS", 0x2d8db9}, {"SIG_INPUT_ENCODE", 0x3ab930},
-        {"SIG_PAY_PLACE", 0x2d8acb}, {"SIG_PAY_REMOVE", 0x2d97dc}, {"SIG_PAY_REMOVE_PREFAB", 0x2d9da5}, {"SIG_PAY_UNDO", 0x2db270}, {"SIG_MISSING_CALL", 0x29bfb2}, {"SIG_STOCKS", 0x40e4f0}, {"SIG_PICK_CALL", 0x2b4707}, {"SIG_ZONE_VIS_CALL", 0x860170},
-        {"SIG_UI_DRAW_RECT", 0x11a8a00}, {"SIG_UI_DRAW_ROTATED", 0x11a9000}, {"SIG_UI_BOX_BLEND", 0x11ca820},
-        {"SIG_UI_SCROLL_PARAMS", 0xa3edf0}, {"SIG_UI_SCROLL_BEGIN", 0xa3df60}, {"SIG_UI_SCROLL_END", 0xa400a0},
-        {"SIG_UI_SCROLL_SPEED", 0xd4e320}, {"SIG_PIECE_CHECK_CALL", 0x2d94f2}, {"SIG_UI_SETTING_OPTION_CALL", 0xc54b53},
-        {"SIG_TOGGLE_SCREEN", 0xd74790}, {"SIG_UI_SMALL_TOGGLE", 0xc37e69},
+        {"SIG_PLACE_COMMIT", 0x48e610}, {"SIG_REMOVE_COMMIT", 0x48ee40}, {"SIG_MATERIAL_ITEM", 0xe8c190}, {"SIG_REFUND_BUILD", 0x4920f0}, {"SIG_BLIT_CHECK", 0xa8e1c7}, {"SIG_POP_UNDO", 0x499460}, {"SIG_HUD_UPDATE", 0xb34c00}, {"SIG_UI_SOUND", 0xb3643a}, {"SIG_CURSOR_XF", 0x2904e0}, {"SIG_SYS_DEPS", 0x9c7aa0}, {"SIG_HOVER_FX", 0x292b70}, {"SIG_DISM_DEPS", 0x2d8db9}, {"SIG_INPUT_ENCODE", 0x3ab930},
+        {"SIG_PAY_PLACE", 0x2d8acb}, {"SIG_PAY_REMOVE", 0x2d97dc}, {"SIG_PAY_REMOVE_PREFAB", 0x2d9da5}, {"SIG_PAY_UNDO", 0x2db270}, {"SIG_MISSING_CALL", 0x29bfb2}, {"SIG_STOCKS", 0x40e4f0}, {"SIG_PICK_CALL", 0x2b4707}, {"SIG_ZONE_VIS_CALL", 0x860150},
+        {"SIG_UI_DRAW_RECT", 0x11a7c60}, {"SIG_UI_DRAW_ROTATED", 0x11a8260}, {"SIG_UI_BOX_BLEND", 0x11c9a80},
+        {"SIG_UI_SCROLL_PARAMS", 0xa3edd0}, {"SIG_UI_SCROLL_BEGIN", 0xa3df40}, {"SIG_UI_SCROLL_END", 0xa40080},
+        {"SIG_UI_SCROLL_SPEED", 0xd4e300}, {"SIG_PIECE_CHECK_CALL", 0x2d94f2}, {"SIG_UI_SETTING_OPTION_CALL", 0xc54b33},
+        {"SIG_TOGGLE_SCREEN", 0xd74770}, {"SIG_UI_SMALL_TOGGLE", 0xc37e49},
     };
     bool allThere = true;
     for (auto& e : expect) allThere &= sigs.count(e.first) == 1;
@@ -79,28 +79,28 @@ static void binary_checks(const char* exe) {
     const uint8_t payStolen[7] = {0x40,0x55,0x56,0x48,0x83,0xEC,0x78};
     CHECK(!memcmp(&img[0x495e40], payStolen, 7), "pay hook steals push rbp; push rsi; sub rsp,78h");
     {
-        const uint32_t sig = 0xa8e1e7;
+        const uint32_t sig = 0xa8e1c7;
         const uint8_t site[4] = {0x41,0x80,0xFB,0x80};
         CHECK(!memcmp(&img[sig + 0x29], site, 4), "blit patch site = cmp r11b,80h");
-        CHECK(sig + 0x29 + 35 == 0xa8e233 && img[0xa8e233] == 0x41 && img[0xa8e234] == 0x80 && img[0xa8e235] == 0xBA, "blit continue = cmp byte [r10+0A0h],0");
-        CHECK(sig + 0x104 == 0xa8e2eb, "blit skip target");
-        CHECK(sig + 0xdb == 0xa8e2c2 && img[0xa8e2c2] == 0x41 && img[0xa8e2c3] == 0x80 && img[0xa8e2c4] == 0x7A, "blit building write path = cmp byte [r10+30h],0");
+        CHECK(sig + 0x29 + 35 == 0xa8e213 && img[0xa8e213] == 0x41 && img[0xa8e214] == 0x80 && img[0xa8e215] == 0xBA, "blit continue = cmp byte [r10+0A0h],0");
+        CHECK(sig + 0x104 == 0xa8e2cb, "blit skip target");
+        CHECK(sig + 0xdb == 0xa8e2a2 && img[0xa8e2a2] == 0x41 && img[0xa8e2a3] == 0x80 && img[0xa8e2a4] == 0x7A, "blit building write path = cmp byte [r10+30h],0");
     }
-    { const uint32_t u = 0xb3645a;
+    { const uint32_t u = 0xb3643a;
       uint32_t ctx = u + 7 + *(int32_t*)&img[u + 3]; uint32_t call = u + 0x2d + *(int32_t*)&img[u + 0x29];
-      CHECK(ctx == 0x28404a8 && call == 0xa4f250 && img[u + 0x28] == 0xE8, "ui sound: context global and play function"); }
-    CHECK(!memcmp(&img[0xb34c20], "\x48\x8B\xC4\x55\x53", 5), "hud hook steals mov rax,rsp; push rbp; push rbx");
+      CHECK(ctx == 0x283f4a8 && call == 0xa4f230 && img[u + 0x28] == 0xE8, "ui sound: context global and play function"); }
+    CHECK(!memcmp(&img[0xb34c00], "\x48\x8B\xC4\x55\x53", 5), "hud hook steals mov rax,rsp; push rbp; push rbx");
     CHECK(!memcmp(&img[0x28c350], "\x48\x89\x5C\x24\x18", 5), "cursor query hook steals mov [rsp+18h],rbx");
-    CHECK(0x2d8db9 + 0x15 + *(int32_t*)&img[0x2d8db9 + 0x11] == 0x9c7ac0, "dismantle deps call targets 9c7ac0");
+    CHECK(0x2d8db9 + 0x15 + *(int32_t*)&img[0x2d8db9 + 0x11] == 0x9c7aa0, "dismantle deps call targets 9c7ac0");
     CHECK(!memcmp(&img[0x2d92c4], "\x48\x8B\x85\x50\x03\x00\x00", 7), "dismantle reads pickup writer at deps+0x180 (rbp+0x350)");
     CHECK(*(int32_t*)&img[0x2d94f2 + 0x1c] == 0x1d8, "dismantle aim state at rbp+0x1d8");
     CHECK(!memcmp(&img[0x4920f0], "\x48\x8B\xC4\x48\x89\x48\x08", 7), "refund hook steals mov rax,rsp; mov [rax+8],rcx");
     CHECK(!memcmp(&img[0x48ee40], "\x48\x89\x5C\x24\x18", 5), "remove commit hook steals mov [rsp+18h],rbx");
-    CHECK(!memcmp(&img[0x3aa8a0], "\x48\x8D\x81\xD0\xFF\x00\x00\xC3", 8) && 0x860170 + 0xc + *(int32_t*)&img[0x860170 + 8] == 0x3aa8a0, "zone vis getter: lea rax,[rcx+0xffd0]; ret");
+    CHECK(!memcmp(&img[0x3aa8a0], "\x48\x8D\x81\xD0\xFF\x00\x00\xC3", 8) && 0x860150 + 0xc + *(int32_t*)&img[0x860150 + 8] == 0x3aa8a0, "zone vis getter: lea rax,[rcx+0xffd0]; ret");
     { const uint32_t h = 0x292b70;
       auto rel = [&](uint32_t at) { return at + 5 + *(int32_t*)&img[at + 1]; };
-      CHECK(rel(h + 0x4fd) == 0x9c4d00 && rel(h + 0x51d) == 0x2a1e90 && rel(h + 0x607) == 0x2a1e40, "hover fn: time / stop / start calls");
-      CHECK(h + 0x5e7 + 7 + *(int32_t*)&img[h + 0x5e7 + 3] == 0x1529a88 && *(uint32_t*)&img[h + 0x436] == 0xb0718612, "hover fn: spawn defaults and highlight guid");
+      CHECK(rel(h + 0x4fd) == 0x9c4ce0 && rel(h + 0x51d) == 0x2a1e90 && rel(h + 0x607) == 0x2a1e40, "hover fn: time / stop / start calls");
+      CHECK(h + 0x5e7 + 7 + *(int32_t*)&img[h + 0x5e7 + 3] == 0x1528a88 && *(uint32_t*)&img[h + 0x436] == 0xb0718612, "hover fn: spawn defaults and highlight guid");
       CHECK(!memcmp(&img[h], "\x48\x89\x5C\x24\x10", 5), "hover fn hook steals mov [rsp+10h],rbx"); }
     const uint8_t popStolen[5] = {0x48,0x89,0x5C,0x24,0x10};
     CHECK(!memcmp(&img[0x499460], popStolen, 5), "pop hook steals mov [rsp+10h],rbx");
