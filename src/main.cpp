@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev4"
+#define MOD_VERSION "0.29.0-dev5"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -2497,8 +2497,6 @@ static volatile LONG g_exactOp = 0;           // OP_BUILD / OP_REMOVE of the are
 static volatile DWORD g_exactFire = 0;        // when the input thread sends the next click (0 = none)
 static volatile DWORD g_exactArmTick = 0;
 static I3 g_exactC[2];
-static volatile LONG g_exactSel = 1;          // row typed into: 0 reference, 1 width, 2 depth, 3 height
-static char g_exactTyped[8];                  // the number being typed ("" = not typing)
 static volatile LONG g_exactShown = 0;        // the window was on screen (its screen came up)
 static volatile DWORD g_exactReqTick = 0;
 static volatile LONG g_exactHidden = 0;       // window down: 1 = right button held (the game has the input), 2 = the game's material catalog
@@ -4348,7 +4346,7 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
         bool openable = *scr == SCREEN_INGAME || (*scr >= 29 && *scr <= 37);   // the game, or a multi-tool (hammer) screen
         if (InterlockedExchange(&g_exactReq, 0)) {        // exact mode: corner 1 clicked, the window opens
             if (openable && !g_exactOpen) {
-                g_exactSel = 1; g_exactTyped[0] = 0; g_exactShown = 0; g_exactReqTick = GetTickCount();
+                g_exactShown = 0; g_exactReqTick = GetTickCount();
                 g_exactHidden = 0; g_exactFrom = *scr;
                 g_exactOpen = 1;
                 lang_update();
@@ -4384,6 +4382,7 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
                 LOG(.str("exact: window back"));
             }
             if (*scr == SCREEN_MOD) { if (!g_exactHidden) g_exactShown = 1; }
+            else if (g_exactHidden == 2) {}               // the catalog is up: the window comes back when it closes
             else if (g_exactHidden == 1) {
                 if (*scr != g_exactFrom && GetTickCount() - g_exactReqTick > 300) { g_exactHidden = 0; g_exactOpen = 0; exact_cancel("other screen while hidden"); }
             }
@@ -4907,56 +4906,17 @@ static bool exact_confirm() {
     g_exactFire = g_exactArmTick + 200;          // after the window has closed
     g_exactArmed = 1;
     LeaveCriticalSection(&g_stateLock);
-    g_exactTyped[0] = 0;
     write_full_ini(g_cfg);                        // the sizes are kept for the next time
     g_menuReq = 2;
     LOG(.str("exact: build ").i(pl.count[0]).c('x').i(pl.count[1]).c('x').i(pl.count[2]).str(" = ").i(n)
         .str(", reference ").i(g_cfg.exactRef).str(" sizes ").i(g_cfg.exactW).c(',').i(g_cfg.exactD).c(',').i(g_cfg.exactH));
     return true;
 }
-// Keys while the window is up (input thread): digits and minus type into the selected row,
-// Backspace deletes, Up / Down / Tab select a row, Enter builds.
 static int exact_clamp(int v) { return v > core::kExactMax ? core::kExactMax : v < -core::kExactMax ? -core::kExactMax : v; }
-// Keys while the window is up (input thread; only then): digits and minus type into the
-// selected row, Backspace deletes, Up / Down / Tab select a row, Left / Right step 1, Page Up /
-// Down step 10, Enter builds.
-static void exact_key(int vk) {
-    LONG sel = g_exactSel;
-    int dg = vk >= '0' && vk <= '9' ? vk - '0' : vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9 ? vk - VK_NUMPAD0 : -1;
-    size_t n = 0; while (g_exactTyped[n]) n++;
-    if (vk == VK_RETURN) { exact_confirm(); return; }
-    if (vk == VK_UP || vk == VK_DOWN || vk == VK_TAB) {
-        bool back = vk == VK_UP || (vk == VK_TAB && (GetAsyncKeyState(VK_SHIFT) & 0x8000));
-        g_exactSel = (sel + (back ? 3 : 1)) % 4; g_exactTyped[0] = 0; return;
-    }
-    if (vk == VK_LEFT || vk == VK_RIGHT || vk == VK_PRIOR || vk == VK_NEXT) {
-        int d = (vk == VK_RIGHT || vk == VK_PRIOR) ? 1 : -1;
-        if (sel == 0) { g_cfg.exactRef = (g_cfg.exactRef + core::EXACT_REF_COUNT + d) % core::EXACT_REF_COUNT; return; }
-        if (vk == VK_PRIOR || vk == VK_NEXT || (GetAsyncKeyState(VK_SHIFT) & 0x8000)) d *= 10;
-        int* f = exact_field(sel);
-        *f = exact_clamp(*f + d); g_exactTyped[0] = 0;
-        return;
-    }
-    if (sel == 0) {                               // reference: 1..5
-        if (dg >= 1 && dg <= core::EXACT_REF_COUNT) g_cfg.exactRef = dg - 1;
-        return;
-    }
-    if (dg >= 0 && n < 4) { g_exactTyped[n] = (char)('0' + dg); g_exactTyped[n + 1] = 0; }
-    else if ((vk == VK_OEM_MINUS || vk == VK_SUBTRACT) && n == 0) { g_exactTyped[0] = '-'; g_exactTyped[1] = 0; }
-    else if ((vk == VK_OEM_MINUS || vk == VK_SUBTRACT) && n > 0) {
-        if (g_exactTyped[0] == '-') { for (size_t k = 0; k < n; k++) g_exactTyped[k] = g_exactTyped[k + 1]; }
-        else if (n < 5) { for (size_t k = n + 1; k > 0; k--) g_exactTyped[k] = g_exactTyped[k - 1]; g_exactTyped[0] = '-'; }
-    }
-    else if (vk == VK_BACK && n > 0) g_exactTyped[n - 1] = 0;
-    else return;
-    int v = 0; bool neg = g_exactTyped[0] == '-', any = false;
-    for (const char* c = g_exactTyped + (neg ? 1 : 0); *c; c++) { v = v * 10 + (*c - '0'); any = true; }
-    if (any) *exact_field(sel) = exact_clamp(neg ? -v : v);
-}
 
 // One size row: the game's option row over a window of values around the current one, then
-// -10 / +10 buttons. The selected row shows the number being typed.
-static bool ui_number(const char* label, int cur, bool typing, int* out) {
+// -10 / +10 buttons. Mouse only.
+static bool ui_number(const char* label, int cur, int* out) {
     static char txt[21][16];
     const char* names[21]; int vals[21];
     int lo = cur - 10 < -core::kExactMax ? -core::kExactMax : cur - 10;
@@ -4964,8 +4924,7 @@ static bool ui_number(const char* label, int cur, bool typing, int* out) {
     int n = 0, idx = 0;
     for (int v = lo; v <= hi; v++) { if (v == cur) idx = n; vals[n++] = v; }
     for (int k = 0; k < n; k++) {
-        Buf b;
-        if (k == idx && typing) b.str(g_exactTyped).c('_'); else b.i(vals[k]);
+        Buf b; b.i(vals[k]);
         copy_text(txt[k], b.z(), sizeof txt[k]);
         names[k] = txt[k];
     }
@@ -4990,7 +4949,12 @@ static bool ui_number(const char* label, int cur, bool typing, int* out) {
 // A key hint as in the game's building box: the key's icon and a label.
 static void hud_key_row(int key, const char* label, int state);
 static bool hud_row_ready();
-static void exact_hint(int key, Str label) { if (hud_row_ready()) hud_key_row(key, T(label), -1); }
+static void exact_hint(int key, Str label) {
+    if (!hud_row_ready()) return;
+    // the mouse icons are wider than the row leaves for them: a gap so the first letter shows
+    Buf b; if (key == VK_LBUTTON || key == VK_RBUTTON || key == VK_MBUTTON) b.str("   "); b.str(T(label));
+    hud_key_row(key, b.z(), -1);
+}
 
 // Full height at the left like the game's menus, always the same size (the rows scroll); the
 // world stays visible on the right (no blur), and the right mouse button hides it all.
@@ -5031,19 +4995,15 @@ static void draw_exact_window() {
     ui.setSpacing(ui_node(list), &lgap, 0);
     ui.setLayout(ui_node(list), &topLeft);
     ui.setStretch(ui_node(list), UiVec2{ 1, 0 });
-    const LONG sel = g_exactSel;
-    const bool typing = g_exactTyped[0] != 0;
     {
         const char* refs[core::EXACT_REF_COUNT] = { T(S_EXACT_REF_CENTRE), T(S_EXACT_REF_FL), T(S_EXACT_REF_FR), T(S_EXACT_REF_BL), T(S_EXACT_REF_BR) };
-        Buf l; if (sel == 0) l.str("> "); l.str(T(S_EXACT_REF));
         LONG v;
-        if (ui_option(l.z(), refs, core::EXACT_REF_COUNT, g_cfg.exactRef, &v)) { g_cfg.exactRef = v; g_exactSel = 0; g_exactTyped[0] = 0; }
+        if (ui_option(T(S_EXACT_REF), refs, core::EXACT_REF_COUNT, g_cfg.exactRef, &v)) g_cfg.exactRef = v;
     }
     const Str labels[3] = { S_EXACT_WIDTH, S_EXACT_DEPTH, S_EXACT_HEIGHT };
     for (int k = 1; k <= 3; k++) {
-        Buf l; if (sel == k) l.str("> "); l.str(T(labels[k - 1]));
         int v;
-        if (ui_number(l.z(), *exact_field(k), typing && sel == k, &v)) { *exact_field(k) = v; g_exactSel = k; g_exactTyped[0] = 0; }
+        if (ui_number(T(labels[k - 1]), *exact_field(k), &v)) *exact_field(k) = v;
     }
     draw_fill_rows();
     ui.endBox(list);
@@ -5072,9 +5032,6 @@ static void draw_exact_window() {
     UiVec2 kgap{ 0, 4 };
     ui.setSpacing(ui_node(keys), &kgap, 0);
     exact_hint(VK_RBUTTON, S_EXACT_KEY_LOOK);
-    exact_hint(VK_RIGHT, S_EXACT_KEY_STEP);
-    exact_hint(VK_PRIOR, S_EXACT_KEY_STEP10);
-    exact_hint(VK_DOWN, S_EXACT_KEY_ROW);
     exact_hint(VK_RETURN, g_exactOp == OP_REMOVE ? S_EXACT_REMOVE : replace ? S_EXACT_REPLACE : S_EXACT_BUILD);
     exact_hint(VK_ESCAPE, S_EXACT_CANCEL);
     ui.endBox(keys);
@@ -5612,10 +5569,11 @@ static void radial_keys(bool focus) {
 
 // Exact mode: Build's click. Sent as a real mouse click once the window has closed and the
 // buttons are up (left = build / replace, right = remove), so the game runs its own click
-// path; if the game does not take it, a hint asks for a click (any click builds the area).
+// path. The game sometimes drops the first click after its screen changes: it is sent again
+// (twice at most), then a hint asks for a click (any click builds the area).
 static void exact_fire(bool focus) {
-    static DWORD sentAt = 0; static bool hinted = false;
-    if (!g_exactArmed) { sentAt = 0; hinted = false; return; }
+    static DWORD sentAt = 0; static bool hinted = false; static int resent = 0;
+    if (!g_exactArmed) { sentAt = 0; hinted = false; resent = 0; return; }
     DWORD now = GetTickCount(), at = g_exactFire;
     bool inGame = wheel_screen(g_hudScreen) && now - g_hudScreenTick < 500 && !g_menuOpen;
     if (at && (LONG)(now - at) >= 0 && inGame && focus &&
@@ -5627,10 +5585,15 @@ static void exact_fire(bool focus) {
         in[0].mi.dwFlags = right ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_LEFTDOWN;
         in[1].mi.dwFlags = right ? MOUSEEVENTF_RIGHTUP : MOUSEEVENTF_LEFTUP;
         SendInput(1, &in[0], sizeof(INPUT));
-        Sleep(40);                                    // a frame or two: the game samples the button
+        Sleep(70);                                    // a few frames: the game samples the button
         SendInput(1, &in[1], sizeof(INPUT));
         sentAt = now; hinted = false;
         LOG(.str("exact: click sent (").str(right ? "right" : "left").c(')'));
+        return;
+    }
+    if (sentAt && !g_exactFire && resent < 2 && now - sentAt > 500) {
+        resent++; g_exactFire = now; sentAt = 0;
+        LOG(.str("exact: the sent click did not arrive; sending it again"));
         return;
     }
     if (sentAt && !hinted && !g_exactFire && now - sentAt > 1500) {
@@ -5695,21 +5658,11 @@ static DWORD WINAPI input_thread(void*) {
             bool esc = focus && g_menuOpen && (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
             if (esc && !prevEsc) { g_menuReq = 2; LOG(.str("key: esc in menu")); }
             prevEsc = esc;
-            if (g_menuOpen && g_exactOpen) {     // the exact window: numbers, rows, Enter
-                static const int keys[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-                    VK_NUMPAD0, VK_NUMPAD1, VK_NUMPAD2, VK_NUMPAD3, VK_NUMPAD4, VK_NUMPAD5, VK_NUMPAD6, VK_NUMPAD7, VK_NUMPAD8, VK_NUMPAD9,
-                    VK_OEM_MINUS, VK_SUBTRACT, VK_BACK, VK_RETURN, VK_UP, VK_DOWN, VK_TAB,
-                    VK_LEFT, VK_RIGHT, VK_PRIOR, VK_NEXT };
-                const size_t nk = sizeof keys / sizeof keys[0];
-                static bool held[nk] = {}; static DWORD since[nk] = {}, rep[nk] = {};
-                const DWORD now = GetTickCount();
-                for (size_t k = 0; k < nk; k++) {
-                    bool d = focus && (GetAsyncKeyState(keys[k]) & 0x8000);
-                    bool step = keys[k] == VK_LEFT || keys[k] == VK_RIGHT || keys[k] == VK_PRIOR || keys[k] == VK_NEXT;
-                    if (d && !held[k]) { exact_key(keys[k]); since[k] = rep[k] = now; }
-                    else if (d && step && now - since[k] > 400 && now - rep[k] > 70) { exact_key(keys[k]); rep[k] = now; }   // held: repeats
-                    held[k] = d;
-                }
+            if (g_menuOpen && g_exactOpen) {     // the exact window: mouse only, Enter builds (Esc cancels above)
+                static bool prevEnter = true;
+                bool d = focus && (GetAsyncKeyState(VK_RETURN) & 0x8000);
+                if (d && !prevEnter) exact_confirm();
+                prevEnter = d;
                 for (bool& p : prev) p = true;
                 continue;
             }

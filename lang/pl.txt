@@ -256,9 +256,6 @@ option.language_game = Użyj języka gry
 exact.title = Dokładne wymiary
 exact.help = Kształty poza klikniętym: 0 = tylko on, ujemne = w drugą stronę.
 exact.key_look = Przytrzymaj: schowaj okno, rozglądaj się, chodź
-exact.key_step = Zmiana o 1 (Lewo / Prawo)
-exact.key_step10 = Zmiana o 10 (Page Up / Down)
-exact.key_row = Wybierz wiersz (Góra / Dół) i wpisz liczbę
 exact.material = Materiał
 exact.reference = Kliknięty blok
 exact.ref_centre = Środek (na dole)

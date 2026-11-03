@@ -247,9 +247,6 @@
     X(S_EXACT_TITLE, "exact.title", "Exact size") \
     X(S_EXACT_HELP, "exact.help", "Shapes past the clicked one: 0 = only it, negative = the other way.") \
     X(S_EXACT_KEY_LOOK, "exact.key_look", "Hold: hide the window, look around, walk") \
-    X(S_EXACT_KEY_STEP, "exact.key_step", "Change by 1 (Left / Right)") \
-    X(S_EXACT_KEY_STEP10, "exact.key_step10", "Change by 10 (Page Up / Down)") \
-    X(S_EXACT_KEY_ROW, "exact.key_row", "Pick a row (Up / Down), then type a number") \
     X(S_EXACT_MATERIAL, "exact.material", "Material") \
     X(S_EXACT_REF, "exact.reference", "Clicked block") \
     X(S_EXACT_REF_CENTRE, "exact.ref_centre", "Middle (bottom)") \

@@ -256,9 +256,6 @@ option.language_game = Как в игре
 exact.title = Точные размеры
 exact.help = Формы сверх выбранной: 0 = только она, минус = в другую сторону.
 exact.key_look = Удерживать: скрыть окно, осмотреться, ходить
-exact.key_step = Изменить на 1 (Влево / Вправо)
-exact.key_step10 = Изменить на 10 (Page Up / Down)
-exact.key_row = Выберите строку (Вверх / Вниз) и введите число
 exact.material = Материал
 exact.reference = Выбранный блок
 exact.ref_centre = Середина (снизу)

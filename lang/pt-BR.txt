@@ -256,9 +256,6 @@ option.language_game = Igual ao jogo
 exact.title = Medidas exatas
 exact.help = Formas além da clicada: 0 = só ela, negativo = para o outro lado.
 exact.key_look = Segurar: esconder a janela, olhar, andar
-exact.key_step = Mudar 1 (Esquerda / Direita)
-exact.key_step10 = Mudar 10 (Page Up / Down)
-exact.key_row = Escolha uma linha (Cima / Baixo) e digite um número
 exact.material = Material
 exact.reference = Bloco clicado
 exact.ref_centre = Meio (embaixo)
