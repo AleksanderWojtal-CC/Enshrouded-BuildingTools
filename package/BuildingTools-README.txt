@@ -1,4 +1,4 @@
-Enshrouded Building Tools 0.22.0
+Enshrouded Building Tools 0.29.0
 ================================
 
 Files in the game folder
@@ -100,7 +100,7 @@ Area mode (2 corners)
   (ridge along the long or short side; a shed rises toward any of the four
   sides). Roof overhang 0-3 shapes carries the slope past the area's edge.
   Thickness 1-3 shapes for hollow rooms, walls and roofs. All of these are
-  also in the menu's Options tab and on the tools wheel; thickness and
+  also on the tools wheel and in the exact window; thickness and
   overhang can get their own keys in the Keys tab. The 3D preview shows the
   roof first. Gable ends are left open.
   Conical and dome roofs (after shed in the Shift+R cycle) are round: they
@@ -116,8 +116,8 @@ Area mode (2 corners)
   a round wall without gaps, 1-3 shapes thick, open on straight sides.
   Standing: round in the ground plan (an area one shape thin stands the round
   up in that wall: arches). Lying: a tube along the area's longer side
-  (pipes; a half makes a tunnel). Solid / hollow and standing / lying are in
-  the Options tab, on the tools wheel, and can get their own keys.
+  (pipes; a half makes a tunnel). Solid / hollow and standing / lying are on
+  the tools wheel and in the exact window, and can get their own keys.
   Diagonal: standing, a wall from corner 1 to corner 2 seen from above, as
   high as the area (in an area one shape thin: a diagonal brace in that
   wall); R turns it to the other diagonal. Lying: a ramp from corner 1 up or
@@ -125,8 +125,20 @@ Area mode (2 corners)
   R turns it 4 ways (falling, along the shorter side). 1-3 shapes thick, no
   gaps on the steps. Standing / lying shares the round fill's key.
   The fill applies to build, replace and remove.
-  3-corner mode is still there: in BuildingTools.ini set [Area] Corners=3
-  (two base corners, then a third click for the height).
+  Area corners (tools wheel, or a key in the Keys tab): two corners -> two
+  base corners + a third click for the height -> exact.
+
+Exact mode (Area corners: exact)
+  Click once (left = build or replace, right = remove) and a window opens next
+  to the area. Pick where the clicked block sits in the structure (the middle
+  of the bottom or one of its four bottom corners; front and left as you look)
+  and enter width, depth and height as shapes past the clicked one: 0 = only
+  that shape, negative = the other way. Arrows step by 1, the -10 / +10
+  buttons by 10. The fill and its options are in the window too, Material
+  opens the game's material picker, and the 3D preview follows as you change
+  things. Hold the right mouse button to hide the window, look around and
+  walk; let go and it comes back. Build (or Enter) builds, Cancel (or Esc)
+  goes back. Works while flying. The last sizes are kept.
   MaxShapes in the ini limits the size (default 2000 shapes).
 
 Undo after Replace
@@ -147,7 +159,8 @@ Tools wheel (hold Caps Lock)
   once); a right click closes it without changes. The camera stays still and
   clicks don't build while it is open. Only what applies right now is shown:
   mode, Replace, free placement and the menu always; replace style while
-  Replace is on; area fill and clear corners in Area mode.
+  Replace is on; area fill, area corners and clear corners in Area mode.
+  Tools switched off in the Options tab are not shown.
   RadialMenu= in the ini (or the Keys tab) changes the key; 0 turns it off.
 
 Menu (Home)
@@ -160,8 +173,13 @@ Menu (Home)
   back as it was when you let go), and keys that set one option directly
   (Prefab or Area mode, Replace on or off, each replace style, each area fill,
   creative building on / off). They have no key until you set one.
-  Options tab: mode, Replace, replace style, area fill, free placement,
-  creative building (single player; on a server its ini decides), language.
+  Options tab: which tools you use. Building Tools (the whole mod), Replace,
+  Area mode, Area shapes (roof, round and diagonal fills), Free placement,
+  Creative building (single player; on a server its ini decides), Magic
+  chests of all bases, and the language. A tool that is off does nothing:
+  its keys are the game's again and it leaves the building box hints and the
+  tools wheel. Saved under [Tools] in the ini. The tools' own settings (mode,
+  replace style, fill...) are on their keys and the tools wheel.
 
 Building box and floating text
   While you build, the game's building box (bottom right) lists the mod's keys
@@ -169,15 +187,9 @@ Building box and floating text
   on/off switch, then fill, replace style, clear corners, the wheel distance and
   the menu key while they apply. The area state, size and block count and the
   mod's short messages show as floating text below the crosshair.
-  HudRows=0 under [Interface] turns both off and brings back the info panel.
+  HudRows=0 under [Interface] turns both off.
 
-Info panel and sounds
-  The info panel at the bottom edge of the screen is used when the building box
-  rows are off (HudRows=0). It shows the mod's state and keys, and hides after
-  5 seconds without changes (it comes back with the
-  next change). Under [Interface] in BuildingTools.ini (close the game first):
-  PanelScale (size in percent), PanelBottom (lift it up, pixels at 1080p),
-  PanelTimeout (seconds, 0 = always visible), PanelKeys (0 = no key line).
+Sounds
   Sounds are the game's own UI sounds (Sound=1); Sound=2 uses Windows sounds,
   Sound=0 turns them off. When Replace gives old material back, the game's
   item pop-up shows it (RefundPopup=0 turns that off).
@@ -211,8 +223,8 @@ Language
 
 Turning the mod off
   F5 (ToggleMod in the ini) switches the whole mod off: Prefab mode, Replace,
-  free placement and creative building turn off, the info panel stays hidden
-  and the other mod keys do nothing. The game then plays exactly as without the
+  free placement and creative building turn off and the other mod keys do
+  nothing (also from the Options tab). The game then plays exactly as without the
   mod. Press F5 again to turn it back on (the banner says which).
 
 Creative building

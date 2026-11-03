@@ -24,6 +24,11 @@ A mod for **Enshrouded 1.0, Patch #1 and Hotfix #4** (single player and dedicate
   wall) or lying (tubes and tunnels). Diagonal fills: a wall from corner 1 to corner 2
   seen from above, or lying, a ramp from corner to corner (R turns both). A live size readout and a drawn 3D preview show
   what the next click will make.
+- **Exact mode** (Area corners: exact): click once and a window opens next to the area.
+  Choose where the clicked block sits (middle or a bottom corner) and enter width, depth
+  and height as shapes past it (negative grows the other way), with the fill, its options
+  and the material picker in the window. The 3D preview follows as you type; hold the right
+  mouse button to hide the window and look around. Build or Cancel.
 - **Free placement**: the block ghost hovers in front of you, snapped to the 0.5 m
   building grid, instead of sticking to surfaces. Hold Q and turn the mouse wheel to set
   the distance.
@@ -40,6 +45,9 @@ A mod for **Enshrouded 1.0, Patch #1 and Hotfix #4** (single player and dedicate
 - **Tools wheel** (hold Caps Lock): a blurred wheel drawn with the game's own wheel;
   point the mouse at an option and let go. It shows only what applies right now
   (Replace style while Replace is on, fill and corners in Area mode).
+- **Pick your tools**: the menu's Options tab switches whole tools on or off (Replace, Area
+  mode, Area shapes, Free placement, Creative building, Magic chests of all bases). A tool
+  that is off gives its keys back to the game and leaves the hints and the wheel.
 - **Menu in the game's own UI** (Home): change keys (also Shift / Ctrl / Alt combinations)
   and options in a full-screen menu with the game's tabs. While you build, the mod's keys
   sit in the game's building box with the game's key icons and on/off switches, and the

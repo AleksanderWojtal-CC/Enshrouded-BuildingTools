@@ -58,6 +58,13 @@ A see-through 3D box is drawn over the area while you set it up (dimmer where te
 blocks hide it, red while you stand inside), with the blocks the action will touch shown
 inside it: blue to build, amber to replace, pink-red to remove (only blocks that exist).
 
+[b]Exact mode[/b] (Area corners: exact, on the tools wheel)
+Click once and a window opens next to the area: choose where the clicked block sits (the
+middle or a bottom corner) and enter width, depth and height as shapes past it (negative
+grows the other way). The fill, its options and the material picker are in the window, the
+3D preview follows as you change things, and holding the right mouse button hides the window
+so you can look around and walk. Build or Cancel; works while flying.
+
 [b]Free placement[/b] (F10)
 The block ghost hovers in front of you instead of sticking to surfaces.
 Hold Q and turn the mouse wheel to move it closer or farther.
@@ -78,13 +85,15 @@ not count.
 [b]Tools wheel[/b] (hold Caps Lock)
 A blurred wheel in the middle of the screen, drawn with the game's own wheel: point the
 mouse at an option and let go (or click to change several). It shows only what applies
-right now: Replace style while Replace is on, area fill and clear corners in Area mode.
+right now: Replace style while Replace is on, area fill, corners and clear corners in Area mode.
 
 [b]Menu in the game's own UI[/b] (Home)
 A full-screen menu that looks like the game's: Keys tab (click a key, press the new one,
 Shift/Ctrl/Alt combinations and mouse side buttons work), Quick keys section on the scrolling Keys tab (keys that set one
-option directly) and Options tab. While you build, the mod's keys sit in
-the game's building box with the game's key icons and on/off switches.
+option directly) and Options tab, where you switch whole tools on or off (Replace, Area mode,
+Area shapes, Free placement, Creative building, Magic chests of all bases): a tool that is off
+gives its keys back to the game and leaves the hints and the wheel. While you build, the
+mod's keys sit in the game's building box with the game's key icons and on/off switches.
 
 [b]In your language[/b]
 The mod's texts follow the game's language: English, Deutsch, Français, Italiano, 日本語,
