@@ -23,7 +23,6 @@ SECTIONS = {'num': 'Numbers', 'msg': 'Messages (shown for a few seconds)',
 NOTES = {
     'num.decimal': 'decimal mark in distances like 4.0 m',
     'menu.translation_note': 'shown at the bottom of the menu while a translation is unreviewed; empty = not shown',
-    'bar.size': 'area size: width x depth, h = height, = number of shapes',
     'msg.placed': 'numbers can be 1 or 2000: write it so any number reads well (e.g. "Shapes placed: {0}")',
 }
 

@@ -40,7 +40,6 @@ msg.fill_diag = เติมพื้นที่: แนวทแยง ({0})
 msg.diag_turned = หมุนแนวทแยง ({0} จาก {1})
 msg.diag_standing = แนวทแยง: ตั้ง (กำแพงจากมุมถึงมุม)
 msg.exact_on = โหมดแม่นยำ เปิด: คลิกหนึ่งครั้ง แล้วใส่ขนาด
-msg.exact_off = โหมดแม่นยำ ปิด (คลิกมุม)
 msg.exact_cancelled = ยกเลิกพื้นที่แม่นยำแล้ว
 msg.exact_click = คลิกเพื่อสร้างพื้นที่แม่นยำ
 msg.exact_too_big = ใหญ่เกินไป: เกิน {0} ชิ้น
@@ -75,32 +74,9 @@ msg.cdelete_capped = ลบแบบเชื่อม: เฉพาะ {0} ช�
 msg.language_set = ภาษาของ Building Tools: ไทย
 
 # Info bar at the bottom of the screen (short words)
-bar.area = พื้นที่ {0}/{1}
 bar.area_build = พื้นที่ สร้าง {0}/{1}
 bar.area_replace = พื้นที่ แทนที่ {0}/{1}
 bar.area_remove = พื้นที่ ลบ {0}/{1}
-bar.hollow = กลวง
-bar.walls = ผนัง
-bar.roof = หลังคา: {0}
-bar.round = ทรงกลม: {0}, {1}
-bar.diag = แนวทแยง: {0}
-bar.prefab = ปกติ
-bar.prefab_replace = ปกติ แทนที่
-bar.full = ทั้งรูปทรง
-bar.overlap = ซ้อนกัน
-bar.connected = เชื่อมกัน
-bar.free = อิสระ {0} ม.
-bar.creative = ครีเอทีฟ
-bar.size = {0}x{1} สูง{2} = {3}
-bar.too_big = ใหญ่เกินไป (สูงสุด {0})
-bar.key_area = พื้นที่
-bar.key_replace = แทนที่
-bar.key_clear = ล้าง
-bar.key_style = รูปแบบ
-bar.key_free = อิสระ
-bar.key_fill = เติม
-bar.key_wheel = +ล้อเมาส์ ระยะ
-bar.key_off = ปิด
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = โหมดพื้นที่

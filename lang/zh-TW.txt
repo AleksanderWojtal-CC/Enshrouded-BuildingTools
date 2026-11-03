@@ -40,7 +40,6 @@ msg.fill_diag = 區域填充：斜向（{0}）
 msg.diag_turned = 斜向已旋轉（{0}/{1}）
 msg.diag_standing = 斜向：豎立（從角到角的牆）
 msg.exact_on = 精確模式開啟：點擊一次，然後輸入尺寸
-msg.exact_off = 精確模式關閉（點擊角點）
 msg.exact_cancelled = 已取消精確區域
 msg.exact_click = 點擊以建造精確區域
 msg.exact_too_big = 太大：超過 {0} 個形狀
@@ -75,32 +74,9 @@ msg.cdelete_capped = 相連刪除：僅前 {0} 個形狀（FillLimit）
 msg.language_set = Building Tools 語言：繁體中文
 
 # Info bar at the bottom of the screen (short words)
-bar.area = 區域 {0}/{1}
 bar.area_build = 區域建造 {0}/{1}
 bar.area_replace = 區域替換 {0}/{1}
 bar.area_remove = 區域移除 {0}/{1}
-bar.hollow = 空心
-bar.walls = 牆壁
-bar.roof = 屋頂：{0}
-bar.round = 圓形：{0}，{1}
-bar.diag = 斜向：{0}
-bar.prefab = 一般
-bar.prefab_replace = 一般替換
-bar.full = 整個形狀
-bar.overlap = 重疊
-bar.connected = 相連
-bar.free = 自由 {0} 公尺
-bar.creative = 創意
-bar.size = {0}x{1} 高{2} = {3}
-bar.too_big = 太大（最多 {0}）
-bar.key_area = 區域
-bar.key_replace = 替換
-bar.key_clear = 清除
-bar.key_style = 方式
-bar.key_free = 自由
-bar.key_fill = 填充
-bar.key_wheel = +滾輪 距離
-bar.key_off = 關閉
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = 區域模式

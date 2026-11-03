@@ -39,7 +39,6 @@
     X(S_DIAG_TURNED, "msg.diag_turned", "Diagonal turned ({0} of {1})") \
     X(S_DIAG_STANDING, "msg.diag_standing", "Diagonal fill: standing (a wall from corner to corner)") \
     X(S_EXACT_ON, "msg.exact_on", "Exact mode ON: click once, then enter the sizes") \
-    X(S_EXACT_OFF, "msg.exact_off", "Exact mode OFF (corner clicks)") \
     X(S_EXACT_CANCELLED, "msg.exact_cancelled", "Exact area cancelled") \
     X(S_EXACT_CLICK, "msg.exact_click", "Click to build the exact area") \
     X(S_EXACT_TOO_BIG, "msg.exact_too_big", "Too big: more than {0} shapes") \
@@ -73,32 +72,9 @@
     X(S_CDELETE_CAPPED, "msg.cdelete_capped", "Connected delete: only the first {0} shapes (FillLimit)") \
     X(S_LANGUAGE_SET, "msg.language_set", "Building Tools language: English") \
     /* info bar (bottom centre) */ \
-    X(S_BAR_AREA, "bar.area", "Area {0}/{1}") \
     X(S_BAR_AREA_BUILD, "bar.area_build", "Area build {0}/{1}") \
     X(S_BAR_AREA_REPLACE, "bar.area_replace", "Area replace {0}/{1}") \
     X(S_BAR_AREA_REMOVE, "bar.area_remove", "Area remove {0}/{1}") \
-    X(S_BAR_HOLLOW, "bar.hollow", "hollow") \
-    X(S_BAR_WALLS, "bar.walls", "walls") \
-    X(S_BAR_ROOF, "bar.roof", "roof: {0}") \
-    X(S_BAR_ROUND, "bar.round", "round: {0}, {1}") \
-    X(S_BAR_DIAG, "bar.diag", "diagonal: {0}") \
-    X(S_BAR_PREFAB, "bar.prefab", "Prefab") \
-    X(S_BAR_PREFAB_REPLACE, "bar.prefab_replace", "Prefab replace") \
-    X(S_BAR_FULL, "bar.full", "full shape") \
-    X(S_BAR_OVERLAP, "bar.overlap", "overlap") \
-    X(S_BAR_CONNECTED, "bar.connected", "connected") \
-    X(S_BAR_FREE, "bar.free", "free {0} m") \
-    X(S_BAR_CREATIVE, "bar.creative", "creative") \
-    X(S_BAR_SIZE, "bar.size", "{0}x{1} h{2} = {3}") \
-    X(S_BAR_TOO_BIG, "bar.too_big", "TOO BIG (max {0})") \
-    X(S_BAR_KEY_AREA, "bar.key_area", "area") \
-    X(S_BAR_KEY_REPLACE, "bar.key_replace", "replace") \
-    X(S_BAR_KEY_CLEAR, "bar.key_clear", "clear") \
-    X(S_BAR_KEY_STYLE, "bar.key_style", "style") \
-    X(S_BAR_KEY_FREE, "bar.key_free", "free") \
-    X(S_BAR_KEY_FILL, "bar.key_fill", "fill") \
-    X(S_BAR_KEY_WHEEL, "bar.key_wheel", "+wheel dist") \
-    X(S_BAR_KEY_OFF, "bar.key_off", "off") \
     /* rows in the game's building box (bottom right; the box is narrow) */ \
     X(S_HUD_AREA, "hud.area", "Area mode") \
     X(S_HUD_AREA_ON, "hud.area_on", "Area mode: on") \

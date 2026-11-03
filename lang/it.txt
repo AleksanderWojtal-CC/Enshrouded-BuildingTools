@@ -40,7 +40,6 @@ msg.fill_diag = Riempimento area: diagonale ({0})
 msg.diag_turned = Diagonale ruotata ({0} di {1})
 msg.diag_standing = Diagonale: in piedi (muro da angolo ad angolo)
 msg.exact_on = Modalità esatta ATTIVA: clicca una volta, poi inserisci le misure
-msg.exact_off = Modalità esatta DISATTIVA (clic sugli angoli)
 msg.exact_cancelled = Area esatta annullata
 msg.exact_click = Clicca per costruire l'area esatta
 msg.exact_too_big = Troppo grande: più di {0} forme
@@ -75,32 +74,9 @@ msg.cdelete_capped = Eliminazione collegata: solo le prime {0} forme (FillLimit)
 msg.language_set = Lingua di Building Tools: italiano
 
 # Info bar at the bottom of the screen (short words)
-bar.area = Area {0}/{1}
 bar.area_build = Area costruisci {0}/{1}
 bar.area_replace = Area sostituisci {0}/{1}
 bar.area_remove = Area rimuovi {0}/{1}
-bar.hollow = vuoto
-bar.walls = pareti
-bar.roof = tetto: {0}
-bar.round = rotondo: {0}, {1}
-bar.diag = diagonale: {0}
-bar.prefab = Normale
-bar.prefab_replace = Normale sostituisci
-bar.full = forma intera
-bar.overlap = sovrapposizione
-bar.connected = collegato
-bar.free = libero {0} m
-bar.creative = creativo
-bar.size = {0}x{1} a{2} = {3}
-bar.too_big = TROPPO GRANDE (max {0})
-bar.key_area = area
-bar.key_replace = sostituisci
-bar.key_clear = cancella
-bar.key_style = stile
-bar.key_free = libero
-bar.key_fill = riempimento
-bar.key_wheel = +rotella distanza
-bar.key_off = disattiva
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = Modalità area

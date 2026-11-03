@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev11"
+#define MOD_VERSION "0.29.0-dev12"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -101,7 +101,6 @@ struct Config {
     int keyCancel    = VK_F8;
     int keyStyle     = VK_F9;
     int maxShapes    = 2000;
-    int overlay      = 1;
     int sound        = 1;
     int log          = 1;
     int corners      = 2;      // area corners: 2 = opposite corners of a box, 3 = base + height
@@ -121,10 +120,6 @@ struct Config {
     int drawBoxDelay = -25;        // hundredths of a frame the picture on screen is behind the game thread (negative: ahead)
     int preview      = 1;          // area preview: 1 = edge highlights, 2 = base-area box, 3 = both, 0 = off
     int hoverDist10  = 40;         // free placement distance in tenths of a metre
-    int panelScale   = 100;        // info panel size in percent
-    int panelBottom  = 0;      // panel distance from the bottom edge (pixels at 1080p)
-    int panelTimeout = 5;      // seconds without change before the panel hides (0 = never)
-    int panelKeys    = 1;      // key hint line
     int hudRows      = 1;      // mod state and keys in the game's building HUD box
     int creative     = 0;      // building is free: no charge, no refund, no missing materials
     int keyOff       = VK_F5;  // the whole mod off / on (vanilla game while off)
@@ -236,11 +231,6 @@ static void write_full_ini(const Config& c) {
      .t("; Most shapes one area action may build, replace or remove (max 20000)\r\nMaxShapes=").i(c.maxShapes).t("\r\n")
      .t("; Most shapes one connected replace (fill bucket) repaints (max = MaxShapes)\r\nFillLimit=").i(c.fillLimit).t("\r\n")
      .t("\r\n[Interface]\r\n")
-     .t("; Info panel at the bottom of the screen (0 = off)\r\nOverlay=").i(c.overlay).t("\r\n")
-     .t("; Panel size in percent, lift from the bottom edge (pixels at 1080p)\r\nPanelScale=").i(c.panelScale).t("\r\n")
-     .t("PanelBottom=").i(c.panelBottom).t("\r\n")
-     .t("; Seconds without change before the panel hides (0 = always shown), key hint line\r\nPanelTimeout=").i(c.panelTimeout).t("\r\n")
-     .t("PanelKeys=").i(c.panelKeys).t("\r\n")
      .t("; Mod state and keys as rows of the game's building box, bottom right (1 = on)\r\nHudRows=").i(c.hudRows).t("\r\n")
      .t("; Sound: 1 = game sounds, 2 = Windows sounds, 0 = off\r\nSound=").i(c.sound).t("\r\n")
      .t("; Item pop-up when Replace gives materials back (1 = on)\r\nRefundPopup=").i(c.refundPopup).t("\r\n")
@@ -259,7 +249,6 @@ static void load_config() {
     g_cfg.keyCancel    = ini_int(L"Keys", L"CancelCorners", VK_F8);
     g_cfg.keyStyle     = ini_int(L"Keys", L"ToggleReplaceStyle", VK_F9);
     g_cfg.maxShapes    = ini_int(L"Limits", L"MaxShapes", 2000);
-    g_cfg.overlay      = ini_int(L"Interface", L"Overlay", 1);
     g_cfg.sound        = ini_int(L"Interface", L"Sound", 1);
     g_cfg.log          = ini_int(L"Debug", L"Log", 1);
     {   int cn = ini_int(L"Area", L"Corners", 2);
@@ -284,12 +273,6 @@ static void load_config() {
     g_cfg.drawBoxDepth = ini_int(L"Area", L"DrawBoxDepth", 1);
     g_cfg.drawBoxCells = ini_int(L"Area", L"DrawBoxBlocks", 1);
     g_cfg.hoverDist10  = ini_int(L"Area", L"FreePlacementDistance", 40);
-    g_cfg.panelScale   = ini_int(L"Interface", L"PanelScale", 100);
-    if (g_cfg.panelScale < 50) g_cfg.panelScale = 50;
-    if (g_cfg.panelScale > 300) g_cfg.panelScale = 300;
-    g_cfg.panelBottom  = ini_int(L"Interface", L"PanelBottom", 0);
-    g_cfg.panelTimeout = ini_int(L"Interface", L"PanelTimeout", 5);
-    g_cfg.panelKeys    = ini_int(L"Interface", L"PanelKeys", 1);
     g_cfg.hudRows      = ini_int(L"Interface", L"HudRows", 1);
     g_cfg.creative     = ini_int(L"Creative", L"CreativeBuilding", 0) != 0;
     g_cfg.keyOff       = ini_int(L"Keys", L"ToggleMod", VK_F5);
@@ -3466,34 +3449,12 @@ static uint64_t input_encode_hook(uint8_t* out, uint8_t* src, uint8_t* flags, ui
     return r;
 }
 
-// ------------------------------------------------------------------- overlay
-static HWND g_overlay;
-static char g_overlayText[1024];
-static volatile LONG g_fontPx = 24;      // panel font height, scaled to the window
-// The panel font, recreated only when its size changes (overlay thread only).
-static HFONT panel_font(int px) {
-    static HFONT font = nullptr; static int fontPx = 0;
-    if (!font || fontPx != px) {
-        if (font) DeleteObject(font);
-        font = CreateFontW(px, 0, 0, 0, FW_MEDIUM, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
-        fontPx = px;
-    }
-    return font;
-}
-
-// The panel texts are UTF-8 (translations): drawn as UTF-16, Windows font linking
-// supplies the CJK and Thai glyphs Segoe UI lacks.
-static void draw_text(HDC dc, const char* t, RECT* r, UINT flags) {
-    static wchar_t w[1024];
-    if (!MultiByteToWideChar(CP_UTF8, 0, t, -1, w, 1024)) w[0] = 0;
-    DrawTextW(dc, w, -1, r, flags);
-}
-
+// ------------------------------------------------------------------- game window
 static HWND find_game_window() {
     struct S { DWORD pid; HWND best; LONG area; } s = { GetCurrentProcessId(), nullptr, 0 };
     EnumWindows([](HWND h, LPARAM lp) -> BOOL {
         auto* s = (S*)lp; DWORD pid = 0; GetWindowThreadProcessId(h, &pid);
-        if (pid != s->pid || h == g_overlay || !IsWindowVisible(h)) return TRUE;
+        if (pid != s->pid || !IsWindowVisible(h)) return TRUE;
         RECT r; GetWindowRect(h, &r); LONG a = (r.right - r.left) * (r.bottom - r.top);
         if (a > s->area) { s->area = a; s->best = h; }
         return TRUE;
@@ -3515,35 +3476,6 @@ static bool game_focused() {
     return pid == GetCurrentProcessId();
 }
 
-static LRESULT CALLBACK overlay_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
-    switch (m) {
-    case WM_NCHITTEST: return HTTRANSPARENT;
-    case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
-    case WM_ERASEBKGND: return 1;
-    case WM_PAINT: {
-        PAINTSTRUCT ps; HDC dc = BeginPaint(h, &ps);
-        RECT r; GetClientRect(h, &r);
-        HBRUSH bg = CreateSolidBrush(RGB(14, 16, 20));
-        FillRect(dc, &r, bg); DeleteObject(bg);
-        RECT bar = { r.left, r.bottom - 3, r.right, r.bottom };     // accent along the bottom
-        HBRUSH fr = CreateSolidBrush(g_replace ? RGB(214, 150, 72) : RGB(196, 178, 126));
-        FillRect(dc, &bar, fr); DeleteObject(fr);
-        int px = g_fontPx;
-        HGDIOBJ of = SelectObject(dc, panel_font(px));
-        SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(232, 226, 210));
-        RECT tr = { r.left + px / 2, r.top + px / 4, r.right - px / 2, r.bottom - px / 4 };
-        draw_text(dc, g_overlayText, &tr, DT_CENTER | DT_TOP | DT_NOPREFIX);
-        SelectObject(dc, of);
-        EndPaint(h, &ps);
-        return 0;
-    }
-    }
-    return DefWindowProcW(h, m, w, l);
-}
-
-// Size the area would have if the next corner were clicked where the cursor is now.
-// The area the next corner click would make, from the corners set so far and the
-// live client cursor. false when no area is being set up.
 static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
     LONG nc = g_corners;
     if (g_mode == MODE_AREA && nc == 1 && exact_on()) {   // exact: the entered sizes, not the cursor
@@ -3589,13 +3521,6 @@ static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
     return true;
 }
 
-static void live_size(Buf& b) {
-    core::Plan pl; float step[3]; bool ok = false;
-    if (!area_plan_live(&pl, step, &ok)) return;
-    long n = ok ? core::fill_count(pl, g_fill) : 0;
-    if (!ok || n > g_cfg.maxShapes) { b.str("  |  ").fmt(T(S_BAR_TOO_BIG), num(g_cfg.maxShapes).s); return; }
-    b.str("  |  ").fmt(T(S_BAR_SIZE), num(pl.count[0]).s, num(pl.count[2]).s, num(pl.count[1]).s, num(n).s);
-}
 
 // ---- in-game area preview
 // The client cursor's hover function (28e2f0) runs every frame. When the hammer
@@ -3946,113 +3871,6 @@ static void vk_name(int code, char* out) {
     }
     b.str(n);
     copy_text(out, b.z(), 32);
-}
-
-// Info panel text, one item per line (shown bottom centre).
-static void compose_overlay(char* out, int cap) {
-    Buf b;
-    bool vanilla = g_mode == MODE_PREFAB && !g_replace && !g_hover;
-    bool flashing = GetTickCount() < g_flashUntil;
-    bool hudRows = GetTickCount() - g_hudRowsTick < 400;     // the game's building box shows the state and keys
-    if (GetTickCount() - g_floatTick < 400) { out[0] = 0; return; }   // the floating text shows them
-    if (hudRows && !flashing && g_mode == MODE_AREA && g_corners > 0) {   // the bar keeps the area size
-        b.fmt(T(S_BAR_AREA), num(g_corners).s, num(g_cfg.corners).s);
-        live_size(b);
-        copy_text(out, b.z(), cap); return;
-    }
-    if (vanilla || hudRows) { if (flashing) b.str(g_flash); copy_text(out, b.z(), cap); return; }
-    // line 1: state (or the latest message)
-    if (flashing) b.str(g_flash);
-    else {
-        if (g_mode == MODE_AREA) {
-            b.fmt(T(g_scOp == OP_REMOVE ? S_BAR_AREA_REMOVE : g_replace ? S_BAR_AREA_REPLACE : S_BAR_AREA_BUILD),
-                  num(g_corners).s, num(g_cfg.corners).s);
-            if (g_fill == core::FILL_ROOF) b.str("  |  ").fmt(T(S_BAR_ROOF), T(kRoofName[g_roofShape % core::ROOF_COUNT]));
-            else if (g_fill == core::FILL_ROUND)
-                b.str("  |  ").fmt(T(S_BAR_ROUND), T(kRoundName[g_roundShape % core::ROUND_COUNT]), T(g_roundHollow ? S_OPT_ROUND_HOLLOW : S_OPT_FILL_SOLID));
-            else if (g_fill == core::FILL_DIAG) b.str("  |  ").fmt(T(S_BAR_DIAG), T(g_diagLying ? S_OPT_DIAG_LYING : S_OPT_ROUND_STANDING));
-            else if (g_fill % core::FILL_COUNT) b.str("  |  ").str(T(g_fill == core::FILL_HOLLOW ? S_BAR_HOLLOW : S_BAR_WALLS));
-            live_size(b);
-        } else b.str(T(g_replace ? S_BAR_PREFAB_REPLACE : S_BAR_PREFAB));
-        if (g_replace) b.str("  |  ").str(T(g_replaceStyle == STYLE_FULL ? S_BAR_FULL : g_replaceStyle == STYLE_CONNECTED ? S_BAR_CONNECTED : S_BAR_OVERLAP));
-        if (g_hover) b.str("  |  ").fmt(T(S_BAR_FREE), tenths((int)(g_hoverDist * 10.f + 0.5f)).s);
-        if (creative_on()) b.str("  |  ").str(T(S_BAR_CREATIVE));
-    }
-    // line 2: keys (named again after a rebinding in the menu)
-    if (g_cfg.panelKeys) {
-        static char k[8][32]; static LONG named = -1;
-        if (named != g_keysVersion) {
-            vk_name(g_cfg.keyStructure, k[0]); vk_name(g_cfg.keyReplace, k[1]); vk_name(g_cfg.keyCancel, k[2]);
-            vk_name(g_cfg.keyStyle, k[3]); vk_name(g_cfg.keyHover, k[4]); vk_name(g_cfg.keyFill, k[5]);
-            if (g_cfg.keyOff > 0) vk_name(g_cfg.keyOff, k[6]);
-            if (g_cfg.wheelKey > 0) vk_name(g_cfg.wheelKey, k[7]);
-            named = g_keysVersion;
-        }
-        b.str("\n");                                  // only the tools in use (Options page)
-        auto key = [&](bool on, int i, Str t) { if (on) b.str(k[i]).c(' ').str(T(t)).str("  "); };
-        key(g_cfg.toolArea, 0, S_BAR_KEY_AREA); key(g_cfg.toolReplace, 1, S_BAR_KEY_REPLACE);
-        key(g_cfg.toolArea, 2, S_BAR_KEY_CLEAR); key(g_cfg.toolReplace, 3, S_BAR_KEY_STYLE);
-        key(g_cfg.toolFree, 4, S_BAR_KEY_FREE); key(g_cfg.toolArea, 5, S_BAR_KEY_FILL);
-        if (g_hover && g_cfg.wheelKey > 0) b.str(k[7]).str(T(S_BAR_KEY_WHEEL)).str("  ");
-        if (g_cfg.keyOff > 0) b.str(k[6]).c(' ').str(T(S_BAR_KEY_OFF));
-    }
-    copy_text(out, b.z(), cap);
-}
-
-static DWORD WINAPI overlay_thread(void*) {
-    WNDCLASSEXW wc = { sizeof(wc) };
-    wc.lpfnWndProc = overlay_proc; wc.hInstance = GetModuleHandleW(nullptr);
-    wc.lpszClassName = L"EnshroudedBuildingToolsOverlay"; wc.hCursor = nullptr;
-    RegisterClassExW(&wc);
-    g_overlay = CreateWindowExW(WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-                                wc.lpszClassName, L"", WS_POPUP, 0, 0, 420, 36, nullptr, nullptr, wc.hInstance, nullptr);
-    SetLayeredWindowAttributes(g_overlay, 0, 205, LWA_ALPHA);
-
-    bool shown = false;
-    static char last[1024] = "", changed[1024] = "";
-    DWORD changedAt = GetTickCount();
-    for (;;) {
-        MSG msg;
-        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
-        compose_overlay(g_overlayText, sizeof(g_overlayText));
-        preview_diag();
-        DWORD now = GetTickCount();
-        if (lstrcmpA(changed, g_overlayText) != 0) { lstrcpyA(changed, g_overlayText); changedAt = now; }
-        bool idle = g_cfg.panelTimeout > 0 && now - changedAt > (DWORD)g_cfg.panelTimeout * 1000 && now >= g_flashUntil;
-        bool want = g_cfg.overlay && g_overlayText[0] && game_focused() && !idle;
-        if (want) {
-            HWND gw = game_window();
-            RECT r = { 0, 0, 1920, 1080 };
-            if (gw) {
-                RECT c; POINT tl = { 0, 0 };
-                if (GetClientRect(gw, &c) && ClientToScreen(gw, &tl))
-                    r = { tl.x, tl.y, tl.x + c.right, tl.y + c.bottom };
-                else GetWindowRect(gw, &r);
-            }
-            HDC dc = GetDC(g_overlay);
-            float sc = (float)(r.bottom - r.top) / 1080.f * (float)g_cfg.panelScale / 100.f;
-            if (sc < 0.5f) sc = 0.5f;
-            int px = (int)(17.f * sc + 0.5f);
-            if (px != g_fontPx) { g_fontPx = px; last[0] = 0; }
-            HGDIOBJ of = SelectObject(dc, panel_font(px));
-            RECT tr = { 0, 0, 4000, 0 };
-            draw_text(dc, g_overlayText, &tr, DT_CALCRECT | DT_NOPREFIX);
-            SelectObject(dc, of); ReleaseDC(g_overlay, dc);
-            int w = (tr.right - tr.left) + px * 2, h = (tr.bottom - tr.top) + px / 2 + 3;
-            int x = r.left + ((r.right - r.left) - w) / 2, y = r.bottom - (int)(g_cfg.panelBottom * sc) - h;
-            if (x < r.left) x = r.left; if (y < r.top) y = r.top;
-            static RECT lastPos = { 0, 0, 0, 0 };
-            if (!shown || lastPos.left != x || lastPos.top != y || lastPos.right != w || lastPos.bottom != h) {
-                SetWindowPos(g_overlay, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-                lastPos = { x, y, w, h };
-            }
-            if (!shown || lstrcmpA(last, g_overlayText) != 0) { InvalidateRect(g_overlay, nullptr, FALSE); lstrcpyA(last, g_overlayText); }
-            shown = true;
-        } else if (shown) {
-            ShowWindow(g_overlay, SW_HIDE); shown = false;
-        }
-        Sleep(50);
-    }
 }
 
 // ------------------------------------------------- free placement distance (Q + wheel)
@@ -5714,6 +5532,7 @@ static DWORD WINAPI input_thread(void*) {
             if (g_modOff) { for (bool& p : prev) p = false; continue; }
         }
         exact_fire(focus);
+        preview_diag();
         if (g_bindWaiting < 0) radial_keys(focus);
         {   // in-game menu
             bool down = focus && g_playUiOrig && key_down(g_cfg.keyMenu);
@@ -6188,7 +6007,6 @@ extern "C" BOOL WINAPI DllMainCRTStartup(HINSTANCE self, DWORD reason, LPVOID) {
     if (!g_dedicated && g_cfg.drawBox) install_vk_hooks();
     if (g_dedicated) return TRUE;        // no keys, window or sounds on a server: the players' games send their settings
     CreateThread(nullptr, 0, input_thread, nullptr, 0, nullptr);
-    if (g_cfg.overlay) CreateThread(nullptr, 0, overlay_thread, nullptr, 0, nullptr);
     CreateThread(nullptr, 0, wheel_thread, nullptr, 0, nullptr);
     return TRUE;
 }

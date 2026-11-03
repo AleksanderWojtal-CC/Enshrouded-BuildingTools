@@ -40,7 +40,6 @@ msg.fill_diag = Заповнення області: діагональ ({0})
 msg.diag_turned = Діагональ повернуто ({0} з {1})
 msg.diag_standing = Діагональ: стоячи (стіна з кута в кут)
 msg.exact_on = Точний режим УВІМК: клацніть один раз, потім введіть розміри
-msg.exact_off = Точний режим ВИМК (клацання по кутах)
 msg.exact_cancelled = Точну область скасовано
 msg.exact_click = Клацніть, щоб збудувати точну область
 msg.exact_too_big = Завелика: понад {0} форм
@@ -75,32 +74,9 @@ msg.cdelete_capped = Зв'язане видалення: лише перші ф�
 msg.language_set = Мова Building Tools: українська
 
 # Info bar at the bottom of the screen (short words)
-bar.area = Область {0}/{1}
 bar.area_build = Область: будівництво {0}/{1}
 bar.area_replace = Область: заміна {0}/{1}
 bar.area_remove = Область: видалення {0}/{1}
-bar.hollow = порожня
-bar.walls = стіни
-bar.roof = дах: {0}
-bar.round = коло: {0}, {1}
-bar.diag = діагональ: {0}
-bar.prefab = Звичайний
-bar.prefab_replace = Звичайний, заміна
-bar.full = уся форма
-bar.overlap = перетин
-bar.connected = зв'язаний
-bar.free = вільно {0} м
-bar.creative = творчий
-bar.size = {0}x{1} в{2} = {3}
-bar.too_big = ЗАБАГАТО (макс. {0})
-bar.key_area = область
-bar.key_replace = заміна
-bar.key_clear = скинути
-bar.key_style = стиль
-bar.key_free = вільно
-bar.key_fill = заповнення
-bar.key_wheel = +коліщатко відст.
-bar.key_off = вимк.
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = Режим області

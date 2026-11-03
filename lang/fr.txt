@@ -40,7 +40,6 @@ msg.fill_diag = Remplissage de zone : diagonale ({0})
 msg.diag_turned = Diagonale tournée ({0} sur {1})
 msg.diag_standing = Diagonale : debout (mur d'angle à angle)
 msg.exact_on = Mode exact ACTIVÉ : cliquez une fois, puis entrez les dimensions
-msg.exact_off = Mode exact DÉSACTIVÉ (clics de coins)
 msg.exact_cancelled = Zone exacte annulée
 msg.exact_click = Cliquez pour construire la zone exacte
 msg.exact_too_big = Trop grand : plus de {0} formes
@@ -75,32 +74,9 @@ msg.cdelete_capped = Suppression connectée : seulement les {0} premières forme
 msg.language_set = Langue de Building Tools : français
 
 # Info bar at the bottom of the screen (short words)
-bar.area = Zone {0}/{1}
 bar.area_build = Zone construire {0}/{1}
 bar.area_replace = Zone remplacer {0}/{1}
 bar.area_remove = Zone retirer {0}/{1}
-bar.hollow = creux
-bar.walls = murs
-bar.roof = toit : {0}
-bar.round = rond : {0}, {1}
-bar.diag = diagonale : {0}
-bar.prefab = Normal
-bar.prefab_replace = Normal remplacer
-bar.full = forme entière
-bar.overlap = chevauchement
-bar.connected = connecté
-bar.free = libre {0} m
-bar.creative = créatif
-bar.size = {0}x{1} h{2} = {3}
-bar.too_big = TROP GRAND (max {0})
-bar.key_area = zone
-bar.key_replace = remplacer
-bar.key_clear = effacer
-bar.key_style = style
-bar.key_free = libre
-bar.key_fill = remplissage
-bar.key_wheel = +molette distance
-bar.key_off = désactiver
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = Mode zone

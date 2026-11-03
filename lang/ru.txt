@@ -40,7 +40,6 @@ msg.fill_diag = Заполнение области: диагональ ({0})
 msg.diag_turned = Диагональ повёрнута ({0} из {1})
 msg.diag_standing = Диагональ: стоя (стена из угла в угол)
 msg.exact_on = Точный режим ВКЛ: щёлкните один раз, затем введите размеры
-msg.exact_off = Точный режим ВЫКЛ (щелчки по углам)
 msg.exact_cancelled = Точная область отменена
 msg.exact_click = Щёлкните, чтобы построить точную область
 msg.exact_too_big = Слишком большая: больше {0} форм
@@ -75,32 +74,9 @@ msg.cdelete_capped = Связанное удаление: только перв�
 msg.language_set = Язык Building Tools: русский
 
 # Info bar at the bottom of the screen (short words)
-bar.area = Область {0}/{1}
 bar.area_build = Область: стройка {0}/{1}
 bar.area_replace = Область: замена {0}/{1}
 bar.area_remove = Область: удаление {0}/{1}
-bar.hollow = пустая
-bar.walls = стены
-bar.roof = крыша: {0}
-bar.round = круг: {0}, {1}
-bar.diag = диагональ: {0}
-bar.prefab = Обычный
-bar.prefab_replace = Обычный, замена
-bar.full = вся форма
-bar.overlap = пересечение
-bar.connected = связанный
-bar.free = свободно {0} м
-bar.creative = творческий
-bar.size = {0}x{1} в{2} = {3}
-bar.too_big = СЛИШКОМ МНОГО (макс. {0})
-bar.key_area = область
-bar.key_replace = замена
-bar.key_clear = сброс
-bar.key_style = стиль
-bar.key_free = свободно
-bar.key_fill = заполнение
-bar.key_wheel = +колесо расст.
-bar.key_off = выкл.
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = Режим области
