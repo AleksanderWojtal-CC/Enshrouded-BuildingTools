@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev7"
+#define MOD_VERSION "0.29.0-dev8"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -941,8 +941,9 @@ static volatile DWORD g_cursorCamTick = 0;     // last time the cursor system pu
 // exact window is), the drawn box follows the camera the frame is rendered with. It lags the
 // cursor camera by a few frames, which only matters while it moves.
 static bool readable(const void* p, size_t n);
-typedef uint64_t (*RenderFrameFn)(void*, void*, uint8_t*, void*, void*, void*);
-static RenderFrameFn g_renderFrameOrig = nullptr;
+// Hooked through render_frame_thunk, which keeps every register and stack argument as the game
+// passed it (the function takes more than four arguments, some on the stack, and is touchy).
+extern "C" void* g_renderFrameOrig = nullptr;
 // The camera's place in the render frame's arguments moves between game builds (1.0: arg3 +
 // 0xad0), so it is found at run time: while the cursor camera is live, the arguments are scanned
 // for its position (int64[3]) with its quaternion right after; an offset that matches in three
@@ -971,7 +972,7 @@ static void render_cam_find(void* const* args, const CamSnap& l) {
         }
     }
 }
-static uint64_t render_frame_hook(void* a, void* b, uint8_t* c, void* d, void* e, void* f) {
+extern "C" void bt_render_frame(void* a, void* b, void* c, void* d) {
     const DWORD now = GetTickCount();
     void* args[4] = { a, b, c, d };
     LONG last = g_camN;
@@ -997,8 +998,21 @@ static uint64_t render_frame_hook(void* a, void* b, uint8_t* c, void* d, void* e
             }
         }
     }
-    return g_renderFrameOrig(a, b, c, d, e, f);
 }
+extern "C" uint8_t render_frame_thunk[];
+asm(".text\n"
+    ".globl render_frame_thunk\n"
+    "render_frame_thunk:\n"
+    "    push %rcx\n    push %rdx\n    push %r8\n    push %r9\n"
+    "    sub $0x68, %rsp\n"
+    "    movdqu %xmm0, 0x20(%rsp)\n    movdqu %xmm1, 0x30(%rsp)\n"
+    "    movdqu %xmm2, 0x40(%rsp)\n    movdqu %xmm3, 0x50(%rsp)\n"
+    "    call bt_render_frame\n"
+    "    movdqu 0x20(%rsp), %xmm0\n    movdqu 0x30(%rsp), %xmm1\n"
+    "    movdqu 0x40(%rsp), %xmm2\n    movdqu 0x50(%rsp), %xmm3\n"
+    "    add $0x68, %rsp\n"
+    "    pop %r9\n    pop %r8\n    pop %rdx\n    pop %rcx\n"
+    "    jmp *g_renderFrameOrig(%rip)\n");
 static bool exact_hold();
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
     uint8_t* r = g_cxOrig(out, sys, q, ray);
@@ -6049,7 +6063,7 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (!g_cxOrig) LOG(.str("free placement not available"));
-    if (!g_dedicated) if (uint8_t* rf = find_hookable("RenderFrame", SIG_RENDER_FRAME, 5)) g_renderFrameOrig = (RenderFrameFn)hook(rf, 5, (void*)&render_frame_hook);
+    if (!g_dedicated) if (uint8_t* rf = find_hookable("RenderFrame", SIG_RENDER_FRAME, 5)) g_renderFrameOrig = hook(rf, 5, (void*)render_frame_thunk);
     if (!g_renderFrameOrig) LOG(.str("render camera: not available (the box may sit off behind the exact window)"));
     if (g_dedicated) {
         LOG(.str("dedicated server: every player builds with the settings of their own Building Tools (players without it build vanilla); ")
