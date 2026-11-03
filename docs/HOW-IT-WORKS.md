@@ -285,6 +285,12 @@ hooks are skipped. The server never sees a player's keys, so the client sends th
 - **Corners in step.** The client counts its own corner clicks and mirrors the corners
   for its HUD and guide lines; the server uses the client's count and click counter
   (`core::net_corner_index`) to skip repeated clicks and restart when it missed one.
+- **Remote or local.** The client mirrors corners only when no in-process server world
+  builds (`remote_session`). The server world reads the building cursor only while the
+  hammer or a material is in hand, so the choice is made only while the game draws its
+  building box (`building_now`: no server world read for a second of building = remote)
+  and kept when the player switches to a weapon or tool. Mirrored clicks also need the
+  building box, so attack and mining clicks never count as corners.
 
 ## Off switch
 
