@@ -802,3 +802,21 @@ building/item/cursor reflection types (EquipmentSetup, cursor components, base r
 PlaceCommit was changed inside (its stack layout), but its arguments and Commit layout are
 the same. The patched dedicated server matches the same signatures (dismantle aim state
 also at rbp+0x1d8).
+
+## Hotfix #4 (1.0.1.1, build 1285601, 2026-11-03): no mod change
+
+0.28.1 works unchanged. All 81 client signatures still match once, and every signature
+the patched server matched before still matches once (same RVAs except BlitCheck a38b37 ->
+a38bb7 and MaterialItem 933330 -> 9333c0; the blit patch bytes around it are the same).
+
+Client RVAs: the building code (PlaceShape .. PickCall, InputEncode, cursor/hover/dismantle)
+did not move. From about 0x9c0000 up code moved -0x20 (HudUpdate b34c00, UiSound b3643a,
+SystemDeps 9c7aa0, ZoneVisCall 860150, the UI building blocks and menu), the 0x11a..0x11d
+UI primitives moved -0xda0, and the data the UI sound and hover code point at moved -0x1000
+(UI sound context 283f4a8, hover spawn defaults 1528a88). The mod reads all of those from
+the code; only tests/test_core.cpp has them hard-coded.
+
+Reflection: FbUiBundle is still 0x14038 bytes and every bundle field the mod uses has its
+Patch #1 offset (checked by field path, e.g. sounds.hud.buildActionFailed 0x12d20,
+namedStyles.menu.header1 0x11d44, hud.itemWheel.background 0xdd00). The startup log on
+the hotfix client shows every feature available.
