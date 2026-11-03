@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev9"
+#define MOD_VERSION "0.29.0-dev10"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -4727,7 +4727,7 @@ static void draw_key_row(int k) {
         uint16_t midLeft = 0x201;
         ui.setLayout(ui_node(row), &midLeft);
         ui.beginBox(label, 0);
-        ui.setWidth(ui_node(label), 380);
+        ui.setWidth(ui_node(label), 600);                   // long labels (and translations) clear of the key button
         ui_text(T(g_keyActions[k].label), STYLE_BODY);
         ui.endBox(label);
         char name[40];
