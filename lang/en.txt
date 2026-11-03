@@ -41,7 +41,6 @@ msg.fill_diag = Area fill: diagonal ({0})
 msg.diag_turned = Diagonal turned ({0} of {1})
 msg.diag_standing = Diagonal fill: standing (a wall from corner to corner)
 msg.exact_on = Exact mode ON: click once, then enter the sizes
-msg.exact_off = Exact mode OFF (corner clicks)
 msg.exact_cancelled = Exact area cancelled
 msg.exact_click = Click to build the exact area
 msg.exact_too_big = Too big: more than {0} shapes
@@ -77,33 +76,9 @@ msg.cdelete_capped = Connected delete: only the first {0} shapes (FillLimit)
 msg.language_set = Building Tools language: English
 
 # Info bar at the bottom of the screen (short words)
-bar.area = Area {0}/{1}
 bar.area_build = Area build {0}/{1}
 bar.area_replace = Area replace {0}/{1}
 bar.area_remove = Area remove {0}/{1}
-bar.hollow = hollow
-bar.walls = walls
-bar.roof = roof: {0}
-bar.round = round: {0}, {1}
-bar.diag = diagonal: {0}
-bar.prefab = Prefab
-bar.prefab_replace = Prefab replace
-bar.full = full shape
-bar.overlap = overlap
-bar.connected = connected
-bar.free = free {0} m
-bar.creative = creative
-# area size: width x depth, h = height, = number of shapes
-bar.size = {0}x{1} h{2} = {3}
-bar.too_big = TOO BIG (max {0})
-bar.key_area = area
-bar.key_replace = replace
-bar.key_clear = clear
-bar.key_style = style
-bar.key_free = free
-bar.key_fill = fill
-bar.key_wheel = +wheel dist
-bar.key_off = off
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = Area mode

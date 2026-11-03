@@ -40,7 +40,6 @@ msg.fill_diag = Obszar: ukośny ({0})
 msg.diag_turned = Ukośny obrócony ({0} z {1})
 msg.diag_standing = Ukośny: stojący (ściana od narożnika do narożnika)
 msg.exact_on = Tryb dokładny WŁ.: kliknij raz, potem wpisz wymiary
-msg.exact_off = Tryb dokładny WYŁ. (kliknięcia narożników)
 msg.exact_cancelled = Dokładny obszar anulowany
 msg.exact_click = Kliknij, aby zbudować dokładny obszar
 msg.exact_too_big = Za duży: więcej niż {0} kształtów
@@ -75,32 +74,9 @@ msg.cdelete_capped = Usuń sąsiednie: zmieniono tylko część, limit {0} (Fill
 msg.language_set = Język Building Tools: polski
 
 # Info bar at the bottom of the screen (short words)
-bar.area = Obszar {0}/{1}
 bar.area_build = Obszar: budowa {0}/{1}
 bar.area_replace = Obszar: zastąpienie {0}/{1}
 bar.area_remove = Obszar: usuwanie {0}/{1}
-bar.hollow = pudło
-bar.walls = ściany
-bar.roof = dach: {0}
-bar.round = okrągły: {0}, {1}
-bar.diag = ukośny: {0}
-bar.prefab = Klasyczny
-bar.prefab_replace = Klasyczny, zastąpienie
-bar.full = pełny
-bar.overlap = część wspólna
-bar.connected = sąsiednie
-bar.free = swobodny {0} m
-bar.creative = kreatywny
-bar.size = {0}x{1} w{2} = {3}
-bar.too_big = ZA DUŻY (maks. {0})
-bar.key_area = obszar
-bar.key_replace = zastąpienie
-bar.key_clear = wyczyść
-bar.key_style = styl
-bar.key_free = swobodny
-bar.key_fill = wypełnienie
-bar.key_wheel = +kółko odległość
-bar.key_off = wył.
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = Tryb obszaru

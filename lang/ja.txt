@@ -40,7 +40,6 @@ msg.fill_diag = 範囲の塗りつぶし：斜め（{0}）
 msg.diag_turned = 斜めを回転（{0} / {1}）
 msg.diag_standing = 斜め：縦置き（角から角への壁）
 msg.exact_on = 正確モード オン: 1回クリックしてからサイズを入力
-msg.exact_off = 正確モード オフ (角をクリック)
 msg.exact_cancelled = 正確エリアをキャンセルしました
 msg.exact_click = クリックすると正確エリアを建築します
 msg.exact_too_big = 大きすぎます: {0} 個を超えています
@@ -75,32 +74,9 @@ msg.cdelete_capped = つながり削除：最初の {0} 個のみ（FillLimit）
 msg.language_set = Building Tools の言語：日本語
 
 # Info bar at the bottom of the screen (short words)
-bar.area = 範囲 {0}/{1}
 bar.area_build = 範囲 建築 {0}/{1}
 bar.area_replace = 範囲 置き換え {0}/{1}
 bar.area_remove = 範囲 撤去 {0}/{1}
-bar.hollow = 空洞
-bar.walls = 壁
-bar.roof = 屋根：{0}
-bar.round = 円形：{0}、{1}
-bar.diag = 斜め：{0}
-bar.prefab = 通常
-bar.prefab_replace = 通常 置き換え
-bar.full = 形全体
-bar.overlap = 重なり
-bar.connected = つながり
-bar.free = 自由 {0} m
-bar.creative = クリエイティブ
-bar.size = {0}x{1} 高さ{2} = {3}
-bar.too_big = 大きすぎ（最大 {0}）
-bar.key_area = 範囲
-bar.key_replace = 置き換え
-bar.key_clear = クリア
-bar.key_style = 方式
-bar.key_free = 自由
-bar.key_fill = 埋め方
-bar.key_wheel = +ホイール 距離
-bar.key_off = オフ
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = 範囲モード

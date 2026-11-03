@@ -40,7 +40,6 @@ msg.fill_diag = 영역 채우기: 대각선 ({0})
 msg.diag_turned = 대각선 회전 ({0}/{1})
 msg.diag_standing = 대각선: 세움 (모서리에서 모서리까지 벽)
 msg.exact_on = 정확 모드 켜짐: 한 번 클릭한 다음 크기를 입력하세요
-msg.exact_off = 정확 모드 꺼짐 (모서리 클릭)
 msg.exact_cancelled = 정확 영역이 취소되었습니다
 msg.exact_click = 클릭하면 정확 영역을 건설합니다
 msg.exact_too_big = 너무 큼: {0}개 초과
@@ -75,32 +74,9 @@ msg.cdelete_capped = 연결 삭제: 처음 {0}개만 (FillLimit)
 msg.language_set = Building Tools 언어: 한국어
 
 # Info bar at the bottom of the screen (short words)
-bar.area = 영역 {0}/{1}
 bar.area_build = 영역 건축 {0}/{1}
 bar.area_replace = 영역 교체 {0}/{1}
 bar.area_remove = 영역 제거 {0}/{1}
-bar.hollow = 빈 방
-bar.walls = 벽
-bar.roof = 지붕: {0}
-bar.round = 원형: {0}, {1}
-bar.diag = 대각선: {0}
-bar.prefab = 일반
-bar.prefab_replace = 일반 교체
-bar.full = 모양 전체
-bar.overlap = 겹침
-bar.connected = 연결
-bar.free = 자유 {0} m
-bar.creative = 창작
-bar.size = {0}x{1} 높이{2} = {3}
-bar.too_big = 너무 큼 (최대 {0})
-bar.key_area = 영역
-bar.key_replace = 교체
-bar.key_clear = 지우기
-bar.key_style = 방식
-bar.key_free = 자유
-bar.key_fill = 채우기
-bar.key_wheel = +휠 거리
-bar.key_off = 끄기
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = 영역 모드

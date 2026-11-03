@@ -40,7 +40,6 @@ msg.fill_diag = Alan dolgusu: çapraz ({0})
 msg.diag_turned = Çapraz döndürüldü ({0}/{1})
 msg.diag_standing = Çapraz: dik (köşeden köşeye duvar)
 msg.exact_on = Tam ölçü modu AÇIK: bir kez tıklayın, sonra ölçüleri girin
-msg.exact_off = Tam ölçü modu KAPALI (köşe tıklamaları)
 msg.exact_cancelled = Tam ölçülü alan iptal edildi
 msg.exact_click = Tam ölçülü alanı inşa etmek için tıklayın
 msg.exact_too_big = Çok büyük: {0} şekilden fazla
@@ -75,32 +74,9 @@ msg.cdelete_capped = Bağlantılı silme: yalnızca ilk {0} şekil (FillLimit)
 msg.language_set = Building Tools dili: Türkçe
 
 # Info bar at the bottom of the screen (short words)
-bar.area = Alan {0}/{1}
 bar.area_build = Alan inşa {0}/{1}
 bar.area_replace = Alan değiştir {0}/{1}
 bar.area_remove = Alan kaldır {0}/{1}
-bar.hollow = boş
-bar.walls = duvarlar
-bar.roof = çatı: {0}
-bar.round = yuvarlak: {0}, {1}
-bar.diag = çapraz: {0}
-bar.prefab = Normal
-bar.prefab_replace = Normal değiştir
-bar.full = tüm şekil
-bar.overlap = kesişim
-bar.connected = bağlantılı
-bar.free = serbest {0} m
-bar.creative = yaratıcı
-bar.size = {0}x{1} y{2} = {3}
-bar.too_big = ÇOK BÜYÜK (en fazla {0})
-bar.key_area = alan
-bar.key_replace = değiştir
-bar.key_clear = temizle
-bar.key_style = stil
-bar.key_free = serbest
-bar.key_fill = dolgu
-bar.key_wheel = +tekerlek mesafe
-bar.key_off = kapat
 
 # Rows in the game's building box, bottom right (narrow: keep them short)
 hud.area = Alan modu
