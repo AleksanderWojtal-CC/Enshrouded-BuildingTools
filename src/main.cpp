@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev10"
+#define MOD_VERSION "0.29.0-dev11"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -4727,7 +4727,7 @@ static void draw_key_row(int k) {
         uint16_t midLeft = 0x201;
         ui.setLayout(ui_node(row), &midLeft);
         ui.beginBox(label, 0);
-        ui.setWidth(ui_node(label), 600);                   // long labels (and translations) clear of the key button
+        ui.setWidth(ui_node(label), 700);                   // long labels (and translations) clear of the key button
         ui_text(T(g_keyActions[k].label), STYLE_BODY);
         ui.endBox(label);
         char name[40];
@@ -4805,7 +4805,7 @@ static void draw_keys() {
     alignas(16) uint8_t list[0x40] = {};
     static float offset[4];                                 // the scroll position, kept between frames
     uint16_t topLeft = 0x101;
-    bool scroll = ui_scroll_begin(st, sizeof st, offset, 960);
+    bool scroll = ui_scroll_begin(st, sizeof st, offset, 1000);
     ui.beginBox(list, 0);
     UiVec2 gap{ 0, 22 };
     ui.setSpacing(ui_node(list), &gap, 0);
@@ -4925,7 +4925,7 @@ static void draw_mod_menu() {
     uint16_t topLeft = 0x101;
     ui.setSelfAlign(n, &topLeft);
     ui.setLayout(n, &topLeft);
-    ui.setWidth(n, 1000);
+    ui.setWidth(n, 1180);                                   // room for long (translated) key labels
     ui.setStretch(n, UiVec2{ 0, 1 });                       // full height: the hints sit at the bottom
 
     ui_text(T(S_MENU_TITLE), STYLE_TITLE);
