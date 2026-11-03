@@ -472,7 +472,7 @@ static bool box_mvp(VkPush& P, float aspect, bool* inside) {
     float* out = P.mvp; float* size = P.size; float* eye = P.eye;
     DWORD t = g_dbTick;
     if (!t || GetTickCount() - t > 300) return false;
-    if (GetTickCount() - g_camSysTick > 300) return false;
+    if (GetTickCount() - g_camSysTick > 300 && !g_exactOpen) return false;   // behind the exact window the camera stands still
     int64_t lo[3], hi[3], cam[3];
     float q[4];
     LONG a0 = g_dbSeq;

@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.28.1"
+#define MOD_VERSION "0.29.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -105,6 +105,8 @@ struct Config {
     int sound        = 1;
     int log          = 1;
     int corners      = 2;      // area corners: 2 = opposite corners of a box, 3 = base + height
+    int exact        = 0;      // 1 = exact mode: one click, then the sizes in a window (corners stays 2)
+    int exactRef = 1, exactW = 4, exactD = 4, exactH = 3;   // the last sizes entered (core::EXACT_*)
     int keyHover     = VK_F10;
     int keyFarther   = VK_PRIOR;   // Page Up
     int keyCloser    = VK_NEXT;    // Page Down
@@ -137,6 +139,7 @@ struct Config {
     int keyFillRound = 0, keyRoundHollow = 0;   // round fill quick key / round fill solid <-> hollow
     int keyRoundLying = 0;                       // round / diagonal fill standing <-> lying
     int keyFillDiag = 0;                         // diagonal fill quick key
+    int keyExact = 0;                            // exact mode on / off (Area mode)
     int keyCreative  = 0;      // creative building on / off
     int keyReplaceHold = 0;    // Replace on while this key is held
     int keyPrefab = 0, keyAreaOn = 0, keyReplaceOn = 0, keyReplaceOff = 0;   // set a mode / Replace directly
@@ -191,6 +194,7 @@ static void write_full_ini(const Config& c) {
      .t("StyleFull=").i(c.keyStyleFull).t("\r\nStyleOverlap=").i(c.keyStyleOverlap).t("\r\nStyleConnected=").i(c.keyStyleConnected).t("\r\n")
      .t("FillSolid=").i(c.keyFillSolid).t("\r\nFillHollow=").i(c.keyFillHollow).t("\r\nFillWalls=").i(c.keyFillWalls).t("\r\n")
      .t("FillRoof=").i(c.keyFillRoof).t("\r\nFillRound=").i(c.keyFillRound).t("\r\nFillDiagonal=").i(c.keyFillDiag).t("\r\n")
+     .t("; Exact mode on / off (one click, then the sizes in a window)\r\nToggleExact=").i(c.keyExact).t("\r\n")
      .t("ToggleCreative=").i(c.keyCreative).t("\r\n")
      .t("PrefabMode=").i(c.keyPrefab).t("\r\nAreaMode=").i(c.keyAreaOn).t("\r\n")
      .t("ReplaceOn=").i(c.keyReplaceOn).t("\r\nReplaceOff=").i(c.keyReplaceOff).t("\r\n")
@@ -205,7 +209,12 @@ static void write_full_ini(const Config& c) {
      .t(";     and crafting menus count them. Loot deposit stays local. Off by default.\r\n")
      .t("GlobalMagicChests=").i(c.globalChests).t("\r\n")
      .t("\r\n[Area]\r\n")
-     .t("; 2 = two opposite corners, 3 = two base corners then the height\r\nCorners=").i(c.corners).t("\r\n")
+     .t("; 2 = two opposite corners, 3 = two base corners then the height,\r\n")
+     .t(";     1 = exact: one click, then width, depth and height in a window\r\nCorners=").i(c.exact ? 1 : c.corners).t("\r\n")
+     .t("; Exact mode, last entered: reference (0 centre, 1 front left, 2 front right, 3 back left,\r\n")
+     .t(";     4 back right; bottom) and sizes in shapes (negative = the other way)\r\n")
+     .t("ExactReference=").i(c.exactRef).t("\r\nExactWidth=").i(c.exactW).t("\r\nExactDepth=").i(c.exactD)
+     .t("\r\nExactHeight=").i(c.exactH).t("\r\n")
      .t("; Free placement start distance in tenths of a metre (40 = 4 m)\r\nFreePlacementDistance=").i(c.hoverDist10).t("\r\n")
      .t("; Show the area being set up: 1 = highlights along the edges on surfaces,\r\n")
      .t(";     2 = the flame altar's base-area box, 3 = both, 0 = off\r\nPreview=").i(c.preview).t("\r\n")
@@ -245,7 +254,14 @@ static void load_config() {
     g_cfg.overlay      = ini_int(L"Interface", L"Overlay", 1);
     g_cfg.sound        = ini_int(L"Interface", L"Sound", 1);
     g_cfg.log          = ini_int(L"Debug", L"Log", 1);
-    g_cfg.corners      = ini_int(L"Area", L"Corners", 2) == 3 ? 3 : 2;
+    {   int cn = ini_int(L"Area", L"Corners", 2);
+        g_cfg.corners = cn == 3 ? 3 : 2; g_cfg.exact = cn == 1; }
+    {   auto clampv = [](int v, int lo, int hi, int def) { return v < lo || v > hi ? def : v; };
+        g_cfg.exactRef = clampv(ini_int(L"Area", L"ExactReference", 1), 0, core::EXACT_REF_COUNT - 1, 1);
+        g_cfg.exactW = clampv(ini_int(L"Area", L"ExactWidth", 4), -core::kExactMax, core::kExactMax, 4);
+        g_cfg.exactD = clampv(ini_int(L"Area", L"ExactDepth", 4), -core::kExactMax, core::kExactMax, 4);
+        g_cfg.exactH = clampv(ini_int(L"Area", L"ExactHeight", 3), -core::kExactMax, core::kExactMax, 3);
+        if (!g_cfg.exactW) g_cfg.exactW = 1; if (!g_cfg.exactD) g_cfg.exactD = 1; if (!g_cfg.exactH) g_cfg.exactH = 1; }
     g_cfg.keyHover     = ini_int(L"Keys", L"ToggleFreePlacement", VK_F10);
     g_cfg.keyFarther   = ini_int(L"Keys", L"FreePlacementFarther", VK_PRIOR);
     g_cfg.keyCloser    = ini_int(L"Keys", L"FreePlacementCloser", VK_NEXT);
@@ -287,6 +303,7 @@ static void load_config() {
     g_cfg.keyRoundHollow = ini_int(L"Keys", L"RoundHollow", 0);
     g_cfg.keyRoundLying = ini_int(L"Keys", L"RoundLying", 0);
     g_cfg.keyFillDiag   = ini_int(L"Keys", L"FillDiagonal", 0);
+    g_cfg.keyExact      = ini_int(L"Keys", L"ToggleExact", 0);
     g_cfg.keyCreative   = ini_int(L"Keys", L"ToggleCreative", 0);
     g_cfg.keyPrefab     = ini_int(L"Keys", L"PrefabMode", 0);
     g_cfg.keyAreaOn     = ini_int(L"Keys", L"AreaMode", 0);
@@ -314,7 +331,7 @@ static void load_config() {
         ini_int(L"Keys", L"ToggleMod", -1) == -1 || ini_int(L"Limits", L"FillLimit", -1) == -1 ||
         ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1 || noLanguage ||
         ini_int(L"Keys", L"RadialMenu", -1) == -1 || ini_int(L"Keys", L"HoldReplace", -1) == -1 ||
-        ini_int(L"Area", L"DrawBoxBlocks", -1) == -1)
+        ini_int(L"Area", L"DrawBoxBlocks", -1) == -1 || ini_int(L"Area", L"ExactWidth", -9999) == -9999)
         write_full_ini(g_cfg);
 }
 
@@ -2399,6 +2416,61 @@ static void quat_rot(const float* q, bool inverse, const double v[3], double out
     out[2] = v[2] + w * tz + (x * ty - y * tx);
 }
 
+// ---- exact mode (Corners=1): one click, then the sizes in a window
+// The first click of an area is the reference point (g_scPos[0]) and opens the window
+// (g_exactReq; the play-state UI opens it on the next frame). The preview and the size
+// readout use the entered sizes while one corner is set. Build arms the mod and sends one
+// click (two with a remote server, see input_encode_hook); the click hooks then take the
+// two corners computed here instead of the cursor (g_exactC, fixed at Build).
+static volatile LONG g_exactReq = 0;          // corner 1 clicked: open the window (any thread -> UI thread)
+static volatile LONG g_exactOpen = 0;         // the window is up (screen 52 shows it instead of the menu)
+static volatile LONG g_exactArmed = 0;        // Build pressed: the next area click(s) build the area
+static volatile LONG g_exactPhase = 0;        // remote server: 0 = next click sends corner 1, 1 = corner 2
+static volatile LONG g_exactOp = 0;           // OP_BUILD / OP_REMOVE of the area being set up
+static volatile DWORD g_exactFire = 0;        // when the input thread sends the next click (0 = none)
+static volatile DWORD g_exactArmTick = 0;
+static I3 g_exactC[2];
+static volatile LONG g_exactSel = 1;          // row typed into: 0 reference, 1 width, 2 depth, 3 height
+static char g_exactTyped[8];                  // the number being typed ("" = not typing)
+static volatile LONG g_exactShown = 0;        // the window was on screen (its screen came up)
+static volatile DWORD g_exactReqTick = 0;
+static void exact_cancel(const char* why);
+static int g_exFAxis = 2, g_exFSign = 1, g_exRAxis = 0, g_exRSign = 1;   // the facing at the click
+// The sizes for this click (core::exact_corners) from the clicked shape and the entered values.
+static bool exact_on() { return g_cfg.exact && !g_dedicated; }   // a server builds what the player's game sends
+static void exact_corners_now(I3 out[2]) {
+    core::exact_corners(g_scPos[0], g_cfg.exactRef, g_cfg.exactW, g_cfg.exactD, g_cfg.exactH,
+                        g_exFAxis, g_exFSign, g_exRAxis, g_exRSign, g_scStep, out);
+}
+// Corner 1 of an exact area was just clicked (g_scPos[0], g_scStep set; g_stateLock held):
+// the view direction snapped to world x / z, then the window opens.
+static void exact_begin(LONG op) {
+    if (!exact_on()) return;
+    LONG k = g_cxLast;
+    if (k >= 0 && k <= 3) {
+        const float* q = g_cxSeen[k].camRot;
+        float x = q[0], y = q[1], z = q[2], w = q[3];
+        const float R[3] = { 1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * z - w * y) };
+        const float F[3] = { 2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x * x + y * y) };
+        core::exact_facing(F, R, &g_exFAxis, &g_exFSign, &g_exRAxis, &g_exRSign);
+    }
+    g_exactOp = op; g_exactArmed = 0; g_exactPhase = 0; g_exactFire = 0;
+    g_exactReq = 1;
+    LOG(.str("exact: corner 1 set, forward ").c(g_exFAxis ? 'z' : 'x').c(g_exFSign > 0 ? '+' : '-')
+        .str(" right ").c(g_exRAxis ? 'z' : 'x').c(g_exRSign > 0 ? '+' : '-'));
+}
+// A click while an exact area is armed (g_stateLock held). Returns the corner index the click
+// sets and puts the corner into g_scPos; -1 = not an exact click (normal handling).
+static int exact_click() {
+    if (!exact_on() || !g_exactArmed) return -1;
+    g_exactFire = 0;
+    g_scPos[0] = g_exactC[0]; g_scPos[1] = g_exactC[1];
+    g_exactArmed = 0;
+    LOG(.str("exact: build click, corners (").fix(g_exactC[0].x).c(',').fix(g_exactC[0].y).c(',').fix(g_exactC[0].z)
+        .str(") - (").fix(g_exactC[1].x).c(',').fix(g_exactC[1].y).c(',').fix(g_exactC[1].z).c(')'));
+    return 1;
+}
+
 // ---- aim hand-off
 // Only client worlds hold the live "aimed at" cursor (+0x338); the server copy is
 // the previous action. The server reads the client's live cursor component when
@@ -2873,7 +2945,9 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
     }
     LONG n = g_sc;
     if (n < 0 || n > g_cfg.corners - 1) n = 0;
-    g_scPos[n] = I3{ xf->pos[0], xf->pos[1], xf->pos[2] };      // removal transforms are shape centres
+    if (exact_on() && n == 1 && !g_exactArmed) n = 0;       // exact: only Remove's click finishes the area
+    if (!(n == 1 && exact_click() == 1))
+        g_scPos[n] = I3{ xf->pos[0], xf->pos[1], xf->pos[2] };  // removal transforms are shape centres
     LOG(.str("remove click: corner ").i(n + 1).str(" at (").fix(xf->pos[0]).c(',').fix(xf->pos[1]).c(',').fix(xf->pos[2]).c(')'));
     if (n == 0) {
         for (int a = 0; a < 3; a++) g_scStep[a] = bx->mx[a] - bx->mn[a];
@@ -2887,8 +2961,9 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
     if (n < g_cfg.corners - 1) {
         g_sc = n + 1; g_corners = g_sc;
         g_rpend.suppress = true;                       // the dismantle would still commit
-        Buf b; b.fmt(T(S_REMOVE_CORNER), num(n + 1).s, num(g_cfg.corners).s);
-        flash(b.z()); beep(MB_OK);
+        if (exact_on()) { exact_begin(OP_REMOVE); beep(MB_OK); }
+        else { Buf b; b.fmt(T(S_REMOVE_CORNER), num(n + 1).s, num(g_cfg.corners).s);
+               flash(b.z()); beep(MB_OK); }
         LeaveCriticalSection(&g_stateLock);
         return 0;
     }
@@ -3061,7 +3136,9 @@ static uint8_t place_hook_body(CostList* list, void* ctx, void* state, void* pda
     if (g_scOp != OP_BUILD) { reset_corners(); g_scOp = OP_BUILD; }
     LONG n = g_sc;
     if (n < 0 || n > g_cfg.corners - 1) n = 0;
-    {
+    if (exact_on() && n == 1 && !g_exactArmed) n = 0;       // exact: only Build's click finishes the area
+    if (n == 1 && exact_click() == 1) {}
+    else {
         Aabb box; shape_bounds(state, &target, &box);
         g_scPos[n] = box_centre(box);
         if (n == 0) {
@@ -3074,8 +3151,9 @@ static uint8_t place_hook_body(CostList* list, void* ctx, void* state, void* pda
     }
     if (n < g_cfg.corners - 1) {
         g_sc = n + 1; g_corners = g_sc;
-        Buf b; b.fmt(T(replace ? S_REPLACE_CORNER : S_BUILD_CORNER), num(n + 1).s, num(g_cfg.corners).s);
-        flash(b.z()); beep(MB_OK);
+        if (exact_on()) { exact_begin(OP_BUILD); beep(MB_OK); }
+        else { Buf b; b.fmt(T(replace ? S_REPLACE_CORNER : S_BUILD_CORNER), num(n + 1).s, num(g_cfg.corners).s);
+               flash(b.z()); beep(MB_OK); }
         LOG(.str("  corner ").i(n + 1).str(" set"));
         LeaveCriticalSection(&g_stateLock);
         return 0;
@@ -3153,8 +3231,17 @@ static void remote_corner(LONG op, uint8_t* item, const CursorXf* place, const C
     LONG n = g_sc;
     if (n < 0 || n > g_cfg.corners - 1) n = 0;
     g_netSeq = (g_netSeq + 1) & 7;
-    g_scPos[n] = box_centre(box);
-    if (n == 0) {
+    // exact: Build sends two clicks, corner 1 and corner 2 of the entered box (the server
+    // only knows clicks); any other second click starts over
+    bool exactClick = false;
+    if (exact_on() && g_exactArmed) {
+        n = g_exactPhase ? 1 : 0;
+        if (n == 0) { g_scPos[0] = g_exactC[0]; g_exactPhase = 1; g_exactFire = GetTickCount() + 120; exactClick = true;
+                      LOG(.str("exact: corner 1 click sent")); }
+        else if (exact_click() == 1) exactClick = true;
+    } else if (exact_on() && n == 1) n = 0;
+    if (!exactClick) g_scPos[n] = box_centre(box);
+    if (n == 0 && !exactClick) {
         for (int a = 0; a < 3; a++) g_scStep[a] = step[a];
         g_scCursorOff = op == OP_REMOVE || replace ? 0x338 : 0x300;
         g_scOff[0] = g_scPos[0].x - target.pos[0]; g_scOff[1] = g_scPos[0].y - target.pos[1]; g_scOff[2] = g_scPos[0].z - target.pos[2];
@@ -3164,6 +3251,8 @@ static void remote_corner(LONG op, uint8_t* item, const CursorXf* place, const C
         .str(" centre (").fix(g_scPos[n].x).c(',').fix(g_scPos[n].y).c(',').fix(g_scPos[n].z).c(')'));
     if (n < g_cfg.corners - 1) {
         g_sc = n + 1; g_corners = g_sc;
+        if (exactClick) { LeaveCriticalSection(&g_stateLock); return; }
+        if (exact_on()) { exact_begin(op); LeaveCriticalSection(&g_stateLock); beep(MB_OK); return; }
         LeaveCriticalSection(&g_stateLock);
         Buf b; b.fmt(T(op == OP_REMOVE ? S_REMOVE_CORNER : replace ? S_REPLACE_CORNER : S_BUILD_CORNER), num(n + 1).s, num(g_cfg.corners).s);
         flash(b.z()); beep(MB_OK);
@@ -3240,6 +3329,23 @@ static uint64_t input_encode_hook(uint8_t* out, uint8_t* src, uint8_t* flags, ui
     const bool patch = item && freecam_aim(src, item, &aim);
     if (item) *flags |= 2;                              // send the aim too
     if (patch) { saved = *(CursorXf*)(src + 0x330); *(CursorXf*)(src + 0x330) = aim; }
+    // exact mode with a remote server: the click Build sent goes out with the entered box's
+    // corner (as the cursor a click there would have: corner centre minus corner 1's offset,
+    // corner 1's rotation), so the server builds it like a two-click area
+    CursorXf exSaved[2]; bool exPatch = false;
+    if (item && src && exact_on() && g_exactArmed && remote_session() && (*(uint64_t*)(src + 0x3a8) & ~g_prevDigital & 0x11)) {
+        EnterCriticalSection(&g_stateLock);
+        const I3 c = g_exactPhase ? g_exactC[1] : g_exactC[0];
+        CursorXf x = *(CursorXf*)(src + 0x2f8);
+        int64_t o[3] = { g_scOff[0], g_scOff[1], g_scOff[2] };
+        x.pos[0] = c.x - o[0]; x.pos[1] = c.y - o[1]; x.pos[2] = c.z - o[2];
+        if (g_scRotOk) memcpy(x.rot, g_scRot, 16);
+        LeaveCriticalSection(&g_stateLock);
+        exSaved[0] = *(CursorXf*)(src + 0x2f8); exSaved[1] = *(CursorXf*)(src + 0x330);
+        *(CursorXf*)(src + 0x2f8) = x; *(CursorXf*)(src + 0x330) = x;
+        exPatch = true;
+        LOG(.str("exact: click ").i(g_exactPhase + 1).str(" sent at (").fix(x.pos[0]).c(',').fix(x.pos[1]).c(',').fix(x.pos[2]).c(')'));
+    }
     uint64_t r = g_inputEncodeOrig(out, src, flags, a4);
     if (out && src) {
         const uint64_t prev = g_prevDigital;
@@ -3251,6 +3357,7 @@ static uint64_t input_encode_hook(uint8_t* out, uint8_t* src, uint8_t* flags, ui
         LeaveCriticalSection(&g_stateLock);
         core::net_pack(st, (int64_t*)out);
     }
+    if (exPatch) { *(CursorXf*)(src + 0x2f8) = exSaved[0]; *(CursorXf*)(src + 0x330) = exSaved[1]; }
     if (patch) *(CursorXf*)(src + 0x330) = saved;
     return r;
 }
@@ -3335,6 +3442,16 @@ static LRESULT CALLBACK overlay_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
 // live client cursor. false when no area is being set up.
 static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
     LONG nc = g_corners;
+    if (g_mode == MODE_AREA && nc == 1 && exact_on()) {   // exact: the entered sizes, not the cursor
+        I3 c[3];
+        if (g_exactArmed) { c[0] = g_exactC[0]; c[1] = g_exactC[1]; } else exact_corners_now(c);   // no lock: a torn read only shows one frame
+        c[2] = c[1];
+        for (int a = 0; a < 3; a++) step[a] = g_scStep[a];
+        if (step[0] <= 0.f || step[1] <= 0.f || step[2] <= 0.f) return false;
+        *pl = core::Plan{};
+        *ok = core::plan_area(c, 3, step, 50000000, g_fill, fill_opts(), pl);
+        return true;
+    }
     uint8_t* cc = live_cc();
     if (g_mode != MODE_AREA || nc < 1 || nc > g_cfg.corners - 1 || !cc) return false;
     LONG off = g_scCursorOff;
@@ -3448,7 +3565,7 @@ got:
 static volatile LONG g_boxFill = 0;             // the box's fill options for the cell shader (see cells.vert)
 static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     core::Plan pl; float step[3]; bool ok = false;
-    if (!g_cfg.preview || !building_now(500) || !area_plan_live(&pl, step, &ok) || !ok) return false;
+    if (!g_cfg.preview || !(building_now(500) || g_exactOpen || g_exactArmed) || !area_plan_live(&pl, step, &ok) || !ok) return false;
     if (core::fill_count(pl, g_fill) > g_cfg.maxShapes) return false;
     g_boxFill = (pl.thick - 1) * 1024 + (g_fill == core::FILL_ROOF ? pl.roofAxisX * 32 + pl.roofFlip * 64 + pl.roofShape * 128 +
                 pl.overhang * 4096 + pl.roofBase * 16384 : 0);
@@ -3688,7 +3805,7 @@ static int* const g_allKeys[] = { &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg
                                   &g_cfg.keyReplaceHold, &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
                                   &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape,
                                   &g_cfg.keyThick, &g_cfg.keyOverhang, &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying,
-                                  &g_cfg.keyFillDiag };
+                                  &g_cfg.keyFillDiag, &g_cfg.keyExact };
 // Down with exactly its modifiers. A key without modifiers ignores held modifiers (Shift
 // while sprinting), unless another setting uses the same key with the held ones.
 static bool key_down(int code) {
@@ -3934,6 +4051,15 @@ static void set_mode(LONG m) {
     g_mode = m; g_corners = 0; g_cancelReq = 1;
     LOG(.str("mode -> ").str(m == MODE_AREA ? "area" : "prefab"));
 }
+// Area corners: 2 = two opposite corners, 3 = base + height, 1 = exact (one click and the
+// sizes in a window; the corner logic runs with 2). Saved to the ini; corners set so far are cleared.
+static void set_corners_mode(int m) {
+    g_cfg.exact = m == 1;
+    g_cfg.corners = m == 3 ? 3 : 2;
+    g_corners = 0; g_cancelReq = 1;
+    write_full_ini(g_cfg);
+    LOG(.str("corners -> ").str(m == 1 ? "exact" : m == 3 ? "3" : "2"));
+}
 static void set_replace(LONG r) { g_replace = r; LOG(.str("replace -> ").i(r)); }
 static void set_replace_style(LONG st) {
     g_replaceStyle = st;
@@ -3969,7 +4095,7 @@ enum {
     ACT_AREA, ACT_REPLACE, ACT_CLEAR, ACT_STYLE, ACT_FREE, ACT_FARTHER, ACT_CLOSER, ACT_FILL,
     ACT_STYLE_FULL, ACT_STYLE_OVERLAP, ACT_STYLE_CONNECTED, ACT_FILL_SOLID, ACT_FILL_HOLLOW, ACT_FILL_WALLS,
     ACT_CREATIVE, ACT_PREFAB, ACT_AREA_ON, ACT_REPLACE_ON, ACT_REPLACE_OFF, ACT_FILL_ROOF, ACT_ROOF_TURN, ACT_ROOF_SHAPE,
-    ACT_THICK, ACT_OVERHANG, ACT_FILL_ROUND, ACT_ROUND_HOLLOW, ACT_ROUND_LYING, ACT_FILL_DIAG,
+    ACT_THICK, ACT_OVERHANG, ACT_FILL_ROUND, ACT_ROUND_HOLLOW, ACT_ROUND_LYING, ACT_FILL_DIAG, ACT_EXACT,
     ACT_KEYED,          // the actions above have their own key
     ACT_MENU = ACT_KEYED,             // the wheel's menu entry (the menu key is handled with the menu)
 };
@@ -3980,7 +4106,7 @@ static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyFillSolid, &g_cfg.keyFillHollow, &g_cfg.keyFillWalls, &g_cfg.keyCreative,
     &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
     &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape, &g_cfg.keyThick, &g_cfg.keyOverhang,
-    &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying, &g_cfg.keyFillDiag,
+    &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying, &g_cfg.keyFillDiag, &g_cfg.keyExact,
 };
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
 static volatile LONG g_menuOpen = 0;
@@ -4045,6 +4171,7 @@ static void do_act(int a) {
     case ACT_FILL_ROOF: fill_set(core::FILL_ROOF); break;
     case ACT_FILL_ROUND: fill_set(core::FILL_ROUND); break;
     case ACT_FILL_DIAG: fill_set(core::FILL_DIAG); break;
+    case ACT_EXACT: set_corners_mode(g_cfg.exact ? 2 : 1); flash(T(g_cfg.exact ? S_EXACT_ON : S_EXACT_OFF)); break;
     case ACT_ROUND_HOLLOW: {
         set_round_hollow(!g_roundHollow);
         flash(T(g_roundHollow ? S_ROUND_HOLLOW : S_ROUND_SOLID));
@@ -4144,6 +4271,23 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
         static int last = -1;
         LONG req = InterlockedExchange(&g_menuReq, 0);
         bool openable = *scr == SCREEN_INGAME || (*scr >= 29 && *scr <= 37);   // the game, or a multi-tool (hammer) screen
+        if (InterlockedExchange(&g_exactReq, 0)) {        // exact mode: corner 1 clicked, the window opens
+            if (openable && !g_exactOpen) {
+                g_exactSel = 1; g_exactTyped[0] = 0; g_exactShown = 0; g_exactReqTick = GetTickCount();
+                g_exactOpen = 1;
+                lang_update();
+                g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD); LOG(.str("exact: window open"));
+                req = 0;
+            } else if (!g_exactOpen) exact_cancel("window could not open");
+        }
+        if (g_exactOpen) {                                // closed (Build, Cancel, Esc, the menu key) or never came up
+            if (*scr == SCREEN_MOD) g_exactShown = 1;
+            else if (g_exactShown || GetTickCount() - g_exactReqTick > 1500) {
+                g_exactOpen = 0;
+                if (!g_exactArmed) exact_cancel(g_exactShown ? "window closed" : "window did not come up");
+                else LOG(.str("exact: window closed, building"));
+            }
+        }
         if (req == 1 && openable) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD); LOG(.str("menu: open")); }
         else if (req == 1) LOG(.str("menu: not opened, screen ").i(*scr).str(" is up"));
         else if (req == 2 && *scr == SCREEN_MOD) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_INGAME); LOG(.str("menu: close")); }
@@ -4286,11 +4430,8 @@ static void draw_tool_settings() {
     ui.endBox(list);
     if (scroll) ui.endScroll(st);
 }
-static void draw_tool_rows() {
-    const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
-    const char* const modes[] = { T(S_OPT_MODE_PREFAB), T(S_OPT_MODE_AREA) };
-    const char* const styles[] = { T(S_OPT_STYLE_FULL), T(S_OPT_STYLE_OVERLAP), T(S_OPT_STYLE_CONNECTED) };
-    static const LONG styleIds[] = { STYLE_FULL, STYLE_OVERLAP, STYLE_CONNECTED };
+// The area fill and its options (Options page and the exact window).
+static void draw_fill_rows() {
     const char* const fills[] = { T(S_OPT_FILL_SOLID), T(S_OPT_FILL_HOLLOW), T(S_OPT_FILL_WALLS), T(S_OPT_FILL_ROOF), T(S_OPT_FILL_ROUND), T(S_OPT_FILL_DIAG) };
     const char* const diagDirs[] = { T(S_OPT_ROUND_STANDING), T(S_OPT_DIAG_LYING) };
     const char* const rounds[] = { T(S_OPT_ROUND_FULL), T(S_OPT_ROUND_HALF), T(S_OPT_ROUND_QUARTER) };
@@ -4301,10 +4442,6 @@ static void draw_tool_rows() {
     static const char* const digits[] = { "1", "2", "3", "4" };
     const char* const overhangs[] = { T(S_OPT_NONE), "1", "2", "3" };
     LONG v;
-    if (ui_option(T(S_OPT_MODE), modes, 2, g_mode, &v)) set_mode(v);
-    if (ui_option(T(S_OPT_REPLACE), offOn, 2, g_replace ? 1 : 0, &v)) set_replace(v);
-    int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
-    if (ui_option(T(S_OPT_STYLE), styles, 3, st, &v)) set_replace_style(styleIds[v]);
     if (ui_option(T(S_OPT_FILL), fills, core::FILL_COUNT, g_fill, &v)) set_fill(v);
     if (g_fill == core::FILL_ROOF) {
         if (ui_option(T(S_OPT_ROOF_SHAPE), roofs, core::ROOF_COUNT, g_roofShape, &v)) set_roof_shape(v);
@@ -4323,6 +4460,23 @@ static void draw_tool_rows() {
     }
     if (g_fill != core::FILL_SOLID && !(g_fill == core::FILL_ROUND && !g_roundHollow) &&
         ui_option(T(S_OPT_THICK), digits, 3, g_thick - 1, &v)) set_thick(v + 1);
+}
+static void draw_tool_rows() {
+    const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
+    const char* const modes[] = { T(S_OPT_MODE_PREFAB), T(S_OPT_MODE_AREA) };
+    const char* const styles[] = { T(S_OPT_STYLE_FULL), T(S_OPT_STYLE_OVERLAP), T(S_OPT_STYLE_CONNECTED) };
+    static const LONG styleIds[] = { STYLE_FULL, STYLE_OVERLAP, STYLE_CONNECTED };
+    LONG v;
+    if (ui_option(T(S_OPT_MODE), modes, 2, g_mode, &v)) set_mode(v);
+    if (ui_option(T(S_OPT_REPLACE), offOn, 2, g_replace ? 1 : 0, &v)) set_replace(v);
+    int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
+    if (ui_option(T(S_OPT_STYLE), styles, 3, st, &v)) set_replace_style(styleIds[v]);
+    {
+        const char* const cms[] = { T(S_OPT_CORNERS_2), T(S_OPT_CORNERS_3), T(S_OPT_CORNERS_EXACT) };
+        int cm = g_cfg.exact ? 2 : g_cfg.corners == 3 ? 1 : 0;
+        if (ui_option(T(S_OPT_CORNERS), cms, 3, cm, &v)) set_corners_mode(v == 2 ? 1 : v == 1 ? 3 : 2);
+    }
+    draw_fill_rows();
     if (ui_option(T(S_OPT_FREE), offOn, 2, g_hover ? 1 : 0, &v)) set_hover(v);
     if (ui_option(T(S_OPT_CREATIVE), offOn, 2, g_cfg.creative ? 1 : 0, &v) && set_creative(v != 0))
         flash(T(g_cfg.creative ? S_CREATIVE_ON : S_CREATIVE_OFF));
@@ -4358,6 +4512,7 @@ static KeyAction g_keyActions[] = {
     { S_ACT_OVERHANG, &g_cfg.keyOverhang, 0 },
     { S_ACT_ROUND_HOLLOW, &g_cfg.keyRoundHollow, 0 },
     { S_ACT_ROUND_LYING, &g_cfg.keyRoundLying, 0 },
+    { S_ACT_EXACT, &g_cfg.keyExact, 0 },
     { S_ACT_CLEAR, &g_cfg.keyCancel, 0 },
     { S_ACT_FREE, &g_cfg.keyHover, 0 },
     { S_ACT_FARTHER, &g_cfg.keyFarther, 0 },
@@ -4613,10 +4768,186 @@ static void draw_mod_menu() {
     ui.endWindow(win);
 }
 
+// ---- exact mode window (screen 52 while g_exactOpen)
+// A panel with the game's popup frame at the right of the screen; the world is not blurred,
+// so the area preview stays visible behind it. Rows: reference, width, depth, height (the
+// game's option rows, a window of values around the current one), the area fill and its
+// options, the size, and Build / Cancel. The input thread types numbers into the selected row.
+static int* exact_field(int k) { return k == 1 ? &g_cfg.exactW : k == 2 ? &g_cfg.exactD : &g_cfg.exactH; }
+
+static void exact_cancel(const char* why) {
+    EnterCriticalSection(&g_stateLock);
+    g_exactArmed = 0; g_exactFire = 0; g_exactPhase = 0;
+    reset_corners();
+    LeaveCriticalSection(&g_stateLock);
+    g_cancelReq = 1;
+    flash(T(S_EXACT_CANCELLED));
+    LOG(.str("exact: cancelled (").str(why).c(')'));
+}
+// Build: checks the size, fixes the corners and closes the window; the input thread then
+// sends the click (or two with a remote server). False = too big, the window stays.
+static bool exact_confirm() {
+    core::Plan pl; float step[3]; bool ok = false;
+    if (!g_exactOpen || g_exactArmed) return false;
+    if (!area_plan_live(&pl, step, &ok)) return false;
+    long n = ok ? core::fill_count(pl, g_fill) : 0;
+    if (!ok || n > g_cfg.maxShapes) {
+        Buf b; b.fmt(T(S_EXACT_TOO_BIG), num(g_cfg.maxShapes).s); flash(b.z()); beep(MB_ICONHAND);
+        return false;
+    }
+    EnterCriticalSection(&g_stateLock);
+    exact_corners_now(g_exactC);
+    g_exactPhase = 0;
+    g_exactArmTick = GetTickCount();
+    g_exactFire = g_exactArmTick + 200;          // after the window has closed
+    g_exactArmed = 1;
+    LeaveCriticalSection(&g_stateLock);
+    g_exactTyped[0] = 0;
+    write_full_ini(g_cfg);                        // the sizes are kept for the next time
+    g_menuReq = 2;
+    LOG(.str("exact: build ").i(pl.count[0]).c('x').i(pl.count[1]).c('x').i(pl.count[2]).str(" = ").i(n)
+        .str(", reference ").i(g_cfg.exactRef).str(" sizes ").i(g_cfg.exactW).c(',').i(g_cfg.exactD).c(',').i(g_cfg.exactH));
+    return true;
+}
+// Keys while the window is up (input thread): digits and minus type into the selected row,
+// Backspace deletes, Up / Down / Tab select a row, Enter builds.
+static void exact_key(int vk) {
+    LONG sel = g_exactSel;
+    int dg = vk >= '0' && vk <= '9' ? vk - '0' : vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9 ? vk - VK_NUMPAD0 : -1;
+    size_t n = 0; while (g_exactTyped[n]) n++;
+    if (vk == VK_RETURN) { exact_confirm(); return; }
+    if (vk == VK_UP || vk == VK_DOWN || vk == VK_TAB) {
+        bool back = vk == VK_UP || (vk == VK_TAB && (GetAsyncKeyState(VK_SHIFT) & 0x8000));
+        g_exactSel = (sel + (back ? 3 : 1)) % 4; g_exactTyped[0] = 0; return;
+    }
+    if (sel == 0) {                               // reference: 1..5
+        if (dg >= 1 && dg <= core::EXACT_REF_COUNT) g_cfg.exactRef = dg - 1;
+        return;
+    }
+    if (dg >= 0 && n < 4) { g_exactTyped[n] = (char)('0' + dg); g_exactTyped[n + 1] = 0; }
+    else if ((vk == VK_OEM_MINUS || vk == VK_SUBTRACT) && n == 0) { g_exactTyped[0] = '-'; g_exactTyped[1] = 0; }
+    else if ((vk == VK_OEM_MINUS || vk == VK_SUBTRACT) && n > 0) {
+        if (g_exactTyped[0] == '-') { for (size_t k = 0; k < n; k++) g_exactTyped[k] = g_exactTyped[k + 1]; }
+        else if (n < 5) { for (size_t k = n + 1; k > 0; k--) g_exactTyped[k] = g_exactTyped[k - 1]; g_exactTyped[0] = '-'; }
+    }
+    else if (vk == VK_BACK && n > 0) g_exactTyped[n - 1] = 0;
+    else return;
+    int v = 0; bool neg = g_exactTyped[0] == '-';
+    for (const char* c = g_exactTyped + (neg ? 1 : 0); *c; c++) v = v * 10 + (*c - '0');
+    if (neg) v = -v;
+    if (v > core::kExactMax) v = core::kExactMax;
+    if (v < -core::kExactMax) v = -core::kExactMax;
+    if (v != 0) *exact_field(sel) = v;
+}
+
+// One size row: the game's option row over a window of values around the current one (0 is
+// left out). Shift makes a step 10. The selected row shows the number being typed.
+static bool ui_number(const char* label, int cur, bool typing, int* out) {
+    static char txt[21][16];
+    const char* names[21]; int vals[21];
+    int below[10], nb = 0, above[10], na = 0;
+    for (int v = cur - 1; nb < 10 && v >= -core::kExactMax; v--) if (v) below[nb++] = v;
+    for (int v = cur + 1; na < 10 && v <= core::kExactMax; v++) if (v) above[na++] = v;
+    int n = 0;
+    for (int k = nb - 1; k >= 0; k--) vals[n++] = below[k];
+    int idx = n; vals[n++] = cur;
+    for (int k = 0; k < na; k++) vals[n++] = above[k];
+    for (int k = 0; k < n; k++) {
+        Buf b;
+        if (k == idx && typing) b.str(g_exactTyped).c('_'); else b.i(vals[k]);
+        copy_text(txt[k], b.z(), sizeof txt[k]);
+        names[k] = txt[k];
+    }
+    LONG v;
+    if (!ui_option(label, names, n, idx, &v)) return false;
+    int nv = vals[v];
+    if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
+        nv = cur + (nv - cur) * 10;
+        if ((cur > 0 && nv <= 0) || (cur < 0 && nv >= 0)) nv = nv - cur > 0 ? 1 : -1;
+        if (nv > core::kExactMax) nv = core::kExactMax;
+        if (nv < -core::kExactMax) nv = -core::kExactMax;
+        if (!nv) nv = 1;
+    }
+    *out = nv;
+    return true;
+}
+
+static void draw_exact_window() {
+    alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, btns[0x40] = {};
+    UiStringView name{ "buildingToolsExact", 18 };
+    g_beginWindow(win, &name, 1, 9, -1, 1);               // full screen, modal: the mouse shows, the camera stops
+    ui.beginRoot(root, ui.windowContext(win));
+    ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
+    const float rpad[4] = { 60, 60, 80, 60 };
+    ui.setPadding(ui_node(root), rpad);
+    if (GetTickCount() - g_hoverTick > 100) update_preview_box();   // the game's cursor may pause behind a menu
+
+    ui.beginBox(panel, 0);
+    void* n = ui_node(panel);
+    const float pad[4] = { 50, 40, 50, 40 };
+    ui.setPadding(n, pad);
+    UiVec2 gap{ 0, 16 };
+    ui.setSpacing(n, &gap, 0);
+    uint16_t rightMid = 0x203, topLeft = 0x101;
+    ui.setSelfAlign(n, &rightMid);
+    ui.setLayout(n, &topLeft);
+    ui.setWidth(n, 860);
+    alignas(16) uint8_t fb[0xc0] = {};
+    *(uint32_t*)fb = 8;                                   // the game's popup frame (reportSharedWorldPopup)
+    *(float*)(fb + 4) = 1.0f;
+    ui.fancyBox(panel, fb);
+
+    ui_text(T(S_EXACT_TITLE), STYLE_TITLE);
+    ui_text(T(S_EXACT_HELP), STYLE_BODY);
+    const LONG sel = g_exactSel;
+    const bool typing = g_exactTyped[0] != 0;
+    {
+        const char* refs[core::EXACT_REF_COUNT] = { T(S_EXACT_REF_CENTRE), T(S_EXACT_REF_FL), T(S_EXACT_REF_FR), T(S_EXACT_REF_BL), T(S_EXACT_REF_BR) };
+        Buf l; if (sel == 0) l.str("> "); l.str(T(S_EXACT_REF));
+        LONG v;
+        if (ui_option(l.z(), refs, core::EXACT_REF_COUNT, g_cfg.exactRef, &v)) { g_cfg.exactRef = v; g_exactSel = 0; g_exactTyped[0] = 0; }
+    }
+    const Str labels[3] = { S_EXACT_WIDTH, S_EXACT_DEPTH, S_EXACT_HEIGHT };
+    for (int k = 1; k <= 3; k++) {
+        Buf l; if (sel == k) l.str("> "); l.str(T(labels[k - 1]));
+        int v;
+        if (ui_number(l.z(), *exact_field(k), typing && sel == k, &v)) { *exact_field(k) = v; g_exactSel = k; g_exactTyped[0] = 0; }
+    }
+    draw_fill_rows();
+    {   // the size, in the window's width / depth / height order
+        core::Plan pl; float step[3]; bool ok = false;
+        Buf b;
+        if (area_plan_live(&pl, step, &ok)) {
+            long cnt = ok ? core::fill_count(pl, g_fill) : 0;
+            if (!ok || cnt > g_cfg.maxShapes) b.fmt(T(S_EXACT_TOO_BIG), num(g_cfg.maxShapes).s);
+            else b.fmt(T(S_EXACT_SIZE), num(pl.count[g_exRAxis]).s, num(pl.count[g_exFAxis]).s, num(pl.count[1]).s, num(cnt).s);
+        }
+        ui_text(b.z(), STYLE_BODY);
+    }
+    ui.beginBox(btns, 0);
+    UiVec2 bgap{ 24, 0 };
+    ui.setSpacingX(ui_node(btns), &bgap, 0);
+    const bool replace = g_exactOp == OP_BUILD && g_replace;
+    if (ui_button(T(g_exactOp == OP_REMOVE ? S_EXACT_REMOVE : replace ? S_EXACT_REPLACE : S_EXACT_BUILD))) exact_confirm();
+    if (ui_button(T(S_EXACT_CANCEL))) g_menuReq = 2;
+    ui.endBox(btns);
+    ui.endBox(panel);
+
+    alignas(16) static uint8_t hints[2 * 0x48];
+    ui.makeHint(hints, UI_ACTION_BACK, 1);
+    hints[0x1b] = 1;
+    *(UiTextString*)(hints + 0x20) = ui_str(T(S_EXACT_CANCEL));
+    struct { void* p; uint64_t n; } list{ hints, 1 };
+    const float hpad[4] = { 40, 40, 40, 40 };
+    ui.drawHints(&list, 0x303, hpad, 0, 0);
+    ui.endBox(root);
+    ui.endWindow(win);
+}
+
 static void mod_screen_hook(void*, void*, void*, void*) {
     static LONG logged = 0;
     if (!InterlockedExchange(&logged, 1)) LOG(.str("menu: screen drawn"));
-    draw_mod_menu();
+    if (g_exactOpen) draw_exact_window(); else draw_mod_menu();
 }
 
 // ---- mod rows in the game's building HUD box (bottom right, under "Undo Build Action")
@@ -5053,6 +5384,7 @@ static int wheel_entries(int* act) {
     if (diag_on()) act[n++] = ACT_ROUND_LYING;
     if (diag_on()) act[n++] = ACT_ROOF_TURN;
     if (thick_on()) act[n++] = ACT_THICK;
+    if (g_mode == MODE_AREA) act[n++] = ACT_EXACT;
     if (g_mode == MODE_AREA && g_corners > 0) act[n++] = ACT_CLEAR;
     act[n++] = ACT_FREE;
     act[n++] = ACT_MENU;
@@ -5079,6 +5411,7 @@ static void wheel_texts(int a, char* name, char* value) {
     case ACT_OVERHANG: nm = T(S_OPT_OVERHANG); numText = num(g_overhang); v = g_overhang ? numText.s : T(S_OPT_NONE); break;
     case ACT_THICK: nm = T(S_HUD_THICK); numText = num(g_thick); v = numText.s; break;
     case ACT_CLEAR: nm = T(S_HUD_CLEAR); break;
+    case ACT_EXACT: nm = T(S_OPT_CORNERS); v = T(g_cfg.exact ? S_OPT_CORNERS_EXACT : g_cfg.corners == 3 ? S_OPT_CORNERS_3 : S_OPT_CORNERS_2); break;
     case ACT_FREE: nm = T(S_OPT_FREE); v = T(g_hover ? S_OPT_ON : S_OPT_OFF); break;
     case ACT_MENU: nm = T(S_HUD_MENU); break;
     case ACT_CREATIVE: nm = T(S_OPT_CREATIVE); v = T(g_cfg.creative ? S_OPT_ON : S_OPT_OFF); break;
@@ -5137,6 +5470,36 @@ static void radial_keys(bool focus) {
     if (!down) radial_close(!g_radialPicked);
 }
 
+// Exact mode: Build's click. Sent as a real mouse click once the window has closed and the
+// buttons are up (left = build / replace, right = remove), so the game runs its own click
+// path; if the game does not take it, a hint asks for a click (any click builds the area).
+static void exact_fire(bool focus) {
+    static DWORD sentAt = 0; static bool hinted = false;
+    if (!g_exactArmed) { sentAt = 0; hinted = false; return; }
+    DWORD now = GetTickCount(), at = g_exactFire;
+    bool inGame = wheel_screen(g_hudScreen) && now - g_hudScreenTick < 500 && !g_menuOpen;
+    if (at && (LONG)(now - at) >= 0 && inGame && focus &&
+        !(GetAsyncKeyState(VK_LBUTTON) & 0x8000) && !(GetAsyncKeyState(VK_RBUTTON) & 0x8000)) {
+        g_exactFire = 0;
+        const bool right = g_exactOp == OP_REMOVE;
+        INPUT in[2] = {};
+        in[0].type = in[1].type = INPUT_MOUSE;
+        in[0].mi.dwFlags = right ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_LEFTDOWN;
+        in[1].mi.dwFlags = right ? MOUSEEVENTF_RIGHTUP : MOUSEEVENTF_LEFTUP;
+        SendInput(1, &in[0], sizeof(INPUT));
+        Sleep(40);                                    // a frame or two: the game samples the button
+        SendInput(1, &in[1], sizeof(INPUT));
+        sentAt = now; hinted = false;
+        LOG(.str("exact: click sent (").str(right ? "right" : "left").c(')'));
+        return;
+    }
+    if (sentAt && !hinted && !g_exactFire && now - sentAt > 1500) {
+        hinted = true;
+        flash(T(S_EXACT_CLICK));
+        LOG(.str("exact: the sent click did not arrive; waiting for a click"));
+    }
+}
+
 static DWORD WINAPI input_thread(void*) {
     bool prev[ACT_KEYED] = {}, prevOff = false, prevMenu = false, prevEsc = false;
     for (;;) {
@@ -5161,6 +5524,7 @@ static DWORD WINAPI input_thread(void*) {
             prevOff = down;
             if (g_modOff) { for (bool& p : prev) p = false; continue; }
         }
+        exact_fire(focus);
         if (g_bindWaiting < 0) radial_keys(focus);
         {   // in-game menu
             bool down = focus && g_playUiOrig && key_down(g_cfg.keyMenu);
@@ -5191,6 +5555,19 @@ static DWORD WINAPI input_thread(void*) {
             bool esc = focus && g_menuOpen && (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
             if (esc && !prevEsc) { g_menuReq = 2; LOG(.str("key: esc in menu")); }
             prevEsc = esc;
+            if (g_menuOpen && g_exactOpen) {     // the exact window: numbers, rows, Enter
+                static const int keys[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                    VK_NUMPAD0, VK_NUMPAD1, VK_NUMPAD2, VK_NUMPAD3, VK_NUMPAD4, VK_NUMPAD5, VK_NUMPAD6, VK_NUMPAD7, VK_NUMPAD8, VK_NUMPAD9,
+                    VK_OEM_MINUS, VK_SUBTRACT, VK_BACK, VK_RETURN, VK_UP, VK_DOWN, VK_TAB };
+                static bool held[sizeof keys / sizeof keys[0]] = {};
+                for (size_t k = 0; k < sizeof keys / sizeof keys[0]; k++) {
+                    bool d = focus && (GetAsyncKeyState(keys[k]) & 0x8000);
+                    if (d && !held[k]) exact_key(keys[k]);
+                    held[k] = d;
+                }
+                for (bool& p : prev) p = true;
+                continue;
+            }
             if (g_menuOpen) {                    // tool keys sleep while the menu is up; Q / E switch pages
                 static bool prevQ = true, prevE = true;
                 bool q = focus && (GetAsyncKeyState('Q') & 0x8000), e = focus && (GetAsyncKeyState('E') & 0x8000);
