@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev6"
+#define MOD_VERSION "0.29.0-dev7"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -4945,7 +4945,7 @@ static bool ui_number(const char* label, int cur, int* out) {
     uint16_t midLeft = 0x201;
     ui.setLayout(ui_node(row), &midLeft);
     ui.beginBox(opt, 0);
-    ui.setWidth(ui_node(opt), 700);
+    ui.setWidth(ui_node(opt), 540);                       // room for the buttons and the scroll bar
     LONG v; bool changed = false; int nv = cur;
     if (ui_option(label, names, n, idx, &v)) { nv = vals[v]; changed = true; }
     ui.endBox(opt);
@@ -4962,7 +4962,7 @@ static bool hud_row_ready();
 static void exact_hint(int key, Str label) {
     if (!hud_row_ready()) return;
     // the mouse icons are wider than the row leaves for them: a gap so the first letter shows
-    Buf b; if (key == VK_LBUTTON || key == VK_RBUTTON || key == VK_MBUTTON) b.str("   "); b.str(T(label));
+    Buf b; if (key == VK_LBUTTON || key == VK_RBUTTON || key == VK_MBUTTON) b.str("\xC2\xA0\xC2\xA0\xC2\xA0"); b.str(T(label));   // no-break spaces: plain ones are trimmed
     hud_key_row(key, b.z(), -1);
 }
 
