@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev5"
+#define MOD_VERSION "0.29.0-dev6"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -999,6 +999,7 @@ static uint64_t render_frame_hook(void* a, void* b, uint8_t* c, void* d, void* e
     }
     return g_renderFrameOrig(a, b, c, d, e, f);
 }
+static bool exact_hold();
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
     uint8_t* r = g_cxOrig(out, sys, q, ray);
     if (!out || !sys || !q || q[3] != 4) return r;
@@ -1025,7 +1026,10 @@ static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* 
         float n = rot[0] * rot[0] + rot[1] * rot[1] + rot[2] * rot[2] + rot[3] * rot[3];
         if (n > 0.9f && n < 1.1f) for (int k = 0; k < 4; k++) g_lastRot[k] = rot[k];
     }
-    if (!g_hover) return r;
+    // exact: while Build's click is on its way the ghost must be valid, else the game drops
+    // the click (flying, looking at the sky); the click's own position is not used
+    const bool exactHold = exact_hold();
+    if (!g_hover && !(exactHold && !valid)) return r;
     const int64_t* cam = (const int64_t*)(sys + 0x640);
     const float* cq = (const float*)(sys + 0x658);
     float x = cq[0], y = cq[1], z = cq[2], w = cq[3];
@@ -1036,7 +1040,8 @@ static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* 
             .str(" vanilla valid=").i(valid).str(" ray type=").u(ray ? ray[0] : 255));
     const double M = 4294967296.0, grid = 0.5 * M;
     int64_t* pos = (int64_t*)out;
-    for (int a = 0; a < 3; a++) pos[a] = round_grid((double)cam[a] + (double)f[a] * g_hoverDist * M, grid);
+    const float dist = g_hover ? g_hoverDist : 4.f;
+    for (int a = 0; a < 3; a++) pos[a] = round_grid((double)cam[a] + (double)f[a] * dist * M, grid);
     for (int k = 0; k < 4; k++) rot[k] = g_lastRot[k];
     out[0x28] = 1;
     return r;
@@ -2499,6 +2504,7 @@ static volatile DWORD g_exactArmTick = 0;
 static I3 g_exactC[2];
 static volatile LONG g_exactShown = 0;        // the window was on screen (its screen came up)
 static volatile DWORD g_exactReqTick = 0;
+static volatile float g_exactPanelX = 0.f;            // right edge of the exact window, 0..1 of the screen width (the box is drawn right of it)
 static volatile LONG g_exactHidden = 0;       // window down: 1 = right button held (the game has the input), 2 = the game's material catalog
 static volatile LONG g_exactPickReq = 0;      // Material clicked (UI thread)
 static bool g_exactPickSeen = false;          // the catalog came up
@@ -2507,6 +2513,7 @@ static void exact_cancel(const char* why);
 static int g_exFAxis = 2, g_exFSign = 1, g_exRAxis = 0, g_exRSign = 1;   // the facing at the click
 // The sizes for this click (core::exact_corners) from the clicked shape and the entered values.
 static bool exact_on() { return g_cfg.exact && !g_dedicated; }   // a server builds what the player's game sends
+static bool exact_hold() { return g_exactArmed && exact_on(); }
 static void exact_corners_now(I3 out[2]) {
     core::exact_corners(g_scPos[0], g_cfg.exactRef, g_cfg.exactW, g_cfg.exactD, g_cfg.exactH,
                         g_exFAxis, g_exFSign, g_exRAxis, g_exRSign, g_scStep, out);
@@ -4336,6 +4343,7 @@ static void draw_radial();
 // the game, or the hammer's screens (29..37; the menu goes back to 29 when opened from there)
 static bool wheel_screen(LONG s) { return s == SCREEN_INGAME || (s >= 29 && s <= 37); }
 static volatile LONG g_hudScreen = 0;               // the HUD screen (UI thread -> input thread)
+static volatile DWORD g_escCloseTick = 0;           // Esc closed the menu / exact window (input thread)
 static volatile DWORD g_hudScreenTick = 0;
 static void play_ui_hook(void* a, void* b, void* c, void* d) {
     uint8_t* scr = hud_screen_byte();
@@ -4398,7 +4406,9 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
         if (*scr != last) {
             LOG(.str("hud screen ").i(last).str(" -> ").i(*scr));
             // Esc on our screen: the game opens its system menu; go back to the game instead.
-            if (last == SCREEN_MOD && *scr == 2) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_INGAME); LOG(.str("menu: esc, back to game")); }
+            if ((last == SCREEN_MOD || GetTickCount() - g_escCloseTick < 500) && *scr == 2) {
+                g_escCloseTick = 0; g_toggleScreen(*g_uiCtxGlobal, SCREEN_INGAME); LOG(.str("menu: esc, back to game"));
+            }
             last = *scr;
         }
         g_menuOpen = *scr == SCREEN_MOD;
@@ -4973,6 +4983,9 @@ static void draw_exact_window() {
     {   // the panel's own backdrop, from its last layout (the world stays clear beside it)
         const float* r = (const float*)((uint8_t*)n + 0x114);
         if (r[2] > 0 && r[3] > 0) ui.fillRect(r, 0x3f800000c0000000ull);
+        const float* rr = (const float*)((uint8_t*)ui_node(root) + 0x114);   // the whole screen
+        float x = rr[2] > 0 && r[2] > 0 ? (r[0] + r[2] - rr[0]) / rr[2] : 0.f;
+        g_exactPanelX = x > 0.f && x < 1.f ? x : 0.f;
     }
     const float pad[4] = { 120, 50, 60, 40 };
     ui.setPadding(n, pad);
@@ -5655,9 +5668,11 @@ static DWORD WINAPI input_thread(void*) {
                 g_menuReq = g_menuOpen ? 2 : 1; LOG(.str("key: menu"));
             }
             prevMenu = down;
-            bool esc = focus && g_menuOpen && (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
-            if (esc && !prevEsc) { g_menuReq = 2; LOG(.str("key: esc in menu")); }
-            prevEsc = esc;
+            // the edge counts whatever screen is up: Esc that closed the game's material
+            // catalog is still down when the exact window comes back
+            bool escKey = focus && (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
+            if (escKey && !prevEsc && g_menuOpen) { g_menuReq = 2; g_escCloseTick = GetTickCount(); LOG(.str("key: esc in menu")); }
+            prevEsc = escKey;
             if (g_menuOpen && g_exactOpen) {     // the exact window: mouse only, Enter builds (Esc cancels above)
                 static bool prevEnter = true;
                 bool d = focus && (GetAsyncKeyState(VK_RETURN) & 0x8000);
