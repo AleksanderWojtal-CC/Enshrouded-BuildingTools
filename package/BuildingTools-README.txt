@@ -1,4 +1,4 @@
-Enshrouded Building Tools 0.29.0
+Enshrouded Building Tools 0.29.1
 ================================
 
 Files in the game folder

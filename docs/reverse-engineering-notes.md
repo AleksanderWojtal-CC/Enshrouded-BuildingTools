@@ -839,3 +839,14 @@ the hotfix client shows every feature available.
   position in front of the camera, as free placement does, lets the click through.
 - Material catalog: toggling screen 30 from screen 52 opens the game's picker for the
   item in hand (its category only); closing it returns to 29.
+
+## 0.29.1: long cost lists
+
+- An area action charges one cost entry per shape (0x18 bytes, item id at +0x10, count
+  at +0x14). PayCost (495e40) mode 0 runs 3f8900, which takes every entry through 411250
+  (backpack, then chests by the order byte at transaction+0xb1) and returns 4 ("not
+  enough") when an entry is left over. With 856 entries of 1 item it failed although the
+  backpack held about 1300 of that item; 324 entries always worked. The exact limit was
+  not found. Charging the same total as one entry per distinct item (first 0x14 bytes
+  equal) succeeds. The mod passes a merged copy to PayCost and leaves the game's list as
+  it was, so undo and the commit still see one entry per shape.

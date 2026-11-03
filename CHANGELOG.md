@@ -3,6 +3,13 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.29.1
+
+- **Large areas build again.** A big area (about 850 shapes and more, like a large roof)
+  was refused with "not enough material" even with plenty in the backpack. The game
+  refuses a payment with that many cost lines, so the mod now pays each material in one
+  line.
+
 ## 0.29.0
 
 - **Exact mode** (#46). A third choice for Area corners (two corners, base + height,

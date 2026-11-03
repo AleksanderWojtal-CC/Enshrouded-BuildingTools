@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0"
+#define MOD_VERSION "0.29.1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1723,7 +1723,27 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
     // or nearest cells first), instead of failing as a whole.
     if (consume && list && mode && mode[0] == 0 && g_actShapes > 1 && list == g_actList)
         shrink_to_affordable(*(uint8_t**)(mode + 8), list);
-    uint8_t r = g_payOrig(mode, list, consume);
+    // A large area action charges one cost entry per shape (856 entries of 1 item for a
+    // big roof). The game refuses such a long list even with the items at hand, so the
+    // entries of the same item are charged as one entry ("1 item" x 856 -> "856 items").
+    // The list itself stays as it was (undo and the commit read it).
+    static CostEntry s_merged[64];
+    CostList merged = {};
+    if (consume && list && list->data && mode && mode[0] == 0 && g_actShapes > 1 && list == g_actList && list->count > 1) {
+        const CostEntry* e = (const CostEntry*)list->data;
+        uint64_t nm = 0; bool fits = true;
+        for (uint64_t q = 0; q < list->count && fits; q++) {
+            uint64_t k = 0;
+            while (k < nm && memcmp(s_merged[k].b, e[q].b, 0x14) != 0) k++;
+            if (k == nm) { if (nm == 64) { fits = false; break; } s_merged[nm++] = e[q]; }
+            else *(uint32_t*)(s_merged[k].b + 0x14) += *(const uint32_t*)(e[q].b + 0x14);
+        }
+        if (fits && nm < list->count) {
+            merged = { s_merged, nm, nm, nullptr };
+            LOG(.str("charge: ").u(list->count).str(" cost entries merged into ").u(nm));
+        }
+    }
+    uint8_t r = g_payOrig(mode, merged.data ? &merged : list, consume);
     // A mod action the inventory cannot pay for is dropped by the game without a word
     // (nothing is built or replaced), so say why.
     const bool multi = g_actShapes > 1 && list == g_actList;
