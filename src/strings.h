@@ -245,7 +245,9 @@
     X(S_OPT_LANGUAGE_GAME, "option.language_game", "Same as the game") \
     /* exact mode window */ \
     X(S_EXACT_TITLE, "exact.title", "Exact size") \
-    X(S_EXACT_HELP, "exact.help", "Sizes in blocks from the clicked block (width to your right, depth away from you); negative = the other way. Click the arrows or use Left / Right (Shift or Page Up / Down: 10 at a time), or type a number into the row marked >; Up / Down picks the row. Hold the right mouse button to look around and walk.") \
+    X(S_EXACT_HELP, "exact.help", "Blocks counted from the clicked one. Width: to your right, depth: away from you. Negative: the other way.") \
+    X(S_EXACT_HELP2, "exact.help2", "Left / Right: 1, with Shift or Page Up / Down: 10, or type a number. Up / Down: row.") \
+    X(S_EXACT_HELP3, "exact.help3", "Hold the right mouse button to hide this window, look around and walk.") \
     X(S_EXACT_REF, "exact.reference", "Clicked block") \
     X(S_EXACT_REF_CENTRE, "exact.ref_centre", "Middle (bottom)") \
     X(S_EXACT_REF_FL, "exact.ref_front_left", "Front left corner") \

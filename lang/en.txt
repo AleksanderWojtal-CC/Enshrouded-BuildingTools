@@ -258,7 +258,9 @@ option.language_game = Same as the game
 
 # Exact mode window
 exact.title = Exact size
-exact.help = Sizes in blocks from the clicked block (width to your right, depth away from you); negative = the other way. Click the arrows or use Left / Right (Shift or Page Up / Down: 10 at a time), or type a number into the row marked >; Up / Down picks the row. Hold the right mouse button to look around and walk.
+exact.help = Blocks counted from the clicked one. Width: to your right, depth: away from you. Negative: the other way.
+exact.help2 = Left / Right: 1, with Shift or Page Up / Down: 10, or type a number. Up / Down: row.
+exact.help3 = Hold the right mouse button to hide this window, look around and walk.
 exact.reference = Clicked block
 exact.ref_centre = Middle (bottom)
 exact.ref_front_left = Front left corner

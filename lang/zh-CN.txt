@@ -254,7 +254,9 @@ option.language_game = 与游戏相同
 
 # Exact mode window
 exact.title = 精确尺寸
-exact.help = 尺寸为从点击的方块起的方块数（宽度向右，深度向前）；负数 = 另一方向。点击箭头或用 左 / 右 键（Shift 或 Page Up / Down：每次 10），或在标有 > 的行输入数字；上 / 下 键选择行。按住鼠标右键可环顾和行走。
+exact.help = 从点击的方块开始计数。宽度：向右，深度：向前。负数：另一方向。
+exact.help2 = 左 / 右：1，Shift 或 Page Up / Down：10，或输入数字。上 / 下：选择行。
+exact.help3 = 按住鼠标右键可隐藏窗口、环顾和行走。
 exact.reference = 点击的方块
 exact.ref_centre = 中间（底部）
 exact.ref_front_left = 前左角
