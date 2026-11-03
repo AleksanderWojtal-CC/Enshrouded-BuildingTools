@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.1"
+#define MOD_VERSION "0.29.2-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -902,7 +902,18 @@ static volatile DWORD g_buildTick = 0;   // last frame the hammer's place cursor
 typedef void (*HudRowFn)(uint8_t action, void* params);
 static HudRowFn g_hudRowOrig = nullptr;
 static volatile DWORD g_gameRowTick = 0;      // last time the game drew its own building box rows
+static volatile LONG g_hudScreen = 0;               // the HUD screen (UI thread -> input thread)
+static volatile DWORD g_hudScreenTick = 0;
+// Other tools (the Sparkwork wrench, the tool that calls NPCs) draw the same key rows,
+// so the HUD screen decides too: 29 is the hammer's (30 its material picker, 52 the
+// mod's menu and exact window opened from it).
+static bool building_screen() {
+    if (GetTickCount() - g_hudScreenTick >= 1000) return true;    // not known (no UI yet)
+    LONG s = g_hudScreen;
+    return s == 29 || s == 30 || s == 52;
+}
 static bool building_now(DWORD window = 300) {
+    if (!building_screen()) return false;
     return g_hudRowOrig ? GetTickCount() - g_gameRowTick < window : GetTickCount() - g_buildTick < window + 200;
 }
 // The last place cursor each cursor system computed: the raw ray hit (not yet on the
@@ -3011,6 +3022,7 @@ static uint8_t remove_hook(void* list, void* ctx, void* state, void* box, void* 
     NetScope ns(NetScope::ctx_input(ctx));
     return remove_hook_body(list, ctx, state, box, xfp, filter, check);
 }
+static bool live_corner(I3* out);
 static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, void* xfp, void* filter, uint8_t check) {
     piece_target_restore();
     if (g_ownRemoveTid == GetCurrentThreadId() || !is_server_ctx(ctx) || !box || !xfp)
@@ -3055,6 +3067,18 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
     if (!(n == 1 && exact_click() == 1))
         g_scPos[n] = I3{ xf->pos[0], xf->pos[1], xf->pos[2] };  // removal transforms are shape centres
     LOG(.str("remove click: corner ").i(n + 1).str(" at (").fix(xf->pos[0]).c(',').fix(xf->pos[1]).c(',').fix(xf->pos[2]).c(')'));
+    {   // preview check: the aim cursor this corner is drawn from, and (corner 2+) where the preview had it
+        uint8_t* cc = live_cc();
+        if (cc && readable(cc + 0x338, 0x28)) {
+            const int64_t* ap = (const int64_t*)(cc + 0x338); const float* ar = (const float*)(cc + 0x338 + 0x18);
+            LOG(.str("  aim (").fix(ap[0]).c(',').fix(ap[1]).c(',').fix(ap[2]).str(") rot (").f(ar[0]).c(',').f(ar[1]).c(',').f(ar[2]).c(',').f(ar[3])
+                .str(") live ").i(cc_live(cc)));
+        }
+        I3 pv;
+        if (n > 0 && live_corner(&pv))
+            LOG(.str("  preview had (").fix(pv.x).c(',').fix(pv.y).c(',').fix(pv.z).str(") offset (")
+                .fix(g_scOff[0]).c(',').fix(g_scOff[1]).c(',').fix(g_scOff[2]).str(") rot ").str(g_scRotOk ? "kept" : "none"));
+    }
     if (n == 0) {
         for (int a = 0; a < 3; a++) g_scStep[a] = bx->mx[a] - bx->mn[a];
         g_scCursorOff = 0x338;
@@ -3424,14 +3448,14 @@ static void remote_clicks(uint8_t* src, uint8_t flags) {
     if (!(rise & 0x11) || g_modOff || g_mode != MODE_AREA || !(flags & 1) || g_exactOpen) return;
     // only with the hammer or a material in hand (a weapon or tool click is the game's):
     // the game's building box is up, or the hammer's cursor was read this frame
-    if (!building_now() && GetTickCount() - g_liveItemTick >= 500) return;
+    if (!building_screen() || (!building_now() && GetTickCount() - g_liveItemTick >= 500)) return;
     uint8_t* item = building_item();
     if (!item) return;                                 // no building item in hand
     remote_corner(rise & 1 ? OP_BUILD : OP_REMOVE, item, (const CursorXf*)(src + 0x2f8), (const CursorXf*)(src + 0x330));
 }
 
 static uint64_t input_encode_hook(uint8_t* out, uint8_t* src, uint8_t* flags, uint64_t a4) {
-    uint8_t* item = flags && (*flags & 1) && !g_modOff && src && (building_now() || GetTickCount() - g_liveItemTick < 500) ? building_item() : nullptr;
+    uint8_t* item = flags && (*flags & 1) && !g_modOff && src && building_screen() && (building_now() || GetTickCount() - g_liveItemTick < 500) ? building_item() : nullptr;
     CursorXf saved, aim;
     const bool patch = item && freecam_aim(src, item, &aim);
     if (item) *flags |= 2;                              // send the aim too
@@ -3496,25 +3520,15 @@ static bool game_focused() {
     return pid == GetCurrentProcessId();
 }
 
-static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
-    LONG nc = g_corners;
-    if (g_mode == MODE_AREA && nc == 1 && exact_on()) {   // exact: the entered sizes, not the cursor
-        I3 c[3];
-        if (g_exactArmed) { c[0] = g_exactC[0]; c[1] = g_exactC[1]; } else exact_corners_now(c);   // no lock: a torn read only shows one frame
-        c[2] = c[1];
-        for (int a = 0; a < 3; a++) step[a] = g_scStep[a];
-        if (step[0] <= 0.f || step[1] <= 0.f || step[2] <= 0.f) return false;
-        *pl = core::Plan{};
-        *ok = core::plan_area(c, 3, step, 50000000, g_fill, fill_opts(), pl);
-        return true;
-    }
+// The corner a click now would set (fixed point), from the live cursor and corner 1's offset.
+static bool live_corner(I3* out) {
     uint8_t* cc = live_cc();
-    if (g_mode != MODE_AREA || nc < 1 || nc > g_cfg.corners - 1 || !cc) return false;
+    if (!cc) return false;
     LONG off = g_scCursorOff;
     if (!readable(cc + off, 0x18)) return false;
     int64_t* p = (int64_t*)(cc + off);
     int64_t qp[3], qa[3], st[3];
-    I3 live;
+    I3& live = *out;
     if (!cc_live(cc) && query_cursor(qp, qa, st)) {      // free camera far from the character: cell centres
         const int64_t* c = off == 0x338 && g_scStep[0] < kSmallShape ? qa : qp;
         live = I3{ c[0], c[1], c[2] };
@@ -3530,6 +3544,24 @@ static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
         }
         live = I3{ p[0] + o[0], p[1] + o[1], p[2] + o[2] };
     }
+    *out = live;
+    return true;
+}
+static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
+    LONG nc = g_corners;
+    if (g_mode == MODE_AREA && nc == 1 && exact_on()) {   // exact: the entered sizes, not the cursor
+        I3 c[3];
+        if (g_exactArmed) { c[0] = g_exactC[0]; c[1] = g_exactC[1]; } else exact_corners_now(c);   // no lock: a torn read only shows one frame
+        c[2] = c[1];
+        for (int a = 0; a < 3; a++) step[a] = g_scStep[a];
+        if (step[0] <= 0.f || step[1] <= 0.f || step[2] <= 0.f) return false;
+        *pl = core::Plan{};
+        *ok = core::plan_area(c, 3, step, 50000000, g_fill, fill_opts(), pl);
+        return true;
+    }
+    if (g_mode != MODE_AREA || nc < 1 || nc > g_cfg.corners - 1) return false;
+    I3 live;
+    if (!live_corner(&live)) return false;
     I3 c[3];
     const int64_t tol = (int64_t)(0.1 * core::kFix);
     if (nc == 1) { c[0] = g_scPos[0]; c[1] = live; c[2] = live; }   // 2-corner mode: the final size
@@ -4239,9 +4271,7 @@ static void draw_float_info();
 static void draw_radial();
 // the game, or the hammer's screens (29..37; the menu goes back to 29 when opened from there)
 static bool wheel_screen(LONG s) { return s == SCREEN_INGAME || (s >= 29 && s <= 37); }
-static volatile LONG g_hudScreen = 0;               // the HUD screen (UI thread -> input thread)
 static volatile DWORD g_escCloseTick = 0;           // Esc closed the menu / exact window (input thread)
-static volatile DWORD g_hudScreenTick = 0;
 static void play_ui_hook(void* a, void* b, void* c, void* d) {
     uint8_t* scr = hud_screen_byte();
     if (scr) { g_hudScreen = *scr; g_hudScreenTick = GetTickCount(); }
