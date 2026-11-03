@@ -254,9 +254,12 @@ option.language_game = 與遊戲相同
 
 # Exact mode window
 exact.title = 精確尺寸
-exact.help = 從點擊的方塊開始計數。寬度：向右，深度：向前。負數：另一方向。
-exact.help2 = 左 / 右：1，Shift 或 Page Up / Down：10，或輸入數字。上 / 下：選擇列。
-exact.help3 = 按住滑鼠右鍵可隱藏視窗、環顧和行走。
+exact.help = 點擊的形狀之外的數量：0 = 僅它，負數 = 另一方向。
+exact.key_look = 按住：隱藏視窗、環顧、行走
+exact.key_step = 改變 1（左 / 右）
+exact.key_step10 = 改變 10（Page Up / Down）
+exact.key_row = 選擇列（上 / 下），然後輸入數字
+exact.material = 材料
 exact.reference = 點擊的方塊
 exact.ref_centre = 中間（底部）
 exact.ref_front_left = 前左角

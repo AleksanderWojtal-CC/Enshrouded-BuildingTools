@@ -669,29 +669,28 @@ int main(int argc, char** argv) {
         CHECK(core::net_corner_index(2, 2, 3, 0, 3) == 2, "3 corners: final");
     }
 
-    {   // exact mode: one click + sizes
+    {   // exact mode: one click + sizes (shapes past the clicked one)
         const float st[3] = { 0.5f, 0.5f, 0.5f };
         const int64_t H = (int64_t)(0.5 * core::kFix);
         core::I3 p{ 10 * H, 2 * H, -4 * H }, c[2];
-        // facing +z, right = -x (as seen from above with y up, z forward)
         int fa, fs, ra, rs;
         const float fwd[3] = { 0.1f, -0.3f, 0.9f }, right[3] = { -0.99f, 0.f, 0.1f };
         core::exact_facing(fwd, right, &fa, &fs, &ra, &rs);
         CHECK(fa == 2 && fs == 1 && ra == 0 && rs == -1, "exact: facing snapped to +z, right -x");
-        core::exact_corners(p, core::EXACT_FRONT_LEFT, 4, 3, 2, fa, fs, ra, rs, st, c);
+        core::exact_corners(p, core::EXACT_FRONT_LEFT, 3, 2, 1, fa, fs, ra, rs, st, c);
         CHECK(c[0].x == p.x && c[0].y == p.y && c[0].z == p.z, "exact: front left corner is the click");
         CHECK(c[1].x == p.x - 3 * H && c[1].z == p.z + 2 * H && c[1].y == p.y + H, "exact: front left grows right, away, up");
-        core::exact_corners(p, core::EXACT_BACK_RIGHT, 4, 3, -2, fa, fs, ra, rs, st, c);
+        core::exact_corners(p, core::EXACT_BACK_RIGHT, 3, 2, -1, fa, fs, ra, rs, st, c);
         CHECK(c[1].x == p.x + 3 * H && c[1].z == p.z - 2 * H && c[1].y == p.y - H, "exact: back right grows left, toward, negative height down");
-        core::exact_corners(p, core::EXACT_FRONT_LEFT, -4, 1, 1, fa, fs, ra, rs, st, c);
-        CHECK(c[1].x == p.x + 3 * H && c[1].z == p.z && c[1].y == p.y, "exact: negative width grows left");
-        core::exact_corners(p, core::EXACT_CENTRE, 5, 4, 1, fa, fs, ra, rs, st, c);
+        core::exact_corners(p, core::EXACT_FRONT_LEFT, -1, 0, 0, fa, fs, ra, rs, st, c);
+        CHECK(c[1].x == p.x + H && c[1].z == p.z && c[1].y == p.y, "exact: -1 is one shape the other way");
+        core::exact_corners(p, core::EXACT_CENTRE, 4, 3, 0, fa, fs, ra, rs, st, c);
         core::Plan pl = {};
         CHECK(core::plan_area(c, 2, st, 100000, core::FILL_SOLID, core::FillOpts{}, &pl) &&
-              pl.count[0] == 5 && pl.count[2] == 4 && pl.count[1] == 1, "exact: centre gives the entered counts");
+              pl.count[0] == 5 && pl.count[2] == 4 && pl.count[1] == 1, "exact: centre, 4 / 3 / 0 past = 5 x 4 x 1");
         CHECK(c[0].x == p.x + 2 * H && c[1].x == p.x - 2 * H, "exact: odd width centred on the click");
         core::exact_corners(p, core::EXACT_FRONT_RIGHT, 0, 0, 0, fa, fs, ra, rs, st, c);
-        CHECK(c[0].x == c[1].x && c[0].y == c[1].y && c[0].z == c[1].z, "exact: 0 counts as 1");
+        CHECK(c[0].x == c[1].x && c[0].y == c[1].y && c[0].z == c[1].z && c[0].x == p.x, "exact: 0, 0, 0 is the clicked shape");
     }
 
     printf(fails ? "\n%d FAILED\n" : "\nall tests passed\n", fails);

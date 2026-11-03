@@ -652,11 +652,12 @@ inline int net_corner_index(int serverCount, int lastSeq, int seq, int count, in
 }
 
 // ---- Exact mode: one click, then sizes entered in a window
-// The clicked shape (p, a shape centre) is the reference point of a box `w` wide, `d` deep
-// and `h` high, counted in shapes. Width runs along the player's right, depth along the view
+// The clicked shape (p, a shape centre) is the reference point of a box reaching `w` shapes
+// past it across, `d` along the view and `h` up (0 = only the clicked shape's row: 0, 0, 0 is
+// one shape; the box is |w| + 1 by |d| + 1 by |h| + 1). Width runs along the player's right, depth along the view
 // (both snapped to world x / z), height up (y). The reference is the bottom centre or one of
 // the bottom corners; front = the side toward the player. A negative size grows the other
-// way (left instead of right, toward the player, downward); 0 counts as 1. Out: the two
+// way (left instead of right, toward the player, downward). Out: the two
 // opposite corners (shape centres) as an Area click pair would give them: corner 1 is the
 // box corner at the reference's side, so turns of roofs, rounds and diagonals keep meaning
 // "from corner 1".
@@ -665,8 +666,8 @@ static const int kExactMax = 999;
 // shapes along one axis: from a to b (inclusive) in steps from the reference cell
 inline void exact_span(int n, int mode, int* a, int* b) {
     // mode: 0 = centred, 1 = grows to + from the reference, -1 = grows to -
-    if (n == 0) n = 1;
-    int s = n < 0 ? -1 : 1, m = n < 0 ? -n : n;
+    // n = shapes past the clicked one: 0 = just it, -1 = one more on the other side
+    int s = n < 0 ? -1 : 1, m = (n < 0 ? -n : n) + 1;
     if (mode == 0) { *a = -((m - 1) / 2); *b = *a + m - 1; return; }
     *a = 0; *b = mode * s * (m - 1);
 }

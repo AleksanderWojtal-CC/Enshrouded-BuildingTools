@@ -254,9 +254,12 @@ option.language_game = ゲームと同じ
 
 # Exact mode window
 exact.title = 正確なサイズ
-exact.help = クリックしたブロックから数えます。幅: 右へ、奥行き: 前方へ。マイナス: 反対方向。
-exact.help2 = 左 / 右: 1、Shift または Page Up / Down: 10、または数字を入力。上 / 下: 行。
-exact.help3 = 右ボタンを押している間はウィンドウを隠して見回し・移動できます。
+exact.help = クリックした形状より先の数: 0 = それだけ、マイナス = 反対方向。
+exact.key_look = 押したまま: ウィンドウを隠して見回し・移動
+exact.key_step = 1 ずつ変更 (左 / 右)
+exact.key_step10 = 10 ずつ変更 (Page Up / Down)
+exact.key_row = 行を選んで (上 / 下) 数字を入力
+exact.material = 素材
 exact.reference = クリックしたブロック
 exact.ref_centre = 中央 (下)
 exact.ref_front_left = 手前左の角

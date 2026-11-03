@@ -254,9 +254,12 @@ option.language_game = 게임과 같게
 
 # Exact mode window
 exact.title = 정확한 크기
-exact.help = 클릭한 블록부터 셉니다. 너비: 오른쪽, 깊이: 앞쪽. 음수: 반대쪽.
-exact.help2 = 왼쪽 / 오른쪽: 1, Shift 또는 Page Up / Down: 10, 또는 숫자 입력. 위 / 아래: 줄.
-exact.help3 = 오른쪽 버튼을 누르고 있으면 창이 숨고 둘러보고 걸을 수 있습니다.
+exact.help = 클릭한 모양 너머의 개수: 0 = 그것만, 음수 = 반대쪽.
+exact.key_look = 누르고 있기: 창 숨기기, 둘러보기, 걷기
+exact.key_step = 1씩 변경 (왼쪽 / 오른쪽)
+exact.key_step10 = 10씩 변경 (Page Up / Down)
+exact.key_row = 줄을 고르고 (위 / 아래) 숫자 입력
+exact.material = 재료
 exact.reference = 클릭한 블록
 exact.ref_centre = 가운데 (아래)
 exact.ref_front_left = 앞쪽 왼쪽 모서리
