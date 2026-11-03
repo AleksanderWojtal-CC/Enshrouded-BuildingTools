@@ -249,6 +249,11 @@ option.thick = Grubość (pudło, ściany, dach)
 option.none = Brak
 option.free = Tryb Swobodny
 option.creative = Tryb kreatywny
+option.tools_help = Używane narzędzia. Wyłączone narzędzie oddaje klawisze grze i znika z podpowiedzi i koła.
+option.mod = Building Tools (cały mod)
+option.tool_area = Tryb obszaru
+option.tool_shapes = Kształty obszaru (dachy, łuki, skosy)
+option.global_chests = Magiczne skrzynie wszystkich baz
 option.language = Język
 option.language_game = Użyj języka gry
 

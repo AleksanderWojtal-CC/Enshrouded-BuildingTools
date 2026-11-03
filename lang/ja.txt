@@ -249,6 +249,11 @@ option.thick = 厚さ（部屋、壁、屋根）
 option.none = なし
 option.free = 自由配置
 option.creative = クリエイティブ建築
+option.tools_help = 使用するツール。オフのツールはキーをゲームに返し、ヒントとホイールから消えます。
+option.mod = Building Tools（MOD全体）
+option.tool_area = エリアモード
+option.tool_shapes = エリアの形（屋根・円形・斜め）
+option.global_chests = 全拠点の魔法の箱
 option.language = 言語
 option.language_game = ゲームと同じ
 

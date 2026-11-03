@@ -241,6 +241,11 @@
     X(S_OPT_NONE, "option.none", "None") \
     X(S_OPT_FREE, "option.free", "Free placement") \
     X(S_OPT_CREATIVE, "option.creative", "Creative building") \
+    X(S_OPT_TOOLS_HELP, "option.tools_help", "Tools in use. A tool that is off leaves its keys to the game and leaves the hints and the wheel.") \
+    X(S_OPT_MOD, "option.mod", "Building Tools (whole mod)") \
+    X(S_OPT_TOOL_AREA, "option.tool_area", "Area mode") \
+    X(S_OPT_TOOL_SHAPES, "option.tool_shapes", "Area shapes (roofs, round, diagonal)") \
+    X(S_OPT_GLOBAL_CHESTS, "option.global_chests", "Magic chests of all bases") \
     X(S_OPT_LANGUAGE, "option.language", "Language") \
     X(S_OPT_LANGUAGE_GAME, "option.language_game", "Same as the game") \
     /* exact mode window */ \

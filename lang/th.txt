@@ -249,6 +249,11 @@ option.thick = ความหนา (ห้อง, ผนัง, หลัง�
 option.none = ไม่มี
 option.free = วางอิสระ
 option.creative = การสร้างแบบสร้างสรรค์
+option.tools_help = เครื่องมือที่ใช้ เครื่องมือที่ปิดจะคืนปุ่มให้เกม และหายไปจากคำแนะนำและวงล้อ
+option.mod = Building Tools (ทั้งม็อด)
+option.tool_area = โหมดพื้นที่
+option.tool_shapes = รูปทรงพื้นที่ (หลังคา, ทรงกลม, แนวทแยง)
+option.global_chests = หีบเวทมนตร์ของทุกฐาน
 option.language = ภาษา
 option.language_game = เหมือนในเกม
 

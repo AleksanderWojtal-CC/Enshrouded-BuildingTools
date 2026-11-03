@@ -249,6 +249,11 @@ option.thick = Толщина (комнаты, стены, крыши)
 option.none = Нет
 option.free = Свободная установка
 option.creative = Творческое строительство
+option.tools_help = Используемые инструменты. Выключенный инструмент отдаёт свои клавиши игре и пропадает из подсказок и колеса.
+option.mod = Building Tools (весь мод)
+option.tool_area = Режим области
+option.tool_shapes = Формы области (крыши, круглые, диагональные)
+option.global_chests = Волшебные сундуки всех баз
 option.language = Язык
 option.language_game = Как в игре
 
