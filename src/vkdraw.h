@@ -611,6 +611,10 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
     g_vd.vkCmdBeginRenderPass(cb, &rb, VK_SUBPASS_CONTENTS_INLINE);
     VkViewport vp = { 0.f, 0.f, (float)s.ext.width, (float)s.ext.height, 0.f, 1.f };
     VkRect2D sc = { { 0, 0 }, s.ext };
+    if (g_exactOpen && !g_exactHidden && g_exactPanelX > 0.f) {   // the exact window covers the box: draw it beside the window
+        int32_t x = (int32_t)(g_exactPanelX * (float)s.ext.width);
+        sc.offset.x = x; sc.extent.width = s.ext.width > (uint32_t)x ? s.ext.width - (uint32_t)x : 0;
+    }
     g_vd.vkCmdSetViewport(cb, 0, 1, &vp);
     g_vd.vkCmdSetScissor(cb, 0, 1, &sc);
     const VkShaderStageFlags stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
