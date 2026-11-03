@@ -254,9 +254,12 @@ option.language_game = Igual ao jogo
 
 # Exact mode window
 exact.title = Medidas exatas
-exact.help = Blocos contados a partir do clicado. Largura: para a direita, profundidade: para longe de você. Negativo: para o outro lado.
-exact.help2 = Esquerda / Direita: 1, com Shift ou Page Up / Down: 10, ou digite um número. Cima / Baixo: linha.
-exact.help3 = Segure o botão direito para esconder a janela, olhar em volta e andar.
+exact.help = Formas além da clicada: 0 = só ela, negativo = para o outro lado.
+exact.key_look = Segurar: esconder a janela, olhar, andar
+exact.key_step = Mudar 1 (Esquerda / Direita)
+exact.key_step10 = Mudar 10 (Page Up / Down)
+exact.key_row = Escolha uma linha (Cima / Baixo) e digite um número
+exact.material = Material
 exact.reference = Bloco clicado
 exact.ref_centre = Meio (embaixo)
 exact.ref_front_left = Canto frontal esquerdo

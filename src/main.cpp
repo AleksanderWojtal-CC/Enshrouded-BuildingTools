@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.0-dev3"
+#define MOD_VERSION "0.29.0-dev4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -106,7 +106,7 @@ struct Config {
     int log          = 1;
     int corners      = 2;      // area corners: 2 = opposite corners of a box, 3 = base + height
     int exact        = 0;      // 1 = exact mode: one click, then the sizes in a window (corners stays 2)
-    int exactRef = 1, exactW = 4, exactD = 4, exactH = 3;   // the last sizes entered (core::EXACT_*)
+    int exactRef = 1, exactW = 3, exactD = 3, exactH = 2;   // the last sizes entered: shapes past the clicked one
     int keyHover     = VK_F10;
     int keyFarther   = VK_PRIOR;   // Page Up
     int keyCloser    = VK_NEXT;    // Page Down
@@ -212,7 +212,7 @@ static void write_full_ini(const Config& c) {
      .t("; 2 = two opposite corners, 3 = two base corners then the height,\r\n")
      .t(";     1 = exact: one click, then width, depth and height in a window\r\nCorners=").i(c.exact ? 1 : c.corners).t("\r\n")
      .t("; Exact mode, last entered: reference (0 centre, 1 front left, 2 front right, 3 back left,\r\n")
-     .t(";     4 back right; bottom) and sizes in shapes (negative = the other way)\r\n")
+     .t(";     4 back right; bottom) and sizes in shapes past the clicked one (0 = one shape, negative = the other way)\r\n")
      .t("ExactReference=").i(c.exactRef).t("\r\nExactWidth=").i(c.exactW).t("\r\nExactDepth=").i(c.exactD)
      .t("\r\nExactHeight=").i(c.exactH).t("\r\n")
      .t("; Free placement start distance in tenths of a metre (40 = 4 m)\r\nFreePlacementDistance=").i(c.hoverDist10).t("\r\n")
@@ -258,10 +258,10 @@ static void load_config() {
         g_cfg.corners = cn == 3 ? 3 : 2; g_cfg.exact = cn == 1; }
     {   auto clampv = [](int v, int lo, int hi, int def) { return v < lo || v > hi ? def : v; };
         g_cfg.exactRef = clampv(ini_int(L"Area", L"ExactReference", 1), 0, core::EXACT_REF_COUNT - 1, 1);
-        g_cfg.exactW = clampv(ini_int(L"Area", L"ExactWidth", 4), -core::kExactMax, core::kExactMax, 4);
-        g_cfg.exactD = clampv(ini_int(L"Area", L"ExactDepth", 4), -core::kExactMax, core::kExactMax, 4);
-        g_cfg.exactH = clampv(ini_int(L"Area", L"ExactHeight", 3), -core::kExactMax, core::kExactMax, 3);
-        if (!g_cfg.exactW) g_cfg.exactW = 1; if (!g_cfg.exactD) g_cfg.exactD = 1; if (!g_cfg.exactH) g_cfg.exactH = 1; }
+        g_cfg.exactW = clampv(ini_int(L"Area", L"ExactWidth", 3), -core::kExactMax, core::kExactMax, 3);
+        g_cfg.exactD = clampv(ini_int(L"Area", L"ExactDepth", 3), -core::kExactMax, core::kExactMax, 3);
+        g_cfg.exactH = clampv(ini_int(L"Area", L"ExactHeight", 2), -core::kExactMax, core::kExactMax, 2);
+    }
     g_cfg.keyHover     = ini_int(L"Keys", L"ToggleFreePlacement", VK_F10);
     g_cfg.keyFarther   = ini_int(L"Keys", L"FreePlacementFarther", VK_PRIOR);
     g_cfg.keyCloser    = ini_int(L"Keys", L"FreePlacementCloser", VK_NEXT);
@@ -2501,7 +2501,9 @@ static volatile LONG g_exactSel = 1;          // row typed into: 0 reference, 1 
 static char g_exactTyped[8];                  // the number being typed ("" = not typing)
 static volatile LONG g_exactShown = 0;        // the window was on screen (its screen came up)
 static volatile DWORD g_exactReqTick = 0;
-static volatile LONG g_exactHidden = 0;       // right button held: the window is down, the game has the input
+static volatile LONG g_exactHidden = 0;       // window down: 1 = right button held (the game has the input), 2 = the game's material catalog
+static volatile LONG g_exactPickReq = 0;      // Material clicked (UI thread)
+static bool g_exactPickSeen = false;          // the catalog came up
 static uint8_t g_exactFrom = 1;  // the screen the window came from (and goes back to while hidden)
 static void exact_cancel(const char* why);
 static int g_exFAxis = 2, g_exFSign = 1, g_exRAxis = 0, g_exRSign = 1;   // the facing at the click
@@ -4356,18 +4358,33 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
         }
         if (g_exactOpen) {                                // closed (Build, Cancel, Esc, the menu key) or never came up
             const bool rmb = game_focused() && (GetAsyncKeyState(VK_RBUTTON) & 0x8000);
-            if (*scr == SCREEN_MOD && g_exactShown && rmb && !g_exactHidden && req != 2) {
+            enum { SCREEN_MATERIAL_CATALOG = 30 };        // HudScreenType BlueprintMultiToolMaterialCatalog
+            if (InterlockedExchange(&g_exactPickReq, 0) && *scr == SCREEN_MOD && !g_exactHidden) {
+                g_exactHidden = 2; g_exactPickSeen = false; g_exactReqTick = GetTickCount();
+                g_toggleScreen(*g_uiCtxGlobal, SCREEN_MATERIAL_CATALOG);
+                LOG(.str("exact: material catalog"));
+            }
+            if (g_exactHidden == 2) {                     // back from the catalog (or it never came up): the window again
+                if (*scr == SCREEN_MATERIAL_CATALOG) g_exactPickSeen = true;
+                if (*scr != SCREEN_MOD && *scr != SCREEN_MATERIAL_CATALOG && (g_exactPickSeen || GetTickCount() - g_exactReqTick > 1000)) {
+                    g_exactHidden = 0; g_exactShown = 0; g_exactReqTick = GetTickCount();
+                    g_exactFrom = *scr == SCREEN_INGAME || (*scr >= 29 && *scr <= 37) ? *scr : g_exactFrom;
+                    g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD);
+                    LOG(.str("exact: back from the catalog (screen ").i(*scr).c(')'));
+                }
+            }
+            else if (*scr == SCREEN_MOD && g_exactShown && rmb && !g_exactHidden && req != 2) {
                 // right button: the window goes down while it is held (look around, walk away and back)
                 g_exactHidden = 1;
                 g_toggleScreen(*g_uiCtxGlobal, g_exactFrom);
                 LOG(.str("exact: window hidden (right button)"));
-            } else if (g_exactHidden && !rmb && *scr == g_exactFrom) {
+            } else if (g_exactHidden == 1 && !rmb && *scr == g_exactFrom) {
                 g_exactHidden = 0; g_exactShown = 0; g_exactReqTick = GetTickCount();
                 g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD);
                 LOG(.str("exact: window back"));
             }
             if (*scr == SCREEN_MOD) { if (!g_exactHidden) g_exactShown = 1; }
-            else if (g_exactHidden) {
+            else if (g_exactHidden == 1) {
                 if (*scr != g_exactFrom && GetTickCount() - g_exactReqTick > 300) { g_exactHidden = 0; g_exactOpen = 0; exact_cancel("other screen while hidden"); }
             }
             else if (g_exactShown || GetTickCount() - g_exactReqTick > 1500) {
@@ -4899,6 +4916,10 @@ static bool exact_confirm() {
 }
 // Keys while the window is up (input thread): digits and minus type into the selected row,
 // Backspace deletes, Up / Down / Tab select a row, Enter builds.
+static int exact_clamp(int v) { return v > core::kExactMax ? core::kExactMax : v < -core::kExactMax ? -core::kExactMax : v; }
+// Keys while the window is up (input thread; only then): digits and minus type into the
+// selected row, Backspace deletes, Up / Down / Tab select a row, Left / Right step 1, Page Up /
+// Down step 10, Enter builds.
 static void exact_key(int vk) {
     LONG sel = g_exactSel;
     int dg = vk >= '0' && vk <= '9' ? vk - '0' : vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9 ? vk - VK_NUMPAD0 : -1;
@@ -4908,16 +4929,12 @@ static void exact_key(int vk) {
         bool back = vk == VK_UP || (vk == VK_TAB && (GetAsyncKeyState(VK_SHIFT) & 0x8000));
         g_exactSel = (sel + (back ? 3 : 1)) % 4; g_exactTyped[0] = 0; return;
     }
-    if (vk == VK_LEFT || vk == VK_RIGHT || vk == VK_PRIOR || vk == VK_NEXT) {   // step: 1, Shift or Page Up / Down 10
+    if (vk == VK_LEFT || vk == VK_RIGHT || vk == VK_PRIOR || vk == VK_NEXT) {
         int d = (vk == VK_RIGHT || vk == VK_PRIOR) ? 1 : -1;
         if (sel == 0) { g_cfg.exactRef = (g_cfg.exactRef + core::EXACT_REF_COUNT + d) % core::EXACT_REF_COUNT; return; }
         if (vk == VK_PRIOR || vk == VK_NEXT || (GetAsyncKeyState(VK_SHIFT) & 0x8000)) d *= 10;
-        int* f = exact_field(sel); int v = *f + d;
-        if (*f > 0 && v <= 0) v -= 1;             // 0 is skipped
-        if (*f < 0 && v >= 0) v += 1;
-        if (v > core::kExactMax) v = core::kExactMax;
-        if (v < -core::kExactMax) v = -core::kExactMax;
-        *f = v; g_exactTyped[0] = 0;
+        int* f = exact_field(sel);
+        *f = exact_clamp(*f + d); g_exactTyped[0] = 0;
         return;
     }
     if (sel == 0) {                               // reference: 1..5
@@ -4932,75 +4949,88 @@ static void exact_key(int vk) {
     }
     else if (vk == VK_BACK && n > 0) g_exactTyped[n - 1] = 0;
     else return;
-    int v = 0; bool neg = g_exactTyped[0] == '-';
-    for (const char* c = g_exactTyped + (neg ? 1 : 0); *c; c++) v = v * 10 + (*c - '0');
-    if (neg) v = -v;
-    if (v > core::kExactMax) v = core::kExactMax;
-    if (v < -core::kExactMax) v = -core::kExactMax;
-    if (v != 0) *exact_field(sel) = v;
+    int v = 0; bool neg = g_exactTyped[0] == '-', any = false;
+    for (const char* c = g_exactTyped + (neg ? 1 : 0); *c; c++) { v = v * 10 + (*c - '0'); any = true; }
+    if (any) *exact_field(sel) = exact_clamp(neg ? -v : v);
 }
 
-// One size row: the game's option row over a window of values around the current one (0 is
-// left out). Shift makes a step 10. The selected row shows the number being typed.
+// One size row: the game's option row over a window of values around the current one, then
+// -10 / +10 buttons. The selected row shows the number being typed.
 static bool ui_number(const char* label, int cur, bool typing, int* out) {
     static char txt[21][16];
     const char* names[21]; int vals[21];
-    int below[10], nb = 0, above[10], na = 0;
-    for (int v = cur - 1; nb < 10 && v >= -core::kExactMax; v--) if (v) below[nb++] = v;
-    for (int v = cur + 1; na < 10 && v <= core::kExactMax; v++) if (v) above[na++] = v;
-    int n = 0;
-    for (int k = nb - 1; k >= 0; k--) vals[n++] = below[k];
-    int idx = n; vals[n++] = cur;
-    for (int k = 0; k < na; k++) vals[n++] = above[k];
+    int lo = cur - 10 < -core::kExactMax ? -core::kExactMax : cur - 10;
+    int hi = cur + 10 > core::kExactMax ? core::kExactMax : cur + 10;
+    int n = 0, idx = 0;
+    for (int v = lo; v <= hi; v++) { if (v == cur) idx = n; vals[n++] = v; }
     for (int k = 0; k < n; k++) {
         Buf b;
         if (k == idx && typing) b.str(g_exactTyped).c('_'); else b.i(vals[k]);
         copy_text(txt[k], b.z(), sizeof txt[k]);
         names[k] = txt[k];
     }
-    LONG v;
-    if (!ui_option(label, names, n, idx, &v)) return false;
-    int nv = vals[v];
-    if (GetAsyncKeyState(VK_SHIFT) & 0x8000) {
-        nv = cur + (nv - cur) * 10;
-        if ((cur > 0 && nv <= 0) || (cur < 0 && nv >= 0)) nv = nv - cur > 0 ? 1 : -1;
-        if (nv > core::kExactMax) nv = core::kExactMax;
-        if (nv < -core::kExactMax) nv = -core::kExactMax;
-        if (!nv) nv = 1;
-    }
-    *out = nv;
-    return true;
+    alignas(16) uint8_t row[0x40] = {}, opt[0x40] = {};
+    ui.beginBox(row, 0);
+    UiVec2 gap{ 12, 0 };
+    ui.setSpacingX(ui_node(row), &gap, 0);
+    uint16_t midLeft = 0x201;
+    ui.setLayout(ui_node(row), &midLeft);
+    ui.beginBox(opt, 0);
+    ui.setWidth(ui_node(opt), 700);
+    LONG v; bool changed = false; int nv = cur;
+    if (ui_option(label, names, n, idx, &v)) { nv = vals[v]; changed = true; }
+    ui.endBox(opt);
+    if (ui_button("-10")) { nv = exact_clamp(cur - 10); changed = true; }
+    if (ui_button("+10")) { nv = exact_clamp(cur + 10); changed = true; }
+    ui.endBox(row);
+    if (changed) *out = nv;
+    return changed;
 }
 
+// A key hint as in the game's building box: the key's icon and a label.
+static void hud_key_row(int key, const char* label, int state);
+static bool hud_row_ready();
+static void exact_hint(int key, Str label) { if (hud_row_ready()) hud_key_row(key, T(label), -1); }
+
+// Full height at the left like the game's menus, always the same size (the rows scroll); the
+// world stays visible on the right (no blur), and the right mouse button hides it all.
 static void draw_exact_window() {
-    alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, btns[0x40] = {};
+    alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, btns[0x40] = {}, list[0x40] = {}, keys[0x40] = {};
     UiStringView name{ "buildingToolsExact", 18 };
     g_beginWindow(win, &name, 1, 9, -1, 1);               // full screen, modal: the mouse shows, the camera stops
     ui.beginRoot(root, ui.windowContext(win));
     ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
-    const float rpad[4] = { 60, 60, 80, 60 };
-    ui.setPadding(ui_node(root), rpad);
+    UiVec2 rgap{ 0, 0 };
+    ui.setSpacing(ui_node(root), &rgap, 0);
     if (GetTickCount() - g_hoverTick > 100) update_preview_box();   // the game's cursor may pause behind a menu
 
     ui.beginBox(panel, 0);
     void* n = ui_node(panel);
-    const float pad[4] = { 40, 30, 40, 30 };
+    {   // the panel's own backdrop, from its last layout (the world stays clear beside it)
+        const float* r = (const float*)((uint8_t*)n + 0x114);
+        if (r[2] > 0 && r[3] > 0) ui.fillRect(r, 0x3f800000c0000000ull);
+    }
+    const float pad[4] = { 120, 50, 60, 40 };
     ui.setPadding(n, pad);
-    UiVec2 gap{ 0, 14 };
+    UiVec2 gap{ 0, 18 };
     ui.setSpacing(n, &gap, 0);
-    uint16_t rightMid = 0x203, topLeft = 0x101;
-    ui.setSelfAlign(n, &rightMid);
+    uint16_t topLeft = 0x101;
+    ui.setSelfAlign(n, &topLeft);
     ui.setLayout(n, &topLeft);
-    ui.setWidth(n, 1000);
-    alignas(16) uint8_t fb[0xc0] = {};
-    *(uint32_t*)fb = 8;                                   // the game's popup frame (reportSharedWorldPopup)
-    *(float*)(fb + 4) = 1.0f;
-    ui.fancyBox(panel, fb);
+    ui.setWidth(n, 1180);
+    ui.setStretch(n, UiVec2{ 0, 1 });                       // full height, whatever the rows
 
     ui_text(T(S_EXACT_TITLE), STYLE_TITLE);
-    ui_text(T(S_EXACT_HELP), STYLE_BODY);                 // short lines: game text does not wrap here
-    ui_text(T(S_EXACT_HELP2), STYLE_BODY);
-    ui_text(T(S_EXACT_HELP3), STYLE_BODY);
+    ui_text(T(S_EXACT_HELP), STYLE_BODY);
+
+    alignas(16) static uint8_t st[0x500];
+    static float offset[4];
+    bool scroll = ui_scroll_begin(st, sizeof st, offset, 1000);
+    ui.beginBox(list, 0);
+    UiVec2 lgap{ 0, 18 };
+    ui.setSpacing(ui_node(list), &lgap, 0);
+    ui.setLayout(ui_node(list), &topLeft);
+    ui.setStretch(ui_node(list), UiVec2{ 1, 0 });
     const LONG sel = g_exactSel;
     const bool typing = g_exactTyped[0] != 0;
     {
@@ -5016,6 +5046,9 @@ static void draw_exact_window() {
         if (ui_number(l.z(), *exact_field(k), typing && sel == k, &v)) { *exact_field(k) = v; g_exactSel = k; g_exactTyped[0] = 0; }
     }
     draw_fill_rows();
+    ui.endBox(list);
+    if (scroll) ui.endScroll(st);
+
     {   // the size, in the window's width / depth / height order
         core::Plan pl; float step[3]; bool ok = false;
         Buf b;
@@ -5031,17 +5064,21 @@ static void draw_exact_window() {
     ui.setSpacingX(ui_node(btns), &bgap, 0);
     const bool replace = g_exactOp == OP_BUILD && g_replace;
     if (ui_button(T(g_exactOp == OP_REMOVE ? S_EXACT_REMOVE : replace ? S_EXACT_REPLACE : S_EXACT_BUILD))) exact_confirm();
+    if (g_exactOp == OP_BUILD && ui_button(T(S_EXACT_MATERIAL))) g_exactPickReq = 1;
     if (ui_button(T(S_EXACT_CANCEL))) g_menuReq = 2;
     ui.endBox(btns);
+    // keys, with the game's key icons
+    ui.beginBox(keys, 0);
+    UiVec2 kgap{ 0, 4 };
+    ui.setSpacing(ui_node(keys), &kgap, 0);
+    exact_hint(VK_RBUTTON, S_EXACT_KEY_LOOK);
+    exact_hint(VK_RIGHT, S_EXACT_KEY_STEP);
+    exact_hint(VK_PRIOR, S_EXACT_KEY_STEP10);
+    exact_hint(VK_DOWN, S_EXACT_KEY_ROW);
+    exact_hint(VK_RETURN, g_exactOp == OP_REMOVE ? S_EXACT_REMOVE : replace ? S_EXACT_REPLACE : S_EXACT_BUILD);
+    exact_hint(VK_ESCAPE, S_EXACT_CANCEL);
+    ui.endBox(keys);
     ui.endBox(panel);
-
-    alignas(16) static uint8_t hints[2 * 0x48];
-    ui.makeHint(hints, UI_ACTION_BACK, 1);
-    hints[0x1b] = 1;
-    *(UiTextString*)(hints + 0x20) = ui_str(T(S_EXACT_CANCEL));
-    struct { void* p; uint64_t n; } list{ hints, 1 };
-    const float hpad[4] = { 40, 40, 40, 40 };
-    ui.drawHints(&list, 0x303, hpad, 0, 0);
     ui.endBox(root);
     ui.endWindow(win);
 }
@@ -5130,6 +5167,7 @@ static void hud_mark(bool on) {
 
 // One row: key icon + label, and the small on/off mark after it for on/off settings
 // (state: -1 = none, 0 = off, 1 = on). The box is narrow: labels stay short.
+static bool hud_row_ready() { return g_hudRowTplOk; }
 static void hud_key_row(int key, const char* label, int state = -1) {
     if (key <= 0) return;                       // the setting has no key
     alignas(16) uint8_t bind[0xd0];
