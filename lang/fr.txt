@@ -254,16 +254,16 @@ option.language_game = Comme le jeu
 
 # Exact mode window
 exact.title = Dimensions exactes
-exact.help = Dimensions en formes, comptées depuis le bloc cliqué. Cliquez les flèches (Maj : par 10) ou tapez un nombre dans la ligne choisie ; Haut / Bas ou Tab choisit. Une valeur négative s'étend dans l'autre sens.
+exact.help = Dimensions en blocs depuis le bloc cliqué (largeur vers votre droite, profondeur devant vous) ; négatif = dans l'autre sens. Cliquez les flèches ou utilisez Gauche / Droite (Maj ou Page préc. / suiv. : par 10), ou tapez un nombre dans la ligne marquée > ; Haut / Bas choisit la ligne. Maintenez le clic droit pour regarder autour et marcher.
 exact.reference = Bloc cliqué
 exact.ref_centre = Milieu (en bas)
 exact.ref_front_left = Coin avant gauche
 exact.ref_front_right = Coin avant droit
 exact.ref_back_left = Coin arrière gauche
 exact.ref_back_right = Coin arrière droit
-exact.width = Largeur (gauche - droite)
-exact.depth = Profondeur (devant vous)
-exact.height = Hauteur (vers le haut)
+exact.width = Largeur
+exact.depth = Profondeur
+exact.height = Hauteur
 exact.size = {0} x {1}, h {2} = {3} formes
 exact.build = Construire
 exact.remove = Retirer

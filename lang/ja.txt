@@ -254,16 +254,16 @@ option.language_game = ゲームと同じ
 
 # Exact mode window
 exact.title = 正確なサイズ
-exact.help = サイズはクリックしたブロックから数えた形状の数です。矢印をクリック (Shift: 10ずつ) するか、選択した行に数字を入力します。上 / 下キーまたは Tab で行を選択。マイナスの値は反対方向に伸びます。
+exact.help = サイズはクリックしたブロックからのブロック数です (幅は右へ、奥行きは前方へ)。マイナスは反対方向。矢印をクリックするか 左 / 右 キー (Shift または Page Up / Down: 10ずつ)、または > の付いた行に数字を入力します。上 / 下 キーで行を選択。右ボタンを押したままで見回しと移動ができます。
 exact.reference = クリックしたブロック
 exact.ref_centre = 中央 (下)
 exact.ref_front_left = 手前左の角
 exact.ref_front_right = 手前右の角
 exact.ref_back_left = 奥左の角
 exact.ref_back_right = 奥右の角
-exact.width = 幅 (左 - 右)
-exact.depth = 奥行き (前方)
-exact.height = 高さ (上)
+exact.width = 幅
+exact.depth = 奥行き
+exact.height = 高さ
 exact.size = {0} x {1}, 高さ {2} = {3} 個
 exact.build = 建築
 exact.remove = 撤去

@@ -258,16 +258,16 @@ option.language_game = Same as the game
 
 # Exact mode window
 exact.title = Exact size
-exact.help = Sizes in shapes, counted from the block you clicked. Click the arrows (Shift: 10 at a time) or type a number into the selected row; Up / Down or Tab selects. A negative size grows the other way.
+exact.help = Sizes in blocks from the clicked block (width to your right, depth away from you); negative = the other way. Click the arrows or use Left / Right (Shift or Page Up / Down: 10 at a time), or type a number into the row marked >; Up / Down picks the row. Hold the right mouse button to look around and walk.
 exact.reference = Clicked block
 exact.ref_centre = Middle (bottom)
 exact.ref_front_left = Front left corner
 exact.ref_front_right = Front right corner
 exact.ref_back_left = Back left corner
 exact.ref_back_right = Back right corner
-exact.width = Width (left - right)
-exact.depth = Depth (away from you)
-exact.height = Height (up)
+exact.width = Width
+exact.depth = Depth
+exact.height = Height
 exact.size = {0} x {1}, h {2} = {3} shapes
 exact.build = Build
 exact.remove = Remove
