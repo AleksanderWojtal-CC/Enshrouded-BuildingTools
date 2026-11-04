@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.0-dev1"
+#define MOD_VERSION "0.31.0-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -716,6 +716,10 @@ static const char* SIG_PROP_UNDO_TEST = "F6 87 D8 05 00 00 88 75 09 44 38 A7 40 
 static const char* SIG_PROP_REC_CALL = "E8 ?? ?? ?? ?? 84 C0 75 33 41 38 87 51 01 00 00 75 2A 49 8B 97 F0 00 00 00";
 // and the server cursor's "can undo" test (its E8 at +0x1a; same item test, then the player's state).
 static const char* SIG_CAN_UNDO_CALL = "44 0F B6 46 69 49 8B D6 48 8B 8D B0 00 00 00 48 8B D8 41 C0 E8 02 41 80 E0 01 E8 ?? ?? ?? ?? 84 C0 74";
+// Client (player_control_action_sequence): its building-mode test (E8 at +0xb; the hammer's branch,
+// where the undo key is read, runs only when out[0] != 0) and that branch's undo key call (E8 at +4)
+static const char* SIG_BUILD_MODE_CALL = "4C 8B C6 48 8D 55 F0 48 8D 4D C8 E8 ?? ?? ?? ?? 80 7D C8 00 0F 85 ?? ?? ?? ??";
+static const char* SIG_UNDO_KEY_CALL = "48 8D 4D F0 E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 48 8D 4D F0 E8 ?? ?? ?? ??";
 static const char* SIG_CURSOR_QUERY = "4D 8B CD 40 88 7C 24 28 4D 8B C6 88 5C 24 20 48 8D 95 F0 03 00 00 48 8D 4D 20 E8 ?? ?? ?? ??";
 // System dependency copy, and the dismantle system's call of it (writer at +0x180)
 static const char* SIG_SYS_DEPS = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 60 4C 8B 09 48 8B D9";

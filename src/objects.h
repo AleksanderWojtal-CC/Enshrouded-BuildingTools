@@ -585,6 +585,36 @@ static bool install_prop_undo() {
     return g_objUndoParts == 3;
 }
 
+// The undo key on the client: player_control_action_sequence reads it (UndoKey, 2c72b0 on 1.0.1.1:
+// BuildingUndo pressed and the server's "can undo" bit -> undo request) only in the hammer's branch.
+// With an object in hand that branch is not taken, so after the branch test (BuildModeFn) the mod
+// reads the undo key the same way.
+typedef void (*BuildModeFn)(uint8_t* out, uint8_t* sys, void* item);
+typedef uint8_t (*UndoKeyFn)(uint8_t* sys);
+static BuildModeFn g_buildModeOrig = nullptr;
+static UndoKeyFn g_undoKey = nullptr;
+static void build_mode_hook(uint8_t* out, uint8_t* sys, void* item) {
+    g_buildModeOrig(out, sys, item);
+    if (!out || out[0] || !g_undoKey || !g_objUndoFlag || !obj_tool_on() || !prop_now() || !sys) return;
+    uint8_t* sc = readable(sys + 0x90, 8) ? *(uint8_t**)(sys + 0x90) : nullptr;
+    uint8_t flags = sc && readable(sc + 0x69, 1) ? sc[0x69] : 0xff;
+    static int lastFlags = -1;
+    if (flags != lastFlags) { lastFlags = flags; LOG(.str("object undo: object in hand, server flags ").x(flags).str((flags & 0xc) == 0xc ? " (undo possible)" : "")); }
+    if (g_undoKey(sys)) LOG(.str("object undo: undo key with an object in hand -> undo sent"));
+}
+static void install_undo_key() {
+    auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
+    uint8_t* bm = find_unique("BuildModeCall", SIG_BUILD_MODE_CALL);
+    uint8_t* uk = find_unique("UndoKeyCall", SIG_UNDO_KEY_CALL);
+    uint8_t* bmSite = bm ? bm + 0xb : nullptr;
+    uint8_t* bmFn = rel(bmSite); uint8_t* ukFn = rel(uk ? uk + 4 : nullptr);
+    if (!bmFn || !ukFn) { LOG(.str("object undo: no undo key with an object in hand")); return; }
+    g_undoKey = (UndoKeyFn)ukFn;
+    g_buildModeOrig = (BuildModeFn)bmFn;
+    if (hook_calls(bmFn, (void*)&build_mode_hook, &bmSite, 1) != 1) { g_buildModeOrig = nullptr; g_undoKey = nullptr; }
+    LOG(.str("object undo: undo key with an object in hand ").str(g_undoKey ? "on" : "not hooked"));
+}
+
 static void install_objects() {
     if (g_dedicated) { LOG(.str("object placement: not on a dedicated server yet")); return; }
     auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
@@ -614,6 +644,7 @@ static void install_objects() {
     int b = hook_calls(pay, (void*)&prop_pay_hook, paySites, 2);
     int c = hook_calls(queryFn, (void*)&cursor_query_hook, &cqSite, 1);
     bool undo = a == 1 && b == 2 && install_prop_undo();
+    if (undo) install_undo_key();
     LOG(.str("object placement: ").str(a == 1 && b == 2 && c == 1 ? "available" : "partly hooked").str(undo ? ", undo on" : ", no undo").str(" (place ").i(a).str(", pay ").i(b)
         .str(", held item ").i(c).str(", ghost ").str(g_cxClientRet ? "yes" : "no").str("); mode ").i(g_cfg.objMode));
 }
