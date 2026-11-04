@@ -3,6 +3,15 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.31.1
+
+- **Higher frame rate.** The mod's checks before it reads game memory were far slower than
+  expected and cost about 2 ms every frame with the hammer or a material in hand, plus 3 to
+  4.5 ms with the magic chests of all bases on (about 100 FPS dropped to about 60). The mod
+  now remembers memory it has already checked, so its share is below 0.1 ms a frame.
+- `Profile=1` under `[Debug]` writes the frame rate and the time each part of the mod takes
+  to BuildingTools.log every 10 seconds (off by default), for reports about FPS.
+
 ## 0.31.0
 
 - **Undo for objects** (#51). The game's undo now also takes back objects you placed

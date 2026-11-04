@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.1-dev3"
+#define MOD_VERSION "0.31.1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -164,6 +164,7 @@ struct Config {
     int maxShapes    = 2000;
     int sound        = 1;
     int log          = 1;
+    int profile      = 0;      // every 10 s the frame time and the mod's share of it in the log
     int corners      = 2;      // area corners: 2 = opposite corners of a box, 3 = base + height
     int exact        = 0;      // 1 = exact mode: one click, then the sizes in a window (corners stays 2)
     int exactRef = 1, exactW = 3, exactD = 3, exactH = 2;   // the last sizes entered: shapes past the clicked one
@@ -315,7 +316,8 @@ static void write_full_ini(const Config& c) {
      .t("; Item pop-up when Replace gives materials back (1 = on)\r\nRefundPopup=").i(c.refundPopup).t("\r\n")
      .t("; Text language: auto = as the game, or en, de, fr, it, ja, ko, pl, pt-BR, ru, es, th, tr,\r\n")
      .t(";     uk, zh-CN, zh-TW (files in the BuildingTools-Languages folder)\r\nLanguage=").t(c.language).t("\r\n")
-     .t("\r\n[Debug]\r\nLog=").i(c.log).t("\r\n");
+     .t("\r\n[Debug]\r\nLog=").i(c.log).t("\r\n")
+     .t("; 1 = every 10 s the log gets the frame rate and the time each part of the mod takes\r\nProfile=").i(c.profile).t("\r\n");
     wchar_t p[MAX_PATH];
     lstrcpyW(p, g_dir); lstrcatW(p, L"BuildingTools.ini");
     HANDLE h = CreateFileW(p, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -330,7 +332,8 @@ static void load_config() {
     g_cfg.maxShapes    = ini_int(L"Limits", L"MaxShapes", 2000);
     g_cfg.sound        = ini_int(L"Interface", L"Sound", 1);
     g_cfg.log          = ini_int(L"Debug", L"Log", 1);
-    g_prof             = ini_int(L"Debug", L"Profile", 1) != 0 && g_cfg.log;
+    g_cfg.profile      = ini_int(L"Debug", L"Profile", 0) != 0;
+    g_prof             = g_cfg.profile && g_cfg.log;
     {   int cn = ini_int(L"Area", L"Corners", 2);
         g_cfg.corners = cn == 3 ? 3 : 2; g_cfg.exact = cn == 1; }
     {   auto clampv = [](int v, int lo, int hi, int def) { return v < lo || v > hi ? def : v; };
@@ -421,7 +424,8 @@ static void load_config() {
         ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1 || noLanguage ||
         ini_int(L"Keys", L"RadialMenu", -1) == -1 || ini_int(L"Keys", L"HoldReplace", -1) == -1 ||
         ini_int(L"Area", L"DrawBoxBlocks", -1) == -1 || ini_int(L"Area", L"ExactWidth", -9999) == -9999 ||
-        ini_int(L"Tools", L"AreaShapes", -1) == -1 || ini_int(L"Objects", L"Count", -1) == -1)
+        ini_int(L"Tools", L"AreaShapes", -1) == -1 || ini_int(L"Objects", L"Count", -1) == -1 ||
+        ini_int(L"Debug", L"Profile", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -1191,11 +1195,11 @@ static void hud_hook(void* a, void* b, void* c, void* d) {
 }
 
 // ---------------------------------------------------------------- utilities
-// VirtualQuery is slow in the game's process: it works out the size of the whole region,
-// and the game's large heaps made each call cost up to a millisecond (measured 0.31.1-dev1:
-// 2 ms a frame for the held item's checks, 3-4 ms for the magic chests of all bases).
-// So a 4 KB page found readable is remembered for 3 seconds (one word per cache slot:
-// page number << 28 | tick; no page below 0x10 is ever mapped, so a used slot is never 0). Only "readable" is remembered.
+// VirtualQuery is slow in the game's process (it works out the size of the whole region,
+// and the game's heaps are large): measured in 0.31.1, the checks cost 2 ms a frame with an
+// item in hand and 3-4 ms more with the magic chests of all bases. So a 4 KB page found
+// readable is remembered for 3 seconds (one word per cache slot: page number << 28 | tick;
+// no page below 0x10 is ever mapped, so a used slot is never 0). Only "readable" is remembered.
 static const int kReadCache = 1024;
 static volatile uint64_t g_readCache[kReadCache];
 static bool read_cached(uint64_t blk, DWORD now) {
