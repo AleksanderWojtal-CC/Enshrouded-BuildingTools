@@ -292,4 +292,5 @@ obj.wheel_menu = 物件設定
 obj.wheel_clear = 清除點
 obj.key_mode = 物件放置：下一模式（單個、直線、曲線、圓、拱形、直立圓）
 obj.key_menu = 物件放置：設定視窗
+obj.key_undo = 物件放置：復原（手持物件）
 obj.tool = 物件線

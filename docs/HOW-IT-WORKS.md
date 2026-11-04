@@ -262,6 +262,30 @@ instructions; the game functions themselves are not patched.
 Chests whose entity is not loaded are skipped by the game itself (the entity lookup
 fails), so a base far away may only count once the game has it in memory.
 
+## Object undo
+
+The game can undo a placed object: an undo record of type 1 (entity id, dismantle method)
+makes its undo remove the object with the same function that picking an object up uses
+(it destroys the entity and plays the pick-up effect), after refunding the step's cost
+list. The game switches this off in three places, and the mod opens all three while
+Object lines is on:
+
+1. The place-object system starts an undo step only for a few item kinds. A small patch
+   at that test also starts it for every object (single placements, and the click that
+   ends a line; never for a click that only marks a point, whose step would refund
+   something that was not placed).
+2. PlaceProp adds the undo record only when a check says so, and that check always says
+   no. The mod redirects that one call.
+3. The server cursor tells the client whether undo is possible with the same item test.
+   The mod redirects that call too, so an object in hand also gets "can undo".
+
+With an object in hand the game never reads its undo key: only the hammer's controls
+produce the BuildingUndo input. The mod reads its own key (default Y, `ObjectUndo`) and,
+in the client's action code, sets that input for one call of the game's undo-key
+function. The game drops an undo request while the place animation still plays, so the
+press is sent again every 0.3 s for up to 1.5 s until the undo's refund runs. Lines use
+the existing undo budget (one record per object, at most 30 per step).
+
 ## Dedicated servers
 
 `enshrouded_server.exe` loads the same DLL (`g_dedicated`, from the exe name). It has

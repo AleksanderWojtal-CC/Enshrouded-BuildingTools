@@ -295,4 +295,5 @@ obj.wheel_menu = Object settings
 obj.wheel_clear = Clear points
 obj.key_mode = Object placement: next mode (single, line, curve, circle, arch, standing circle)
 obj.key_menu = Object placement: settings window
+obj.key_undo = Object placement: undo (object in hand)
 obj.tool = Object lines

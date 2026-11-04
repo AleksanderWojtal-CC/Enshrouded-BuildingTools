@@ -292,4 +292,5 @@ obj.wheel_menu = Réglages des objets
 obj.wheel_clear = Effacer les points
 obj.key_mode = Placement d'objets : mode suivant (unique, ligne, courbe, cercle, arche, cercle debout)
 obj.key_menu = Placement d'objets : fenêtre des réglages
+obj.key_undo = Placement d'objets : annuler (objet en main)
 obj.tool = Lignes d'objets

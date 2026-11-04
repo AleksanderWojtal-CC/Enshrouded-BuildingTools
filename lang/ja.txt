@@ -292,4 +292,5 @@ obj.wheel_menu = オブジェクト設定
 obj.wheel_clear = ポイントをクリア
 obj.key_mode = オブジェクト配置：次のモード（単体、直線、曲線、円、アーチ、縦の円）
 obj.key_menu = オブジェクト配置：設定ウィンドウ
+obj.key_undo = オブジェクト配置：元に戻す（オブジェクトを手に持って）
 obj.tool = オブジェクトライン

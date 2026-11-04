@@ -292,4 +292,5 @@ obj.wheel_menu = Ajustes de objetos
 obj.wheel_clear = Apagar pontos
 obj.key_mode = Colocação de objetos: próximo modo (único, linha, curva, círculo, arco, círculo em pé)
 obj.key_menu = Colocação de objetos: janela de ajustes
+obj.key_undo = Colocação de objetos: desfazer (objeto na mão)
 obj.tool = Linhas de objetos
