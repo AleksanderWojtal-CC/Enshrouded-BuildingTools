@@ -412,7 +412,11 @@ static void draw_obj_window() {
     ui.setWidth(n, 1180);
     ui.setStretch(n, UiVec2{ 0, 1 });
     ui_text(T(S_OBJ_TITLE), STYLE_TITLE);
-    ui_text(T(S_OBJ_HELP), STYLE_BODY);
+    {   // one short line for the current mode (the panel does not wrap text)
+        static const Str how[core::OBJ_MODE_COUNT] = { S_OBJ_HOW_SINGLE, S_OBJ_HOW_LINE, S_OBJ_HOW_CURVE, S_OBJ_HOW_CIRCLE, S_OBJ_HOW_ARCH, S_OBJ_HOW_VCIRCLE };
+        ui_text(T(how[g_cfg.objMode % core::OBJ_MODE_COUNT]), STYLE_BODY);
+        if (g_cfg.objMode != core::OBJ_SINGLE) ui_text(T(S_OBJ_HELP), STYLE_BODY);
+    }
     alignas(16) static uint8_t st[0x500];
     static float offset[4];
     bool scroll = ui_scroll_begin(st, sizeof st, offset, 1000);

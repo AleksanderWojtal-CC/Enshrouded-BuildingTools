@@ -258,7 +258,13 @@
     X(S_OBJ_REMOTE, "obj.remote", "Object lines work only in a world you host (not yet when you join a server)") \
     X(S_FLOAT_OBJ, "obj.float", "{0}: click {1} of {2}, {3} objects") \
     X(S_OBJ_TITLE, "obj.title", "Object placement") \
-    X(S_OBJ_HELP, "obj.help", "With an object in hand: Line = 2 clicks, Curve = start, end, then a point it bends through, Circle = centre, then a point on it, Arch = its two ends (a half circle standing up), Standing circle = centre, then a point on it. The last click places all objects.") \
+    X(S_OBJ_HELP, "obj.help", "The clicks before the last only mark points.") \
+    X(S_OBJ_HOW_SINGLE, "obj.how_single", "Single: each click places one object, as in the game.") \
+    X(S_OBJ_HOW_LINE, "obj.how_line", "Line: click the start, then the end.") \
+    X(S_OBJ_HOW_CURVE, "obj.how_curve", "Curve: start, end, then a point it bends through.") \
+    X(S_OBJ_HOW_CIRCLE, "obj.how_circle", "Circle: the centre, then a point on the circle.") \
+    X(S_OBJ_HOW_ARCH, "obj.how_arch", "Arch: its two ends (a half circle standing up).") \
+    X(S_OBJ_HOW_VCIRCLE, "obj.how_vcircle", "Standing circle: the centre, then a point on it.") \
     X(S_OBJ_MODE_LABEL, "obj.mode_label", "Mode") \
     X(S_OBJ_COUNT, "obj.count", "Number of objects") \
     X(S_OBJ_SPACING, "obj.spacing", "Random spacing (%)") \
@@ -276,7 +282,7 @@
     X(S_WHEEL_OBJ_CLEAR, "obj.wheel_clear", "Clear points") \
     X(S_ACT_OBJ_MODE, "obj.key_mode", "Object placement: next mode (single, line, curve, circle, arch, standing circle)") \
     X(S_ACT_OBJ_MENU, "obj.key_menu", "Object placement: settings window") \
-    X(S_OPT_TOOL_OBJECTS, "obj.tool", "Object placement (line, curve, circle, arch)")
+    X(S_OPT_TOOL_OBJECTS, "obj.tool", "Object lines")
 
 enum Str {
 #define BT_STR_ID(id, key, en) id,

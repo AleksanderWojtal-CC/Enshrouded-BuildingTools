@@ -17,6 +17,8 @@ changelog on Nexus Mods, so keep it short and written for players.
   height) and Turn with the line, so each object faces along the line or, on arches and
   standing circles, round the centre. In Single mode the random rotation and height apply
   to every object you place.
+- **Object lines** can be switched off in the menu's Options tab (`Objects=` in `[Tools]`);
+  then an object in hand works exactly as in the game.
 - Works in any world you host (also alone); not yet when you join someone else's server
   or on a dedicated server. The game has no undo for objects, so a placed line is taken
   back by picking the objects up.
