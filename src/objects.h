@@ -92,7 +92,7 @@ static bool obj_ground(void*, double x, double z, double yRef, double* y) {
     uint32_t h = ((uint32_t)vx * 73856093u ^ (uint32_t)vz * 19349663u ^ (uint32_t)v0 * 83492791u) & 4095;
     ObjCol& c = g_objCol[h];
     const DWORD now = GetTickCount();
-    if (!(c.tick && c.vx == vx && c.vz == vz && c.v0 == v0 && now - c.tick < 3000)) {
+    if (!(c.tick && c.vx == vx && c.vz == vz && c.v0 == v0 && now - c.tick < 10000)) {
         void* world = g_objWorld;
         if (g_objProbeBudget <= 0 || !g_voxQuery || !world || readable_len(world, 16) < 16) return c.tick && c.vx == vx && c.vz == vz && c.v0 == v0 ?
             core::obj_column_top(c.bits, 48, v0, yRef, y) : false;
@@ -151,7 +151,7 @@ static void obj_plan_update(bool probe) {
 static void obj_plan_body(bool probe) {
     const int mode = obj_mode();
     if (mode == core::OBJ_SINGLE || !prop_now() || obj_remote()) { set_draw_path(nullptr, 0, nullptr, 0); return; }
-    g_objProbeBudget = probe ? 40 : 0;
+    g_objProbeBudget = probe ? 16 : 0;
     ObjOpts o = obj_opts();
     double pt[3][3]; int n, clicked;
     EnterCriticalSection(&g_stateLock);
@@ -165,6 +165,13 @@ static void obj_plan_body(bool probe) {
         n++;
     }
     static ObjPlan p;
+    // nothing moved and the ground is all read: the last plan stands (a long line costs frames)
+    if (p.tick && n == p.pts && clicked == p.clicked && !memcmp(pt, p.pt, sizeof pt) && same_opts(o, p.opts) && p.ground &&
+        now - p.tick < 1000) {
+        EnterCriticalSection(&g_stateLock); g_plan.tick = now; LeaveCriticalSection(&g_stateLock);
+        p.tick = now;
+        return;
+    }
     p.pts = n; p.clicked = clicked; memcpy(p.pt, pt, sizeof pt); p.opts = o;
     // Ground: only when the clicks sit on the ground (an object on a wall keeps the line's height)
     ObjOpts lo = o;
@@ -606,19 +613,19 @@ static void build_mode_hook(uint8_t* out, uint8_t* sys, void* item) {
     // Right after placing, the place animation still runs and the game drops the undo request, so
     // a press is kept for 1.5 s and sent again every 0.3 s until the game's undo has run.
     static bool was = false;
-    static DWORD pressTick = 0, sentTick = 0;
+    static DWORD pressTick = 0, sentTick = 0; static bool pending = false;
     const bool down = g_cfg.keyObjUndo > 0 && game_focused() && !g_objWin && key_down(g_cfg.keyObjUndo);
     const DWORD now = GetTickCount();
-    if (down && !was) { pressTick = now | 1; sentTick = 0; }
+    if (down && !was) { pressTick = now; sentTick = 0; pending = true; }
     was = down;
-    if (!pressTick) return;
+    if (!pending) return;
     if (now - pressTick > 1500 || (g_undoRanTick && (LONG)(g_undoRanTick - pressTick) >= 0)) {
         LOG(.str("object undo: ").str(g_undoRanTick && (LONG)(g_undoRanTick - pressTick) >= 0 ? "undone after " : "no undo after ")
             .u(now - pressTick).str(" ms"));
-        pressTick = 0; return;
+        pending = false; return;
     }
     if (sentTick && now - sentTick < 300) return;
-    sentTick = now | 1;
+    sentTick = now ? now : 1;
     uint64_t* in = readable(sys + 0x2f8, 8) ? *(uint64_t**)(sys + 0x2f8) : nullptr;
     if (!in || !readable(in, 16)) return;
     const uint64_t bit = 1ull << 40, in0 = in[0], in1 = in[1];
