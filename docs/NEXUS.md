@@ -98,7 +98,7 @@ right now: Replace style while Replace is on, area fill, corners and clear corne
 A full-screen menu that looks like the game's: Keys tab (click a key, press the new one,
 Shift/Ctrl/Alt combinations and mouse side buttons work), Quick keys section on the scrolling Keys tab (keys that set one
 option directly) and Options tab, where you switch whole tools on or off (Replace, Area mode,
-Area shapes, Free placement, Creative building, Magic chests of all bases): a tool that is off
+Area shapes, Free placement, Object lines, Creative building, Magic chests of all bases): a tool that is off
 gives its keys back to the game and leaves the hints and the wheel. While you build, the
 mod's keys sit in the game's building box with the game's key icons and on/off switches.
 

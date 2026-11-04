@@ -198,6 +198,7 @@ Menu (Home)
   creative building on / off). They have no key until you set one.
   Options tab: which tools you use. Building Tools (the whole mod), Replace,
   Area mode, Area shapes (roof, round and diagonal fills), Free placement,
+  Object lines,
   Creative building (single player; on a server its ini decides), Magic
   chests of all bases, and the language. A tool that is off does nothing:
   its keys are the game's again and it leaves the building box hints and the
