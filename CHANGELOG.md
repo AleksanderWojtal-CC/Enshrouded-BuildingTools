@@ -3,6 +3,24 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.30.0
+
+- **Object placement** (#18). With an object in hand (a chair, torch, plant...), the tools
+  wheel picks how the next clicks place it: Single (as the game), Line (2 clicks), Curve
+  (start, end, then a point it bends through), Circle (centre, then a point on it), Arch
+  (its two ends, a half circle standing up) or Standing circle (centre, then a point on
+  it). The line and a ring for each object are drawn over the world while you aim; the
+  last click places all of them and charges them at once.
+- **Object settings** (on the wheel): number of objects (2 to 200), random spacing, random
+  rotation and random height, the reference plane (the ground under each object, level
+  at the first click, or a slope from click to click; objects on walls keep the line's
+  height) and Turn with the line, so each object faces along the line or, on arches and
+  standing circles, round the centre. In Single mode the random rotation and height apply
+  to every object you place.
+- Works in any world you host (also alone); not yet when you join someone else's server
+  or on a dedicated server. The game has no undo for objects, so a placed line is taken
+  back by picking the objects up.
+
 ## 0.29.1
 
 - **Large areas build again.** A big area (about 850 shapes and more, like a large roof)

@@ -82,6 +82,13 @@ base. The material picker, the missing-materials ghost and the crafting menus co
 too. The loot deposit stays local. Chests of a base the game has not loaded (far away) may
 not count.
 
+[b]Object placement[/b] (an object in hand, on the tools wheel)
+Place chairs, torches, plants and any other object in a Line, Curve, Circle, Arch or
+Standing circle: the line and a ring for each object are drawn over the world, the last
+click places them all. Set the number of objects, random spacing, rotation and height, the
+reference plane (ground under each object, level or slope) and whether they turn with the
+line. In worlds you host.
+
 [b]Tools wheel[/b] (hold Caps Lock)
 A blurred wheel in the middle of the screen, drawn with the game's own wheel: point the
 mouse at an option and let go (or click to change several). It shows only what applies
