@@ -1,0 +1,467 @@
+// ---- Object placement (issue #18): objects along a line, a curve or a circle
+// Included from main.cpp (single translation unit), after the UI helpers.
+//
+// How the game places an object (a prop held in hand, client 1.0.1.1): the server system
+// player_building_place_prop (2da200) runs on the place animation's ChangeVoxel event, pays
+// the object (PayCost, call sites found by SIG_PROP_PAY_A / _B; the cost list is the held item)
+// and calls PlaceProp (48ddd0, call site SIG_PROP_PLACE_CALL) with an info block: +0x00
+// placedEntity template guid (item +0x3c0), +0x10 float3 position (metres), +0x1c rotation
+// quaternion, +0x2c / +0x38 local bounds, +0x44 an extra id. PlaceProp spawns the entity, records
+// its undo step and sends BuildingPlaceEvent.
+//
+// The mod (single player: the server runs in the game's process): in Line / Curve / Circle
+// mode the clicks before the last only mark a point (PayCost and PlaceProp are skipped); the
+// last click pays all objects at once and calls PlaceProp once per object with its own position
+// and rotation. The client side (the game's client_cursor system, game thread) knows the held
+// item (its cursor query builder 28c350 gets it, call SIG_CURSOR_QUERY), reads the ghost
+// (cursor transform), works out the spots with the ground under them (the voxel query of the
+// hover code) and draws the path (vkdraw.h). The server uses those spots when they were worked
+// out for the same points, else it works them out itself (slope height instead of ground).
+
+using core::ObjOpts; using core::ObjSpot;
+static const int kObjMax = core::kObjMax;
+
+// ---- client: what is in hand, the ghost
+typedef uint64_t (*CursorQueryFn)(uint8_t* q, uint8_t* sys, uint8_t* item, void* d, uint64_t e, uint64_t f);
+static CursorQueryFn g_cursorQueryOrig = nullptr;
+static uint8_t* volatile g_propItem = nullptr;    // the held object (ItemInfo), or null
+static volatile DWORD g_propTick = 0;
+static void* volatile g_objWorld = nullptr;        // client world (voxel query) seen by client_cursor
+struct ObjGhost { int64_t pos[3]; float rot[4]; uint8_t valid; DWORD tick; };
+static ObjGhost g_ghost;
+static bool prop_item(const uint8_t* it) {
+    if (!it || !readable(it + 0x3c0, 0x120)) return false;
+    if (item_kind(it) != ITEM_OTHER) return false;                             // blocks, pieces, terrain
+    if (!(*(const uint64_t*)(it + 0x3c0) | *(const uint64_t*)(it + 0x3c8))) return false;   // EquipmentSetup.placedEntity
+    if (it[0x427]) return false;                                               // requiresAltarSlot (flame altar)
+    return true;
+}
+static bool prop_now() { return g_propItem && (GetTickCount() - g_propTick < 300 || g_objWin); }   // the window stops the cursor
+static bool obj_remote() { return g_dedicated || remote_session(); }
+static bool obj_tool_on() { return g_cfg.toolObjects && !g_modOff; }
+static int obj_mode() { return obj_tool_on() ? g_cfg.objMode : core::OBJ_SINGLE; }
+static ObjOpts obj_opts() {
+    return ObjOpts{ g_cfg.objMode, g_cfg.objCount, g_cfg.objSpacing, g_cfg.objRot, g_cfg.objElev, g_cfg.objRef, g_cfg.objTurn,
+                    (uint32_t)g_cfg.objSeed };
+}
+
+// ---- clicked points (written by the server side, read by the client: one process)
+static double g_objPt[3][3];
+static float g_objPtRot[4];
+static volatile LONG g_objPtN = 0;
+static void obj_clear(const char* why) {
+    EnterCriticalSection(&g_stateLock);
+    LONG had = g_objPtN;
+    g_objPtN = 0;
+    LeaveCriticalSection(&g_stateLock);
+    if (had) LOG(.str("objects: points cleared (").str(why).c(')'));
+}
+static const Str kObjModeName[core::OBJ_MODE_COUNT] = { S_OBJ_SINGLE, S_OBJ_LINE, S_OBJ_CURVE, S_OBJ_CIRCLE };
+static void obj_set_mode(int m) {
+    g_cfg.objMode = ((m % core::OBJ_MODE_COUNT) + core::OBJ_MODE_COUNT) % core::OBJ_MODE_COUNT;
+    obj_clear("mode");
+    write_full_ini(g_cfg);
+    LOG(.str("objects: mode -> ").i(g_cfg.objMode));
+}
+
+// ---- ground under a spot: the hover code's voxel query, one column of 48 voxels (24 m),
+// cached; a few new columns a frame (game thread only)
+struct ObjCol { int32_t vx, vz, v0; uint32_t tick; uint64_t bits; };
+static ObjCol g_objCol[4096];
+static int g_objProbeBudget = 0;
+static LONG g_objProbes = 0;
+static bool obj_ground(void*, double x, double z, double yRef, double* y) {
+    int32_t vx = (int32_t)core::d_floor(x * 2), vz = (int32_t)core::d_floor(z * 2);
+    int32_t v0 = (int32_t)core::d_floor((yRef - 12) * 2);
+    v0 = (int32_t)core::floor_div(v0, 8) * 8;                   // a few heights share a column
+    if (vx < 0 || vz < 0 || v0 < 0) return false;
+    uint32_t h = ((uint32_t)vx * 73856093u ^ (uint32_t)vz * 19349663u ^ (uint32_t)v0 * 83492791u) & 4095;
+    ObjCol& c = g_objCol[h];
+    const DWORD now = GetTickCount();
+    if (!(c.tick && c.vx == vx && c.vz == vz && c.v0 == v0 && now - c.tick < 3000)) {
+        void* world = g_objWorld;
+        if (g_objProbeBudget <= 0 || !g_voxQuery || !world || readable_len(world, 16) < 16) return c.tick && c.vx == vx && c.vz == vz && c.v0 == v0 ?
+            core::obj_column_top(c.bits, 48, v0, yRef, y) : false;
+        void* w0 = ((void**)world)[0]; void* w1 = ((void**)world)[1];
+        if (!w0 || !w1) return false;
+        g_objProbeBudget--;
+        if (!g_voxOnes[0]) memset(g_voxOnes, 1, sizeof(g_voxOnes));
+        static int32_t hits[48][3];
+        VoxQuery q = {};
+        q.data = g_voxOnes; q.count = 48; q.bits = 0;
+        q.size[0] = q.rsize[0] = 1; q.size[1] = q.rsize[1] = 48; q.size[2] = q.rsize[2] = 1;
+        q.pos[0] = vx; q.pos[1] = v0; q.pos[2] = vz;
+        for (int a = 0; a < 3; a++) { q.axis[a] = (uint32_t)a; q.pos3[a] = 1; }
+        VoxList list = { hits, 0, 48, nullptr, 0 };
+        g_voxQuery(&list, w0, w1, &q);
+        uint64_t bits = 0, nh = list.count < 48 ? list.count : 48;
+        for (uint64_t k = 0; k < nh; k++) {
+            int d = hits[k][1] - v0;
+            if (hits[k][0] == vx && hits[k][2] == vz && d >= 0 && d < 48) bits |= 1ull << d;
+        }
+        c.vx = vx; c.vz = vz; c.v0 = v0; c.bits = bits; c.tick = now ? now : 1;
+        g_objProbes++;
+    }
+    return core::obj_column_top(c.bits, 48, v0, yRef, y);
+}
+
+// ---- the plan: the spots for the points clicked so far and the ghost as the next point
+struct ObjPlan {
+    int pts;                     // points used (clicked + the ghost)
+    int clicked;                 // of them clicked
+    double pt[3][3];
+    ObjOpts opts;
+    int n; ObjSpot spot[kObjMax];
+    bool ground;                 // every spot found its ground
+    DWORD tick;
+};
+static ObjPlan g_plan;           // under g_stateLock
+static bool same_opts(const ObjOpts& a, const ObjOpts& b) {
+    return a.mode == b.mode && a.count == b.count && a.spacing == b.spacing && a.rot == b.rot && a.elev == b.elev &&
+           a.ref == b.ref && a.turn == b.turn && a.seed == b.seed;
+}
+struct GroundCtx { bool all; };
+static bool obj_ground_note(void* ctx, double x, double z, double yRef, double* y) {
+    bool ok = obj_ground(nullptr, x, z, yRef, y);
+    if (!ok) ((GroundCtx*)ctx)->all = false;
+    return ok;
+}
+// Works out the spots and the drawn path. probe = new ground columns may be read (game thread).
+static void obj_plan_body(bool probe);
+static void obj_plan_update(bool probe) {
+    static volatile LONG busy = 0;                  // game thread and the settings window (UI thread)
+    if (InterlockedExchange(&busy, 1)) return;
+    obj_plan_body(probe);
+    busy = 0;
+}
+static void obj_plan_body(bool probe) {
+    const int mode = obj_mode();
+    if (mode == core::OBJ_SINGLE || !prop_now() || obj_remote()) { set_draw_path(nullptr, 0, nullptr, 0); return; }
+    g_objProbeBudget = probe ? 40 : 0;
+    ObjOpts o = obj_opts();
+    double pt[3][3]; int n, clicked;
+    EnterCriticalSection(&g_stateLock);
+    clicked = n = g_objPtN;
+    memcpy(pt, g_objPt, sizeof pt);
+    LeaveCriticalSection(&g_stateLock);
+    const int need = core::obj_points(mode);
+    const DWORD now = GetTickCount();
+    if (n < need && g_ghost.valid && (now - g_ghost.tick < 500 || g_objWin)) {
+        for (int a = 0; a < 3; a++) pt[n][a] = (double)g_ghost.pos[a] / core::kFix;
+        n++;
+    }
+    static ObjPlan p;
+    p.pts = n; p.clicked = clicked; memcpy(p.pt, pt, sizeof pt); p.opts = o;
+    GroundCtx gc = { true };
+    p.n = n >= 2 ? core::obj_layout(o, pt, n, obj_ground_note, &gc, p.spot, kObjMax) : 0;
+    p.ground = gc.all;
+    p.tick = now;
+    EnterCriticalSection(&g_stateLock);
+    g_plan = p;
+    LeaveCriticalSection(&g_stateLock);
+    // drawn: the path (a little above the ground) and a marker per object
+    static double path[kPathMax][3];
+    static int64_t pf[kPathMax][3], mf[kObjMax][3];
+    int np = n >= 2 ? core::obj_path(o, pt, n, obj_ground, nullptr, path, kPathMax) : 0;
+    for (int i = 0; i < np; i++) { pf[i][0] = (int64_t)(path[i][0] * core::kFix); pf[i][1] = (int64_t)((path[i][1] + 0.06) * core::kFix); pf[i][2] = (int64_t)(path[i][2] * core::kFix); }
+    for (int i = 0; i < p.n; i++) { mf[i][0] = (int64_t)(p.spot[i].p[0] * core::kFix); mf[i][1] = (int64_t)((p.spot[i].p[1] + 0.12) * core::kFix); mf[i][2] = (int64_t)(p.spot[i].p[2] * core::kFix); }
+    set_draw_path(pf, np, mf, p.n);
+    static DWORD logAt = 0;
+    if (g_cfg.log && now - logAt > 5000 && n >= 2) {
+        logAt = now;
+        LOG(.str("objects: plan mode ").i(mode).str(" points ").i(clicked).c('+').i(n - clicked).str(", ").i(p.n).str(" spots, path ").i(np)
+            .str(", ground ").str(o.ref == core::OBJ_REF_GROUND ? (p.ground ? "all found" : "partly") : "not used")
+            .str(", columns read ").i(g_objProbes).str(", world ").str(g_objWorld ? "yes" : "no"));
+    }
+}
+
+static uint64_t cursor_query_hook(uint8_t* q, uint8_t* sys, uint8_t* item, void* d, uint64_t e, uint64_t f) {
+    uint64_t r = g_cursorQueryOrig(q, sys, item, d, e, f);
+    if (sys && readable(sys - 0x220, 8)) g_objWorld = *(void**)(sys - 0x220);     // client_cursor's deps (rbp+0xa0) + 0x130
+    uint8_t* it = prop_item(item) ? item : nullptr;
+    if (it != g_propItem && g_propItem && it && g_objPtN) {
+        obj_clear("other object in hand");
+        flash(T(S_OBJ_CLEARED));
+    }
+    if (it) {
+        static uint8_t* logged = nullptr;
+        if (logged != it) {
+            logged = it;
+            LOG(.str("objects: object in hand, item ").x(*(uint32_t*)it).str(" template ").x(*(uint64_t*)(it + 0x3c0))
+                .str(" flags ").x(*(uint32_t*)(it + 0x5d8)).str(" query mode ").u(q ? q[3] : 255));
+        }
+        g_propItem = it; g_propTick = GetTickCount();
+    } else if (item != nullptr || GetTickCount() - g_propTick > 300) g_propItem = nullptr;
+    obj_plan_update(true);
+    return r;
+}
+// from cursor_xf_hook: the ghost of the held object (client_cursor's own call)
+static void obj_ghost(const uint8_t* out, const uint8_t* q) {
+    if (!prop_now()) return;
+    memcpy(g_ghost.pos, out, 24); memcpy(g_ghost.rot, out + 0x18, 16);
+    g_ghost.valid = out[0x28]; g_ghost.tick = GetTickCount();
+    static LONG logged = 0;
+    if (!logged && q) { logged = 1; LOG(.str("objects: ghost query mode ").u(q[3]).str(" valid ").u(out[0x28])); }
+}
+
+// ---- server: the clicks (single player)
+typedef uint8_t (*PlacePropFn)(void* ctx, uint8_t* info, uint32_t item);
+static PlacePropFn g_placePropOrig = nullptr;
+static volatile LONG g_objStage = 0;            // 0 = vanilla, -1 = this click marks a point, N = place N
+static volatile DWORD g_objStageTid = 0;
+static uint8_t prop_pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
+    g_objStage = 0;
+    const int m = obj_mode();
+    if (m == core::OBJ_SINGLE || g_dedicated) return g_payOrig(mode, list, consume);   // consume 0: the game charges nothing (counts x n are harmless)
+    if (remote_session()) return g_payOrig(mode, list, consume);
+    const int need = core::obj_points(m);
+    if (g_objPtN + 1 < need) {                    // a point of the line: nothing paid, nothing placed
+        g_objStage = -1; g_objStageTid = GetCurrentThreadId();
+        return 1;
+    }
+    const int n = core::obj_clamp_count(m, g_cfg.objCount);
+    // the same list with every count times n (the held object, usually one entry)
+    static CostEntry e[16];
+    CostList many = {};
+    if (list && list->data && list->count <= 16) {
+        memcpy(e, list->data, (size_t)list->count * sizeof(CostEntry));
+        for (uint64_t k = 0; k < list->count; k++) *(uint32_t*)(e[k].b + 0x14) *= (uint32_t)n;
+        many = { e, list->count, list->count, nullptr };
+    }
+    uint8_t r = g_payOrig(mode, many.data ? &many : list, consume);
+    LOG(.str("objects: paying ").i(n).str(" objects (").u(list ? list->count : 0).str(" cost entries) -> ").i(r));
+    if (!r) {
+        Buf b; b.fmt(T(S_OBJ_NOT_ENOUGH), num(n).s); flash(b.z()); beep(MB_ICONHAND);
+        return 0;
+    }
+    g_objStage = many.data ? n : 1; g_objStageTid = GetCurrentThreadId();
+    return 1;
+}
+static uint8_t prop_place_hook(void* ctx, uint8_t* info, uint32_t item) {
+    LONG stage = g_objStageTid == GetCurrentThreadId() ? InterlockedExchange(&g_objStage, 0) : 0;
+    const int m = obj_mode();
+    if (!stage || !info || m == core::OBJ_SINGLE) return g_placePropOrig(ctx, info, item);
+    const float* fp = (const float*)(info + 0x10);
+    const double click[3] = { fp[0], fp[1], fp[2] };
+    const int need = core::obj_points(m);
+    if (stage < 0) {
+        EnterCriticalSection(&g_stateLock);
+        int k = g_objPtN < 3 ? g_objPtN : 2;
+        for (int a = 0; a < 3; a++) g_objPt[k][a] = click[a];
+        memcpy(g_objPtRot, info + 0x1c, 16);
+        g_objPtN = k + 1;
+        LeaveCriticalSection(&g_stateLock);
+        Buf b; b.fmt(T(S_OBJ_POINT), T(kObjModeName[m]), num(k + 1).s, num(need).s); flash(b.z());
+        beep(MB_OK);
+        LOG(.str("objects: point ").i(k + 1).str(" of ").i(need).str(" at (").f(click[0]).c(',').f(click[1]).c(',').f(click[2]).c(')'));
+        return 1;
+    }
+    // the last click: the client's spots when they were worked out for these points, else here
+    static ObjSpot spot[kObjMax];
+    double pt[3][3]; int clicked;
+    EnterCriticalSection(&g_stateLock);
+    clicked = g_objPtN;
+    memcpy(pt, g_objPt, sizeof pt);
+    const ObjPlan& p = g_plan;
+    ObjOpts o = obj_opts();
+    int n = 0; bool fromClient = false;
+    double dx = p.pt[need - 1][0] - click[0], dy = p.pt[need - 1][1] - click[1], dz = p.pt[need - 1][2] - click[2];
+    if (p.pts == need && p.clicked == clicked && clicked == need - 1 && !memcmp(p.pt, pt, sizeof(double) * 3 * clicked) &&
+        same_opts(p.opts, o) && GetTickCount() - p.tick < 2000 && dx * dx + dy * dy + dz * dz < 0.75 * 0.75 &&
+        (p.ground || o.ref != core::OBJ_REF_GROUND)) {
+        n = p.n; memcpy(spot, p.spot, sizeof(ObjSpot) * n); fromClient = true;
+    }
+    g_objPtN = 0;
+    LeaveCriticalSection(&g_stateLock);
+    if (clicked != need - 1) { LOG(.str("objects: ").i(clicked).str(" points clicked, ").i(need - 1).str(" needed; placed one")); return g_placePropOrig(ctx, info, item); }
+    if (!fromClient) {
+        for (int a = 0; a < 3; a++) pt[need - 1][a] = click[a];
+        if (o.ref == core::OBJ_REF_GROUND) o.ref = core::OBJ_REF_SLOPE;
+        n = core::obj_layout(o, pt, need, nullptr, nullptr, spot, kObjMax);
+    }
+    const int paid = (int)stage;
+    if (n > paid) n = paid;
+    float base[4]; memcpy(base, info + 0x1c, 16);
+    alignas(16) uint8_t one[0x50];
+    int placed = 0;
+    for (int i = 0; i < n; i++) {
+        memcpy(one, info, sizeof one);
+        float* pos = (float*)(one + 0x10);
+        pos[0] = (float)spot[i].p[0]; pos[1] = (float)spot[i].p[1]; pos[2] = (float)spot[i].p[2];
+        core::obj_turn(base, spot[i].yaw, (float*)(one + 0x1c));
+        if (g_placePropOrig(ctx, one, item)) placed++;
+    }
+    LOG(.str("objects: placed ").i(placed).str(" of ").i(n).str(fromClient ? " (spots from the preview)" : " (spots worked out on the click)"));
+    Buf b; b.fmt(T(S_OBJ_PLACED), num(placed).s); flash(b.z());
+    beep(MB_ICONASTERISK);
+    return placed > 0;
+}
+
+// ---- settings window (screen 52 while g_objWin)
+// g_objWinShown: main.cpp (before the play-state UI)
+// One number row: the game's option row over values around the current one, then -10 / +10.
+static bool ui_int(const char* label, int cur, int lo, int hi, int step, int* out) {
+    static char txt[21][16];
+    const char* names[21]; int vals[21];
+    int n = 0, idx = 0;
+    for (int k = -10; k <= 10; k++) {
+        int v = cur + k * step;
+        if (v < lo || v > hi) continue;
+        if (k == 0) idx = n;
+        vals[n] = v;
+        Buf b; b.i(v); copy_text(txt[n], b.z(), sizeof txt[n]); names[n] = txt[n];
+        n++;
+    }
+    alignas(16) uint8_t row[0x40] = {}, opt[0x40] = {};
+    ui.beginBox(row, 0);
+    UiVec2 gap{ 12, 0 };
+    ui.setSpacingX(ui_node(row), &gap, 0);
+    uint16_t midLeft = 0x201;
+    ui.setLayout(ui_node(row), &midLeft);
+    ui.beginBox(opt, 0);
+    ui.setWidth(ui_node(opt), 540);
+    LONG v; bool changed = false; int nv = cur;
+    if (ui_option(label, names, n, idx, &v)) { nv = vals[v]; changed = true; }
+    ui.endBox(opt);
+    auto clampv = [&](int x) { return x < lo ? lo : x > hi ? hi : x; };
+    if (ui_button("-10")) { nv = clampv(cur - 10); changed = true; }
+    if (ui_button("+10")) { nv = clampv(cur + 10); changed = true; }
+    ui.endBox(row);
+    if (changed) *out = nv;
+    return changed;
+}
+static void draw_obj_window() {
+    g_objWinShown = 1;
+    alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, btns[0x40] = {}, list[0x40] = {};
+    UiStringView name{ "buildingToolsObjects", 20 };
+    g_beginWindow(win, &name, 1, 9, -1, 1);
+    ui.beginRoot(root, ui.windowContext(win));
+    ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
+    UiVec2 rgap{ 0, 0 };
+    ui.setSpacing(ui_node(root), &rgap, 0);
+    ui.beginBox(panel, 0);
+    void* n = ui_node(panel);
+    {
+        const float* r = (const float*)((uint8_t*)n + 0x114);
+        if (r[2] > 0 && r[3] > 0) ui.fillRect(r, 0x3f800000c0000000ull);
+        const float* rr = (const float*)((uint8_t*)ui_node(root) + 0x114);
+        float x = rr[2] > 0 && r[2] > 0 ? (r[0] + r[2] - rr[0]) / rr[2] : 0.f;
+        g_exactPanelX = x > 0.f && x < 1.f ? x : 0.f;
+    }
+    const float pad[4] = { 120, 50, 60, 40 };
+    ui.setPadding(n, pad);
+    UiVec2 gap{ 0, 18 };
+    ui.setSpacing(n, &gap, 0);
+    uint16_t topLeft = 0x101;
+    ui.setSelfAlign(n, &topLeft);
+    ui.setLayout(n, &topLeft);
+    ui.setWidth(n, 1180);
+    ui.setStretch(n, UiVec2{ 0, 1 });
+    ui_text(T(S_OBJ_TITLE), STYLE_TITLE);
+    ui_text(T(S_OBJ_HELP), STYLE_BODY);
+    alignas(16) static uint8_t st[0x500];
+    static float offset[4];
+    bool scroll = ui_scroll_begin(st, sizeof st, offset, 1000);
+    ui.beginBox(list, 0);
+    UiVec2 lgap{ 0, 18 };
+    ui.setSpacing(ui_node(list), &lgap, 0);
+    ui.setLayout(ui_node(list), &topLeft);
+    ui.setStretch(ui_node(list), UiVec2{ 1, 0 });
+    {
+        const char* modes[core::OBJ_MODE_COUNT];
+        for (int k = 0; k < core::OBJ_MODE_COUNT; k++) modes[k] = T(kObjModeName[k]);
+        LONG v;
+        if (ui_option(T(S_OBJ_MODE_LABEL), modes, core::OBJ_MODE_COUNT, g_cfg.objMode, &v) && v != g_cfg.objMode) obj_set_mode(v);
+        int iv;
+        const int m = g_cfg.objMode == core::OBJ_SINGLE ? core::OBJ_LINE : g_cfg.objMode;
+        if (ui_int(T(S_OBJ_COUNT), core::obj_clamp_count(m, g_cfg.objCount), core::obj_min_count(m), kObjMax, 1, &iv)) g_cfg.objCount = iv;
+        if (ui_int(T(S_OBJ_SPACING), g_cfg.objSpacing, 0, 100, 5, &iv)) g_cfg.objSpacing = iv;
+        if (ui_int(T(S_OBJ_ROT), g_cfg.objRot, 0, 180, 5, &iv)) g_cfg.objRot = iv;
+        if (ui_int(T(S_OBJ_ELEV), g_cfg.objElev, 0, 300, 5, &iv)) g_cfg.objElev = iv;
+        const char* refs[core::OBJ_REF_COUNT] = { T(S_OBJ_REF_GROUND), T(S_OBJ_REF_LEVEL), T(S_OBJ_REF_SLOPE) };
+        if (ui_option(T(S_OBJ_REF), refs, core::OBJ_REF_COUNT, g_cfg.objRef, &v)) g_cfg.objRef = v;
+        const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
+        if (ui_option(T(S_OBJ_TURN), offOn, 2, g_cfg.objTurn ? 1 : 0, &v)) g_cfg.objTurn = v;
+    }
+    ui.endBox(list);
+    if (scroll) ui.endScroll(st);
+    ui.beginBox(btns, 0);
+    UiVec2 bgap{ 24, 0 };
+    ui.setSpacingX(ui_node(btns), &bgap, 0);
+    if (ui_button(T(S_OBJ_REROLL))) { g_cfg.objSeed = (int)((GetTickCount() * 2654435761u) >> 1) | 1; LOG(.str("objects: new random values")); }
+    if (ui_button(T(S_OBJ_CLOSE))) g_menuReq = 2;
+    ui.endBox(btns);
+    ui.endBox(panel);
+    ui.endBox(root);
+    ui.endWindow(win);
+    if (GetTickCount() - g_propTick > 200) obj_plan_update(false);   // the cursor is paused: the settings still move the preview
+}
+// the window closed: settings kept
+static void obj_window_closed() {
+    if (!g_objWinShown) return;
+    g_objWin = 0; g_objWinShown = 0;
+    write_full_ini(g_cfg);
+    LOG(.str("objects: settings window closed"));
+}
+
+// ---- tool actions
+static void obj_act(int a) {
+    if (!obj_tool_on()) return;
+    if (a == ACT_OBJ_MODE) {
+        if (obj_remote()) { flash(T(S_OBJ_REMOTE)); beep(MB_ICONHAND); return; }
+        obj_set_mode(g_cfg.objMode + 1);
+        Buf b; b.fmt(T(S_OBJ_MODE), T(kObjModeName[g_cfg.objMode])); flash(b.z());
+    } else if (a == ACT_OBJ_MENU) {
+        if (g_menuOpen) return;
+        lang_update();
+        g_objWin = 1; g_objWinShown = 0; g_menuReq = 1;
+        LOG(.str("objects: settings window"));
+        return;
+    } else if (a == ACT_OBJ_CLEAR) {
+        obj_clear("key");
+        flash(T(S_OBJ_CLEARED));
+    }
+    beep(MB_ICONQUESTION);
+}
+static bool obj_hud_info(Buf& b) {
+    const int m = obj_mode();
+    if (m == core::OBJ_SINGLE || !prop_now()) return false;
+    if (obj_remote()) { b.str(T(S_OBJ_REMOTE)); return true; }
+    const int need = core::obj_points(m);
+    LONG k = g_objPtN;
+    b.fmt(T(S_FLOAT_OBJ), T(kObjModeName[m]), num(k + 1 > need ? need : k + 1).s, num(need).s, num(core::obj_clamp_count(m, g_cfg.objCount)).s);
+    return true;
+}
+
+// ---- install (client and single player server)
+static void install_objects() {
+    if (g_dedicated) { LOG(.str("object placement: not on a dedicated server yet")); return; }
+    auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
+    uint8_t* pc = find_unique("PropPlaceCall", SIG_PROP_PLACE_CALL);
+    uint8_t* pa = find_unique("PropPayA", SIG_PROP_PAY_A);
+    uint8_t* pb = find_unique("PropPayB", SIG_PROP_PAY_B);
+    uint8_t* cq = find_unique("CursorQueryCall", SIG_CURSOR_QUERY);
+    uint8_t* placeSite = pc ? pc + 0x11 : nullptr;
+    uint8_t* paySites[2] = { pa ? pa + 0xf : nullptr, pb ? pb + 0x11 : nullptr };
+    uint8_t* cqSite = cq ? cq + 0x1a : nullptr;
+    uint8_t* pay = (uint8_t*)g_payOrig;
+    uint8_t* placeFn = rel(placeSite);
+    uint8_t* queryFn = rel(cqSite);
+    // client_cursor's cursor transform call after the query (the ghost)
+    uint8_t* cxSite = cqSite ? cqSite + 0x5c : nullptr;
+    bool ok = placeFn && pay && rel(paySites[0]) == pay && rel(paySites[1]) == pay && queryFn && rel(cqSite - 0x1f) == queryFn &&
+              placeFn - placeSite < 0x1000000 && !memcmp(placeFn, "\x48\x89\x74\x24\x18\x48\x89\x7C\x24\x20\x55\x41\x55\x41\x57", 15);
+    if (!ok) {
+        LOG(.str("object placement: not available (place ").i(placeFn != nullptr).str(" pay ").i(rel(paySites[0]) == pay && pay)
+            .i(rel(paySites[1]) == pay && pay).str(" query ").i(queryFn != nullptr).c(')'));
+        return;
+    }
+    if (rel(cxSite) && rel(cxSite) == (uint8_t*)g_cxFn) g_cxClientRet = cxSite + 5;
+    g_placePropOrig = (PlacePropFn)placeFn;
+    g_cursorQueryOrig = (CursorQueryFn)queryFn;
+    int a = hook_calls(placeFn, (void*)&prop_place_hook, &placeSite, 1);
+    int b = hook_calls(pay, (void*)&prop_pay_hook, paySites, 2);
+    int c = hook_calls(queryFn, (void*)&cursor_query_hook, &cqSite, 1);
+    LOG(.str("object placement: ").str(a == 1 && b == 2 && c == 1 ? "available" : "partly hooked").str(" (place ").i(a).str(", pay ").i(b)
+        .str(", held item ").i(c).str(", ghost ").str(g_cxClientRet ? "yes" : "no").str("); mode ").i(g_cfg.objMode));
+}

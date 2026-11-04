@@ -242,7 +242,39 @@
     X(S_EXACT_BUILD, "exact.build", "Build") \
     X(S_EXACT_REMOVE, "exact.remove", "Remove") \
     X(S_EXACT_REPLACE, "exact.replace", "Replace") \
-    X(S_EXACT_CANCEL, "exact.cancel", "Cancel")
+    X(S_EXACT_CANCEL, "exact.cancel", "Cancel") \
+    /* object placement */ \
+    X(S_OBJ_SINGLE, "obj.single", "Single") \
+    X(S_OBJ_LINE, "obj.line", "Line") \
+    X(S_OBJ_CURVE, "obj.curve", "Curve") \
+    X(S_OBJ_CIRCLE, "obj.circle", "Circle") \
+    X(S_OBJ_MODE, "obj.mode", "Objects: {0}") \
+    X(S_OBJ_POINT, "obj.point", "{0}: point {1} of {2} set") \
+    X(S_OBJ_PLACED, "obj.placed", "Objects placed: {0}") \
+    X(S_OBJ_NOT_ENOUGH, "obj.not_enough", "Not enough for {0} objects") \
+    X(S_OBJ_CLEARED, "obj.cleared", "Object line points cleared") \
+    X(S_OBJ_REMOTE, "obj.remote", "Object lines work in single player only (for now)") \
+    X(S_FLOAT_OBJ, "obj.float", "{0}: click {1} of {2}, {3} objects") \
+    X(S_OBJ_TITLE, "obj.title", "Object placement") \
+    X(S_OBJ_HELP, "obj.help", "With an object in hand: Line = 2 clicks, Curve = start, end, then a point it bends through, Circle = centre, then a point on it. The last click places all objects.") \
+    X(S_OBJ_MODE_LABEL, "obj.mode_label", "Mode") \
+    X(S_OBJ_COUNT, "obj.count", "Number of objects") \
+    X(S_OBJ_SPACING, "obj.spacing", "Random spacing (%)") \
+    X(S_OBJ_ROT, "obj.rotation", "Random rotation (degrees)") \
+    X(S_OBJ_ELEV, "obj.elevation", "Random elevation (cm)") \
+    X(S_OBJ_REF, "obj.reference", "Reference plane") \
+    X(S_OBJ_REF_GROUND, "obj.ref_ground", "Ground under each object") \
+    X(S_OBJ_REF_LEVEL, "obj.ref_level", "Level (first click height)") \
+    X(S_OBJ_REF_SLOPE, "obj.ref_slope", "Slope (straight from click to click)") \
+    X(S_OBJ_TURN, "obj.turn", "Turn with the line") \
+    X(S_OBJ_REROLL, "obj.reroll", "New random values") \
+    X(S_OBJ_CLOSE, "obj.close", "Close") \
+    X(S_WHEEL_OBJ_MODE, "obj.wheel_mode", "Objects") \
+    X(S_WHEEL_OBJ_MENU, "obj.wheel_menu", "Object settings") \
+    X(S_WHEEL_OBJ_CLEAR, "obj.wheel_clear", "Clear points") \
+    X(S_ACT_OBJ_MODE, "obj.key_mode", "Object placement: next mode (single, line, curve, circle)") \
+    X(S_ACT_OBJ_MENU, "obj.key_menu", "Object placement: settings window") \
+    X(S_OPT_TOOL_OBJECTS, "obj.tool", "Object placement (line, curve, circle)")
 
 enum Str {
 #define BT_STR_ID(id, key, en) id,

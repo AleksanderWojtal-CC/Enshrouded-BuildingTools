@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.29.1"
+#define MOD_VERSION "0.30.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -139,6 +139,9 @@ struct Config {
     int keyReplaceHold = 0;    // Replace on while this key is held
     int keyPrefab = 0, keyAreaOn = 0, keyReplaceOn = 0, keyReplaceOff = 0;   // set a mode / Replace directly
     int toolReplace = 1, toolArea = 1, toolShapes = 1, toolFree = 1;   // tools on (Options page); off = no keys, hints or wheel entries
+    int toolObjects = 1;                         // object placement along a line / curve / circle (objects.h)
+    int keyObjMode = 0, keyObjMenu = 0;          // object placement: next mode, settings window
+    int objMode = 0, objCount = 10, objSpacing = 0, objRot = 0, objElev = 0, objRef = 0, objTurn = 1, objSeed = 1;
     char language[16] = "auto";  // text language: auto (as the game), or a file code (pl, de, ...)
 };
 static Config g_cfg;
@@ -195,13 +198,15 @@ static void write_full_ini(const Config& c) {
      .t("PrefabMode=").i(c.keyPrefab).t("\r\nAreaMode=").i(c.keyAreaOn).t("\r\n")
      .t("ReplaceOn=").i(c.keyReplaceOn).t("\r\nReplaceOff=").i(c.keyReplaceOff).t("\r\n")
      .t("; Replace is on while this key is held, back as it was when you let go\r\nHoldReplace=").i(c.keyReplaceHold).t("\r\n")
+     .t("; Object placement (an object in hand): next mode (single / line / curve / circle), settings window\r\nObjectMode=").i(c.keyObjMode)
+     .t("\r\nObjectSettings=").i(c.keyObjMenu).t("\r\n")
      .t("\r\n[Tools]\r\n")
      .t("; Tools in use (1) or not (0). A tool that is off does nothing: its keys are free for the\r\n")
      .t(";     game and it leaves the building box hints and the tools wheel. AreaShapes = the roof,\r\n")
      .t(";     round and diagonal fills of Area mode. (Creative building and the\r\n")
      .t(";     magic chests of all bases have their own sections below.)\r\n")
      .t("Replace=").i(c.toolReplace).t("\r\nAreaMode=").i(c.toolArea).t("\r\nAreaShapes=").i(c.toolShapes)
-     .t("\r\nFreePlacement=").i(c.toolFree).t("\r\n")
+     .t("\r\nFreePlacement=").i(c.toolFree).t("\r\nObjects=").i(c.toolObjects).t("\r\n")
      .t("\r\n[Creative]\r\n")
      .t("; 1 = creative building: blocks cost nothing, removing or undoing gives nothing back,\r\n")
      .t(";     so your inventory is never touched (props, crafting and chests stay normal)\r\n")
@@ -227,6 +232,16 @@ static void write_full_ini(const Config& c) {
      .t("; Field of view the box is drawn with, degrees; frame timing in hundredths of a frame\r\n")
      .t(";     (lower = earlier). Change only if the box drifts from the blocks when the camera moves.\r\n")
      .t("DrawBoxFov=").i(c.drawBoxFov).t("\r\nDrawBoxDelay100=").i(c.drawBoxDelay).t("\r\n")
+     .t("\r\n[Objects]\r\n")
+     .t("; Placing objects (an object in hand, single player): 0 = single (as the game), 1 = line (2 clicks),\r\n")
+     .t(";     2 = curve (start, end, then a point it bends through), 3 = circle (centre, then a point on it)\r\nMode=").i(c.objMode).t("\r\n")
+     .t("; Objects placed evenly along the line (2..200, circle 3..200)\r\nCount=").i(c.objCount).t("\r\n")
+     .t("; Random spacing (percent of the gap), random turn (degrees), random height (cm)\r\nSpacing=").i(c.objSpacing)
+     .t("\r\nRotation=").i(c.objRot).t("\r\nElevation=").i(c.objElev).t("\r\n")
+     .t("; Height the objects stand on: 0 = the ground under each one, 1 = level (height of the first click),\r\n")
+     .t(";     2 = slope (straight from click to click)\r\nReference=").i(c.objRef).t("\r\n")
+     .t("; 1 = objects turn with the line (circle: around the centre), 0 = all as the ghost\r\nTurnWithLine=").i(c.objTurn).t("\r\n")
+     .t("; Random values (the settings window rolls new ones)\r\nSeed=").i(c.objSeed).t("\r\n")
      .t("\r\n[Limits]\r\n")
      .t("; Most shapes one area action may build, replace or remove (max 20000)\r\nMaxShapes=").i(c.maxShapes).t("\r\n")
      .t("; Most shapes one connected replace (fill bucket) repaints (max = MaxShapes)\r\nFillLimit=").i(c.fillLimit).t("\r\n")
@@ -305,6 +320,19 @@ static void load_config() {
     g_cfg.toolArea     = ini_int(L"Tools", L"AreaMode", 1) != 0;
     g_cfg.toolShapes   = ini_int(L"Tools", L"AreaShapes", 1) != 0;
     g_cfg.toolFree     = ini_int(L"Tools", L"FreePlacement", 1) != 0;
+    g_cfg.toolObjects  = ini_int(L"Tools", L"Objects", 1) != 0;
+    g_cfg.keyObjMode   = ini_int(L"Keys", L"ObjectMode", 0);
+    g_cfg.keyObjMenu   = ini_int(L"Keys", L"ObjectSettings", 0);
+    {   auto clampv = [](int v, int lo, int hi, int def) { return v < lo || v > hi ? def : v; };
+        g_cfg.objMode    = clampv(ini_int(L"Objects", L"Mode", 0), 0, core::OBJ_MODE_COUNT - 1, 0);
+        g_cfg.objCount   = clampv(ini_int(L"Objects", L"Count", 10), 2, core::kObjMax, 10);
+        g_cfg.objSpacing = clampv(ini_int(L"Objects", L"Spacing", 0), 0, 100, 0);
+        g_cfg.objRot     = clampv(ini_int(L"Objects", L"Rotation", 0), 0, 180, 0);
+        g_cfg.objElev    = clampv(ini_int(L"Objects", L"Elevation", 0), 0, 300, 0);
+        g_cfg.objRef     = clampv(ini_int(L"Objects", L"Reference", 0), 0, core::OBJ_REF_COUNT - 1, 0);
+        g_cfg.objTurn    = ini_int(L"Objects", L"TurnWithLine", 1) != 0;
+        g_cfg.objSeed    = ini_int(L"Objects", L"Seed", 1);
+    }
     bool noLanguage;
     {
         wchar_t p[MAX_PATH], w[16];
@@ -327,7 +355,7 @@ static void load_config() {
         ini_int(L"Chests", L"GlobalMagicChests", -1) == -1 || ini_int(L"Keys", L"Menu", -1) == -1 || noLanguage ||
         ini_int(L"Keys", L"RadialMenu", -1) == -1 || ini_int(L"Keys", L"HoldReplace", -1) == -1 ||
         ini_int(L"Area", L"DrawBoxBlocks", -1) == -1 || ini_int(L"Area", L"ExactWidth", -9999) == -9999 ||
-        ini_int(L"Tools", L"AreaShapes", -1) == -1)
+        ini_int(L"Tools", L"AreaShapes", -1) == -1 || ini_int(L"Objects", L"Count", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -675,6 +703,12 @@ static const char* SIG_UI_SOUND = "48 8B 0D ?? ?? ?? ?? 44 89 B3 F4 1B 03 00 40 
 // position, quaternion). Used for the drawn box while the cursor system pauses (exact window).
 static const char* SIG_RENDER_FRAME = "4C 89 44 24 18 48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 A8 9D FF FF B8 58 63 00 00 E8 ?? ?? ?? ?? 48 2B E0 48 8B 5A 08 48 8B F1 4C 8B B5 C8 62 00 00 48 8B CA 0F 29 B4 24";
 static const char* SIG_CURSOR_XF = "48 8B C4 55 53 56 57 41 56 48 8D 6C 24 90 48 81 EC 70 01 00 00 0F 29 70 C8";
+// object placement (objects.h): place_prop's PlaceProp call (E8 at +0x11) and its two PayCost calls
+// (E8 at +0xf / +0x11); client_cursor's second cursor query call (E8 at +0x1a; its cursor transform call follows at +0x5c)
+static const char* SIG_PROP_PLACE_CALL = "44 8B 07 48 8D 95 20 01 00 00 48 8D 8D 70 01 00 00 E8 ?? ?? ?? ?? 0F B6 D8";
+static const char* SIG_PROP_PAY_A = "49 8D 90 10 01 00 00 45 0F B6 80 F8 01 00 00 E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ??";
+static const char* SIG_PROP_PAY_B = "41 B0 01 48 8D 95 C0 04 00 00 48 8D 8D D0 03 00 00 E8 ?? ?? ?? ?? 84 C0";
+static const char* SIG_CURSOR_QUERY = "4D 8B CD 40 88 7C 24 28 4D 8B C6 88 5C 24 20 48 8D 95 F0 03 00 00 48 8D 4D 20 E8 ?? ?? ?? ??";
 // System dependency copy, and the dismantle system's call of it (writer at +0x180)
 static const char* SIG_SYS_DEPS = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 60 4C 8B 09 48 8B D9";
 // Dismantle system: 9b83c0 call right before the aimed-entity check (piece or blocks); the
@@ -1010,8 +1044,21 @@ asm(".text\n"
     "    pop %r9\n    pop %r8\n    pop %rdx\n    pop %rcx\n"
     "    jmp *g_renderFrameOrig(%rip)\n");
 static bool exact_hold();
+static uint8_t* g_cxFn = nullptr;                 // the cursor transform function (hooked)
+static uint8_t* g_cxClientRet = nullptr;          // return address of client_cursor's call of it (objects.h)
+static bool prop_now();
+static void obj_ghost(const uint8_t* out, const uint8_t* q);
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
     uint8_t* r = g_cxOrig(out, sys, q, ray);
+    if (out && q && g_cxClientRet && (uint8_t*)__builtin_return_address(0) == g_cxClientRet) obj_ghost(out, q);
+    if (out && sys && q && q[3] != 4 && prop_now() && g_cxClientRet && (uint8_t*)__builtin_return_address(0) == g_cxClientRet) {
+        // an object in hand: the camera for the drawn path (the building cursor is not running)
+        const DWORD now = GetTickCount();
+        cam_ring_push(sys, (const int64_t*)(sys + 0x640), (const float*)(sys + 0x658), now);
+        g_cursorCamTick = now;
+        { float dd = *(const float*)(sys + 0x678); g_camDist = dd >= 0.f && dd < 50.f ? dd : 0.f; }
+        return r;
+    }
     if (!out || !sys || !q || q[3] != 4) return r;
     g_buildTick = GetTickCount();
     {
@@ -4045,8 +4092,10 @@ enum {
     ACT_STYLE_FULL, ACT_STYLE_OVERLAP, ACT_STYLE_CONNECTED, ACT_FILL_SOLID, ACT_FILL_HOLLOW, ACT_FILL_WALLS,
     ACT_CREATIVE, ACT_PREFAB, ACT_AREA_ON, ACT_REPLACE_ON, ACT_REPLACE_OFF, ACT_FILL_ROOF, ACT_ROOF_TURN, ACT_ROOF_SHAPE,
     ACT_THICK, ACT_OVERHANG, ACT_FILL_ROUND, ACT_ROUND_HOLLOW, ACT_ROUND_LYING, ACT_FILL_DIAG, ACT_EXACT,
+    ACT_OBJ_MODE, ACT_OBJ_MENU,
     ACT_KEYED,          // the actions above have their own key
     ACT_MENU = ACT_KEYED,             // the wheel's menu entry (the menu key is handled with the menu)
+    ACT_OBJ_CLEAR,                    // the wheel's "clear points" of object placement
 };
 static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg.keyCancel, &g_cfg.keyStyle, &g_cfg.keyHover,
@@ -4056,6 +4105,7 @@ static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
     &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape, &g_cfg.keyThick, &g_cfg.keyOverhang,
     &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying, &g_cfg.keyFillDiag, &g_cfg.keyExact,
+    &g_cfg.keyObjMode, &g_cfg.keyObjMenu,
 };
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
 static volatile LONG g_offReq = 0;                  // the Options page switched the whole mod off
@@ -4095,6 +4145,7 @@ static bool act_allowed(int a) {
     case ACT_OVERHANG: case ACT_ROUND_HOLLOW: case ACT_ROUND_LYING: return g_cfg.toolArea && g_cfg.toolShapes;
     case ACT_AREA: case ACT_CLEAR: case ACT_FILL: case ACT_FILL_SOLID: case ACT_FILL_HOLLOW: case ACT_FILL_WALLS:
     case ACT_PREFAB: case ACT_AREA_ON: case ACT_THICK: case ACT_EXACT: return g_cfg.toolArea != 0;
+    case ACT_OBJ_MODE: case ACT_OBJ_MENU: case ACT_OBJ_CLEAR: return g_cfg.toolObjects != 0;
     default: return true;
     }
 }
@@ -4105,8 +4156,13 @@ static void tools_apply() {
     if (g_fill >= fill_n()) set_fill(core::FILL_SOLID);
     if (!g_cfg.toolFree && g_hover) set_hover(0);
 }
+static void obj_act(int a);
+static bool prop_now();
+static void obj_clear(const char* why);
 static void do_act(int a) {
     if (!act_allowed(a)) return;
+    if (a == ACT_OBJ_MODE || a == ACT_OBJ_MENU || a == ACT_OBJ_CLEAR) { obj_act(a); return; }
+    if (a == ACT_CLEAR && prop_now()) { obj_act(ACT_OBJ_CLEAR); return; }
     switch (a) {
     case ACT_AREA: {
         LONG m = g_mode == MODE_PREFAB ? MODE_AREA : MODE_PREFAB;
@@ -4242,6 +4298,8 @@ static bool wheel_screen(LONG s) { return s == SCREEN_INGAME || (s >= 29 && s <=
 static volatile LONG g_hudScreen = 0;               // the HUD screen (UI thread -> input thread)
 static volatile DWORD g_escCloseTick = 0;           // Esc closed the menu / exact window (input thread)
 static volatile DWORD g_hudScreenTick = 0;
+static volatile LONG g_objWinShown = 0;           // the object settings window was drawn (objects.h)
+static void obj_window_closed();
 static void play_ui_hook(void* a, void* b, void* c, void* d) {
     uint8_t* scr = hud_screen_byte();
     if (scr) { g_hudScreen = *scr; g_hudScreenTick = GetTickCount(); }
@@ -4298,7 +4356,7 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
             }
         }
         if (req == 1 && openable) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_MOD); LOG(.str("menu: open")); }
-        else if (req == 1) LOG(.str("menu: not opened, screen ").i(*scr).str(" is up"));
+        else if (req == 1) { g_objWin = 0; LOG(.str("menu: not opened, screen ").i(*scr).str(" is up")); }
         else if (req == 2 && *scr == SCREEN_MOD) { g_toggleScreen(*g_uiCtxGlobal, SCREEN_INGAME); LOG(.str("menu: close")); }
         if (*scr != last) {
             LOG(.str("hud screen ").i(last).str(" -> ").i(*scr));
@@ -4310,6 +4368,7 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
         }
         g_menuOpen = *scr == SCREEN_MOD;
         if (!g_menuOpen) g_bindWaiting = -1;
+        if (!g_menuOpen && g_objWinShown) obj_window_closed();
     }
     g_playUiOrig(a, b, c, d);
     draw_float_info();
@@ -4493,6 +4552,7 @@ static void draw_tool_rows() {
     tool_toggle(S_OPT_TOOL_AREA, &g_cfg.toolArea);
     if (g_cfg.toolArea) tool_toggle(S_OPT_TOOL_SHAPES, &g_cfg.toolShapes);
     tool_toggle(S_OPT_FREE, &g_cfg.toolFree);
+    tool_toggle(S_OPT_TOOL_OBJECTS, &g_cfg.toolObjects);
     if (ui_option(T(S_OPT_CREATIVE), offOn, 2, g_cfg.creative ? 1 : 0, &v) && set_creative(v != 0))
         flash(T(g_cfg.creative ? S_CREATIVE_ON : S_CREATIVE_OFF));
     if (ui_option(T(S_OPT_GLOBAL_CHESTS), offOn, 2, g_cfg.globalChests ? 1 : 0, &v) && (v != 0) != (g_cfg.globalChests != 0)) {
@@ -4532,6 +4592,8 @@ static KeyAction g_keyActions[] = {
     { S_ACT_ROUND_HOLLOW, &g_cfg.keyRoundHollow, 0 },
     { S_ACT_ROUND_LYING, &g_cfg.keyRoundLying, 0 },
     { S_ACT_EXACT, &g_cfg.keyExact, 0 },
+    { S_ACT_OBJ_MODE, &g_cfg.keyObjMode, 0 },
+    { S_ACT_OBJ_MENU, &g_cfg.keyObjMenu, 0 },
     { S_ACT_CLEAR, &g_cfg.keyCancel, 0 },
     { S_ACT_FREE, &g_cfg.keyHover, 0 },
     { S_ACT_FARTHER, &g_cfg.keyFarther, 0 },
@@ -4958,10 +5020,12 @@ static void draw_exact_window() {
     ui.endWindow(win);
 }
 
+#include "objects.h"
+
 static void mod_screen_hook(void*, void*, void*, void*) {
     static LONG logged = 0;
     if (!InterlockedExchange(&logged, 1)) LOG(.str("menu: screen drawn"));
-    if (g_exactOpen) draw_exact_window(); else draw_mod_menu();
+    if (g_exactOpen) draw_exact_window(); else if (g_objWin) draw_obj_window(); else draw_mod_menu();
 }
 
 // ---- mod rows in the game's building HUD box (bottom right, under "Undo Build Action")
@@ -5130,6 +5194,7 @@ static bool hud_info(char* out, int cap) {
             if (!ok || n > g_cfg.maxShapes) b.str(": ").str(T(S_FLOAT_TOO_BIG));
             else b.str(": ").fmt(T(S_FLOAT_SIZE), num(pl.count[0]).s, num(pl.count[2]).s, num(pl.count[1]).s, num(n).s);
         }
+    } else if (!g_modOff && obj_hud_info(b)) {
     } else return false;
     copy_text(out, b.z(), cap);
     return true;
@@ -5391,6 +5456,15 @@ static int wheel_entries(int* act) {
     int n = 0;
     int all[kWheelSlots + 8];
     int& m = n; int* out = act; act = all;
+    if (prop_now() && g_cfg.toolObjects) {   // an object in hand (not a building item): object placement
+        act[n++] = ACT_OBJ_MODE;
+        act[n++] = ACT_OBJ_MENU;
+        if (g_objPtN) act[n++] = ACT_OBJ_CLEAR;
+        act[n++] = ACT_MENU;
+        int k = 0;
+        for (int i = 0; i < m; i++) if (act_allowed(all[i]) && k < kWheelSlots) out[k++] = all[i];
+        return k;
+    }
     act[n++] = ACT_AREA;
     if (g_mode == MODE_AREA) act[n++] = ACT_FILL;
     if (roof_on()) act[n++] = ACT_ROOF_SHAPE;
@@ -5433,6 +5507,9 @@ static void wheel_texts(int a, char* name, char* value) {
     case ACT_EXACT: nm = T(S_OPT_CORNERS); v = T(g_cfg.exact ? S_OPT_CORNERS_EXACT : g_cfg.corners == 3 ? S_OPT_CORNERS_3 : S_OPT_CORNERS_2); break;
     case ACT_FREE: nm = T(S_OPT_FREE); v = T(g_hover ? S_OPT_ON : S_OPT_OFF); break;
     case ACT_MENU: nm = T(S_HUD_MENU); break;
+    case ACT_OBJ_MODE: nm = T(S_WHEEL_OBJ_MODE); v = T(kObjModeName[g_cfg.objMode % core::OBJ_MODE_COUNT]); break;
+    case ACT_OBJ_MENU: nm = T(S_WHEEL_OBJ_MENU); break;
+    case ACT_OBJ_CLEAR: nm = T(S_WHEEL_OBJ_CLEAR); break;
     case ACT_CREATIVE: nm = T(S_OPT_CREATIVE); v = T(g_cfg.creative ? S_OPT_ON : S_OPT_OFF); break;
     case ACT_STYLE: nm = T(S_OPT_STYLE); v = T(styles[g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0]); break;
     case ACT_REPLACE: nm = T(S_OPT_REPLACE); v = T(g_replace ? S_OPT_ON : S_OPT_OFF); break;
@@ -5468,7 +5545,7 @@ static void radial_keys(bool focus) {
     if (!g_radialOpen) {
         bool inGame = wheel_screen(g_hudScreen) && GetTickCount() - g_hudScreenTick < 500;
         // only while building: the hammer or a building material in hand (the game draws its building box then)
-        bool building = building_now();
+        bool building = building_now() || (prop_now() && g_cfg.toolObjects && !g_modOff);   // or an object (object placement)
         if (down && !wasDown && inGame && building && !g_menuOpen) {
             g_radialX = g_radialY = 0.f; g_radialSel = -1; g_radialClicks = 0; g_radialCancel = 0;
             g_radialPicked = false;
@@ -5960,6 +6037,8 @@ static DWORD WINAPI init_thread(void*) {
         .str(g_zoneVisOrig ? "available" : "not available"));
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
+    if (g_cxOrig) g_cxFn = cxf;
+    install_objects();
     if (!g_cxOrig) LOG(.str("free placement not available"));
     if (!g_dedicated) if (uint8_t* rf = find_hookable("RenderFrame", SIG_RENDER_FRAME, 5)) g_renderFrameOrig = hook(rf, 5, (void*)render_frame_thunk);
     if (!g_renderFrameOrig) LOG(.str("render camera: not available (the box may sit off behind the exact window)"));

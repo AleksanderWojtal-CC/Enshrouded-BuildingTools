@@ -17,7 +17,8 @@ SECTIONS = {'num': 'Numbers', 'msg': 'Messages (shown for a few seconds)',
             'hud': "Rows in the game's building box, bottom right (narrow: keep them short)",
             'float': 'Floating text under the crosshair', 'key': 'Key names',
             'menu': 'Building Tools menu', 'option': 'Options tab',
-            'wheel': 'Tools wheel (hold its key)', 'exact': 'Exact mode window'}
+            'wheel': 'Tools wheel (hold its key)', 'exact': 'Exact mode window',
+            'obj': 'Object placement (an object in hand)'}
 
 
 NOTES = {
