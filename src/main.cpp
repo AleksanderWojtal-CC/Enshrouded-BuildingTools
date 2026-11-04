@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.0-dev3"
+#define MOD_VERSION "0.31.0-dev4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1743,8 +1743,10 @@ static bool shrink_to_affordable(uint8_t* trans, CostList* list);
 // Every PayCost call goes through here (redirected call sites). When it charges a list
 // the mod removed blocks for (Replace), the removed materials are refunded through the
 // same function.
+static volatile DWORD g_undoRanTick = 0;          // the game's undo gave a step back (its refund call)
 static uint8_t pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
     uint8_t* ret = (uint8_t*)__builtin_return_address(0);
+    if (ret && ret == g_creativeSites[3]) g_undoRanTick = GetTickCount() | 1;
     ChestScope scope(global_chests_on() && creative_site(ret));
     return pay_body(mode, list, consume, ret);
 }

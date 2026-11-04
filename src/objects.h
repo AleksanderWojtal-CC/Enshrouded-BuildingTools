@@ -603,18 +603,30 @@ static void build_mode_hook(uint8_t* out, uint8_t* sys, void* item) {
     // The game's undo key is an input action (BuildingUndo, bit 40 of the action set at sys+0x2f8: +8
     // down, +0 already taken) that only the hammer's controls produce. On the mod's key (default Y,
     // [Keys] ObjectUndo) that bit is set for this one call, so the game's own undo code runs.
+    // Right after placing, the place animation still runs and the game drops the undo request, so
+    // a press is kept for 1.5 s and sent again every 0.3 s until the game's undo has run.
     static bool was = false;
+    static DWORD pressTick = 0, sentTick = 0;
     const bool down = g_cfg.keyObjUndo > 0 && game_focused() && !g_objWin && key_down(g_cfg.keyObjUndo);
-    const bool press = down && !was;
+    const DWORD now = GetTickCount();
+    if (down && !was) { pressTick = now | 1; sentTick = 0; }
     was = down;
-    if (!press) return;
+    if (!pressTick) return;
+    if (now - pressTick > 1500 || (g_undoRanTick && (LONG)(g_undoRanTick - pressTick) >= 0)) {
+        LOG(.str("object undo: ").str(g_undoRanTick && (LONG)(g_undoRanTick - pressTick) >= 0 ? "undone after " : "no undo after ")
+            .u(now - pressTick).str(" ms"));
+        pressTick = 0; return;
+    }
+    if (sentTick && now - sentTick < 300) return;
+    sentTick = now | 1;
     uint64_t* in = readable(sys + 0x2f8, 8) ? *(uint64_t**)(sys + 0x2f8) : nullptr;
     if (!in || !readable(in, 16)) return;
     const uint64_t bit = 1ull << 40, in0 = in[0], in1 = in[1];
     in[1] |= bit; in[0] &= ~bit;
     uint8_t r = g_undoKey(sys);
     in[0] = in0; in[1] = in1;
-    LOG(.str("object undo: undo key with an object in hand, server flags ").x(flags).str(r ? " -> undo sent" : " -> not sent"));
+    LOG(.str("object undo: undo key with an object in hand, server flags ").x(flags).str(", sent ").u(now - pressTick).str(" ms after the press"));
+    (void)r;
 }
 static void install_undo_key() {
     auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
