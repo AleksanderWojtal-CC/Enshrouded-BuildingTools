@@ -713,11 +713,15 @@ inline void exact_facing(const float fwd[3], const float right[3], int* fAxis, i
 // the build agree. Reference plane: the height the objects stand at before the elevation:
 // ground (the surface under each one, found by the caller), level (the first click's
 // height) or slope (straight between the clicked points; a circle stays level).
-enum { OBJ_SINGLE = 0, OBJ_LINE, OBJ_CURVE, OBJ_CIRCLE, OBJ_MODE_COUNT };
+// Arch: a half circle standing between the two clicks; vertical circle: centre, then a point on it
+// (the circle stands in the upright plane through both)
+enum { OBJ_SINGLE = 0, OBJ_LINE, OBJ_CURVE, OBJ_CIRCLE, OBJ_ARCH, OBJ_VCIRCLE, OBJ_MODE_COUNT };
+inline bool obj_closed(int mode) { return mode == OBJ_CIRCLE || mode == OBJ_VCIRCLE; }
+inline bool obj_upright(int mode) { return mode == OBJ_ARCH || mode == OBJ_VCIRCLE; }   // no ground, no turning
 enum { OBJ_REF_GROUND = 0, OBJ_REF_LEVEL, OBJ_REF_SLOPE, OBJ_REF_COUNT };
 static const int kObjMax = 200;
 inline int obj_points(int mode) { return mode == OBJ_CURVE ? 3 : mode == OBJ_SINGLE ? 1 : 2; }
-inline int obj_min_count(int mode) { return mode == OBJ_CIRCLE ? 3 : 2; }
+inline int obj_min_count(int mode) { return obj_closed(mode) ? 3 : 2; }
 inline int obj_clamp_count(int mode, int n) { int lo = obj_min_count(mode); return n < lo ? lo : n > kObjMax ? kObjMax : n; }
 
 static const double kPi = 3.14159265358979323846;
@@ -778,6 +782,31 @@ inline void obj_eval(int mode, const double (*pt)[3], int n, double u, double* o
         tan[0] = -s; tan[1] = 0; tan[2] = c;
         return;
     }
+    if (mode == OBJ_VCIRCLE || mode == OBJ_ARCH) {
+        double d[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] };
+        double len = d_sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        double hx = d[0], hz = d[2], hl = d_sqrt(hx * hx + hz * hz);
+        if (hl < 1e-6) { hx = 1; hz = 0; hl = 1; }
+        hx /= hl; hz /= hl;
+        if (mode == OBJ_VCIRCLE) {
+            double th = d_atan2(d[1], d[0] * hx + d[2] * hz) + 2 * kPi * u, c = d_cos(th), s = d_sin(th);
+            out[0] = a[0] + len * c * hx; out[1] = a[1] + len * s; out[2] = a[2] + len * c * hz;
+            tan[0] = -s * hx; tan[1] = c; tan[2] = -s * hz;
+            return;
+        }
+        // arch: from a over the top to b; w = up made square to a -> b
+        double e[3] = { hx, 0, hz };
+        if (len > 1e-6) for (int k = 0; k < 3; k++) e[k] = d[k] / len;
+        double w[3] = { -e[1] * e[0], 1 - e[1] * e[1], -e[1] * e[2] };
+        double wl = d_sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]);
+        if (wl < 1e-6) { w[0] = hx; w[1] = 0; w[2] = hz; wl = 1; }
+        double r = len * 0.5, th = kPi * u, c = d_cos(th), s = d_sin(th);
+        for (int k = 0; k < 3; k++) {
+            out[k] = 0.5 * (a[k] + b[k]) - r * c * e[k] + r * s * w[k] / wl;
+            tan[k] = s * e[k] + c * w[k] / wl;
+        }
+        return;
+    }
     if (mode == OBJ_CURVE && n >= 3) {
         double q[3];
         for (int k = 0; k < 3; k++) q[k] = 2 * pt[2][k] - 0.5 * (a[k] + b[k]);
@@ -812,6 +841,7 @@ inline double obj_arc_u(int mode, const double (*pt)[3], int n, double share) {
     return ((double)(i - 1) + f) / K;
 }
 inline double obj_height(const ObjOpts& o, const double (*pt)[3], double pathY) {
+    if (obj_upright(o.mode)) return pathY;
     return o.ref == OBJ_REF_SLOPE && o.mode != OBJ_CIRCLE ? pathY : pt[0][1];
 }
 // The objects' spots. n = clicked points (obj_points(mode) for the build). Returns the count.
@@ -819,7 +849,7 @@ inline int obj_layout(const ObjOpts& o, const double (*pt)[3], int n, ObjGroundF
     if (n < 1 || o.mode == OBJ_SINGLE) return 0;
     int N = obj_clamp_count(o.mode, o.count);
     if (N > cap) N = cap;
-    const bool circle = o.mode == OBJ_CIRCLE;
+    const bool circle = obj_closed(o.mode), upright = obj_upright(o.mode);
     double p0[3], t0[3];
     obj_eval(o.mode, pt, n, 0, p0, t0);
     const double yaw0 = d_atan2(t0[0], t0[2]);
@@ -832,10 +862,10 @@ inline int obj_layout(const ObjOpts& o, const double (*pt)[3], int n, ObjGroundF
         double p[3], t[3];
         obj_eval(o.mode, pt, n, u, p, t);
         double y = obj_height(o, pt, p[1]), g;
-        if (o.ref == OBJ_REF_GROUND && ground && ground(gctx, p[0], p[2], p[1], &g)) y = g;
+        if (!upright && o.ref == OBJ_REF_GROUND && ground && ground(gctx, p[0], p[2], p[1], &g)) y = g;
         ObjSpot& s = out[i];
         s.p[0] = p[0]; s.p[1] = y + obj_rand(o.seed, i, 2) * o.elev / 100.0; s.p[2] = p[2];
-        double yaw = o.turn && (t[0] != 0 || t[2] != 0) ? d_atan2(t[0], t[2]) - yaw0 : 0;
+        double yaw = o.turn && !upright && (t[0] != 0 || t[2] != 0) ? d_atan2(t[0], t[2]) - yaw0 : 0;
         s.yaw = yaw + obj_rand(o.seed, i, 1) * o.rot * kPi / 180.0;
     }
     return N;
@@ -853,13 +883,14 @@ inline int obj_path(const ObjOpts& o, const double (*pt)[3], int n, ObjGroundFn 
         for (int k = 0; k < 3; k++) prev[k] = p[k];
     }
     int m = (int)(len / 0.5) + 1;
-    if (o.ref != OBJ_REF_GROUND) m = o.mode == OBJ_LINE || (o.mode == OBJ_CURVE && n < 3) ? 1 : (m < 48 ? 48 : m);
+    const bool onGround = o.ref == OBJ_REF_GROUND && !obj_upright(o.mode);
+    if (!onGround) m = o.mode == OBJ_LINE || (o.mode == OBJ_CURVE && n < 3) ? 1 : (m < 48 ? 48 : m);
     if (m > cap - 1) m = cap - 1;
     if (m < 1) m = 1;
     for (int i = 0; i <= m; i++) {
         obj_eval(o.mode, pt, n, (double)i / m, p, t);
         double y = obj_height(o, pt, p[1]), g;
-        if (o.ref == OBJ_REF_GROUND && ground && ground(gctx, p[0], p[2], p[1], &g)) y = g;
+        if (onGround && ground && ground(gctx, p[0], p[2], p[1], &g)) y = g;
         out[i][0] = p[0]; out[i][1] = y; out[i][2] = p[2];
     }
     return m + 1;
