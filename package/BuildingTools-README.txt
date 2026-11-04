@@ -232,6 +232,9 @@ Changing keys and settings
   Ctrl, 16384 for Alt (Shift+K = 4096 + 75 = 4171). Example: to use F4 for Area mode,
   set ToggleAreaMode=115. The comments in the file explain each option.
   Delete the ini to get all defaults back.
+  Low FPS? Profile=1 under [Debug] writes the frame rate and the time each
+  part of the mod takes to BuildingTools.log every 10 seconds; attach the log
+  to a report.
 
 Language
   The mod's texts follow the game's language (Settings > Gameplay > Language, or

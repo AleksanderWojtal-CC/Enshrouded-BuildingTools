@@ -406,6 +406,17 @@ the game's UI sound function (a429f0) from a hook on the HUD building update (b2
 because that function is not thread safe. (The separate info panel window of the early
 versions was removed in 0.29.0; the game UI shows everything.)
 
+## Frame time
+
+Before reading game memory the mod checks it is committed and readable (`readable()`,
+VirtualQuery). In the game's process each VirtualQuery can take up to a millisecond (it
+works out the size of the whole region, and the heaps are large), which cost 2 ms a frame
+with an item in hand and 3-4 ms more with the magic chests of all bases before 0.31.1.
+Pages found readable are now cached for 3 seconds (1024 slots, page number and tick in one
+word), so almost every check is a cache hit. `[Debug] Profile=1` times every per-frame
+hook with QueryPerformanceCounter, and the game's own function called from it separately
+("game:" entries), and logs the time per frame every 10 seconds from the Vulkan present hook.
+
 ## Files written
 
 `BuildingTools.ini` holds settings, written with comments on first start. `BuildingTools.log`
