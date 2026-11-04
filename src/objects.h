@@ -594,7 +594,9 @@ static void install_objects() {
     int a = hook_calls(placeFn, (void*)&prop_place_hook, &placeSite, 1);
     int b = hook_calls(pay, (void*)&prop_pay_hook, paySites, 2);
     int c = hook_calls(queryFn, (void*)&cursor_query_hook, &cqSite, 1);
-    bool undo = install_prop_undo();
+    // 0.30.0-dev5/6 test: the step gets no records (PlaceProp skips them for these objects) and the
+    // game's undo never takes it, while its refund would still be there: off until undo is understood
+    bool undo = false; (void)&install_prop_undo;
     install_undo_log();
     LOG(.str("object placement: ").str(a == 1 && b == 2 && c == 1 ? "available" : "partly hooked").str(undo ? ", lines undoable" : ", no undo for lines").str(" (place ").i(a).str(", pay ").i(b)
         .str(", held item ").i(c).str(", ghost ").str(g_cxClientRet ? "yes" : "no").str("); mode ").i(g_cfg.objMode));
