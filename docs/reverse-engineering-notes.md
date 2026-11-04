@@ -850,3 +850,31 @@ the hotfix client shows every feature available.
   not found. Charging the same total as one entry per distinct item (first 0x14 bytes
   equal) succeeds. The mod passes a merged copy to PayCost and leaves the game's list as
   it was, so undo and the commit still see one entry per shape.
+
+## Object placement (0.30.0, client 1.0.1.1)
+
+- System `player_building_place_prop` (2da200) runs on the place animation's ChangeVoxel
+  event (type hash 0x92273809, +0x60 changeType: 1 add, 4 undo). Held item = e94390(id) in rdi.
+- Place info at rbp+0x120 (filled before paying): +0 placedEntity template guid (item +0x3c0),
+  +0x10 float3 position in metres, +0x1c rotation quaternion, +0x2c / +0x38 local bounds
+  (494130), +0x44 an id (41aa60).
+- PayCost (495e40) at 2dab64 with the undo step's list ([rbp+0x260]+0x110, consume = step
+  +0x1f8) when an undo step exists, else at 2dabc1 with a stack list (rbp+0x4c0, consume 1);
+  rcx = rbp+0x3d0 at both. Then **PlaceProp 48ddd0(ctx = rbp+0x170, info, item id)** at 2dac34
+  (returns al = placed): spawn 48d330, an undo record per object (498830, only when ctx+0xf0
+  holds a step: an undo step takes 32 records, a full one is fatal), BuildingPlaceEvent
+  4973a0; then the result event 492ff0.
+- Undo step for props: set up (storage 4996b0 -> [rbp+0x258], step 498960 -> [rbp+0x260])
+  only when item +0x5d8 & 0x88, +0x440 (building voxel) or +0xcc == 6 (test at 2da4ed). Most
+  objects have none: the game cannot undo them. Forcing the step (tested in 0.30.0-dev5/6)
+  left it without records (the record add in 48ddd0 is skipped) and the undo key never
+  reached player_building_undo (2dad50; it takes the latest step with 4997a0 and undoes prop
+  records through 491320 -> 490950), so object lines have no undo.
+- Client: client_cursor (294540) builds its cursor query with 28c350(q, sys, item, ...) (second
+  call at 2954ea, SIG_CURSOR_QUERY), which gives the held item; q[3] is 4 for props too. Its
+  cursor transform call (2904e0) at 295546 gives the ghost. World for the voxel query =
+  *(sys - 0x220).
+- The mod: clicks before the last return success from both hooks without paying or placing;
+  the last click pays the cost list with every count times N and calls PlaceProp N times.
+  Clicks more than 1.5 m from this game's ghost are other players' (a hosted game runs their
+  placements too) and stay vanilla.

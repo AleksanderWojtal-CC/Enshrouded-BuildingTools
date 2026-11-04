@@ -66,7 +66,6 @@ static void obj_clear(const char* why) {
     LeaveCriticalSection(&g_stateLock);
     if (had) LOG(.str("objects: points cleared (").str(why).c(')'));
 }
-static void obj_undo_flag();
 static const Str kObjModeName[core::OBJ_MODE_COUNT] = { S_OBJ_SINGLE, S_OBJ_LINE, S_OBJ_CURVE, S_OBJ_CIRCLE, S_OBJ_ARCH, S_OBJ_VCIRCLE };
 static void obj_set_mode(int m) {
     g_cfg.objMode = ((m % core::OBJ_MODE_COUNT) + core::OBJ_MODE_COUNT) % core::OBJ_MODE_COUNT;
@@ -148,7 +147,6 @@ static void obj_plan_update(bool probe) {
     busy = 0;
 }
 static void obj_plan_body(bool probe) {
-    obj_undo_flag();
     const int mode = obj_mode();
     if (mode == core::OBJ_SINGLE || !prop_now() || obj_remote()) { set_draw_path(nullptr, 0, nullptr, 0); return; }
     g_objProbeBudget = probe ? 40 : 0;
@@ -231,7 +229,6 @@ static void obj_ghost(const uint8_t* out, const uint8_t* q) {
 typedef uint8_t (*PlacePropFn)(void* ctx, uint8_t* info, uint32_t item);
 static PlacePropFn g_placePropOrig = nullptr;
 static CostList* volatile g_objStepList = nullptr;
-static uint8_t* volatile g_objLastStep = nullptr;     // the last line's undo step (log)
 static volatile LONG g_objStage = 0;            // 0 = vanilla, -1 = this click marks a point, N = place N
 static volatile DWORD g_objStageTid = 0;
 static uint8_t prop_pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
@@ -297,8 +294,7 @@ static uint8_t prop_place_hook(void* ctx, uint8_t* info, uint32_t item) {
         memcpy(g_objPtRot, info + 0x1c, 16);
         g_objPtN = k + 1;
         LeaveCriticalSection(&g_stateLock);
-        obj_undo_flag();
-        Buf b; b.fmt(T(S_OBJ_POINT), T(kObjModeName[m]), num(k + 1).s, num(need).s); flash(b.z());
+            Buf b; b.fmt(T(S_OBJ_POINT), T(kObjModeName[m]), num(k + 1).s, num(need).s); flash(b.z());
         beep(MB_OK);
         LOG(.str("objects: point ").i(k + 1).str(" of ").i(need).str(" at (").f(click[0]).c(',').f(click[1]).c(',').f(click[2]).c(')'));
         return 1;
@@ -320,7 +316,6 @@ static uint8_t prop_place_hook(void* ctx, uint8_t* info, uint32_t item) {
     }
     g_objPtN = 0;
     LeaveCriticalSection(&g_stateLock);
-    obj_undo_flag();
     if (clicked != need - 1) { LOG(.str("objects: ").i(clicked).str(" points clicked, ").i(need - 1).str(" needed; placed one")); return g_placePropOrig(ctx, info, item); }
     if (!fromClient) {
         for (int a = 0; a < 3; a++) pt[need - 1][a] = click[a];
@@ -345,10 +340,6 @@ static uint8_t prop_place_hook(void* ctx, uint8_t* info, uint32_t item) {
         undo_after(us);
     }
     undo_end(us);
-    g_objLastStep = us.step0;
-    if (us.step0) LOG(.str("objects: undo step ").x((uint64_t)us.step0).str(" storage ").x((uint64_t)us.storage)
-        .str(" records ").u(*(uint64_t*)(us.step0 + 0x100) - *(uint64_t*)(us.step0 + 0x108)).str(" flag 1f8 ").u(us.step0[0x1f8])
-        .str(" head ").u(us.storage ? *(uint64_t*)(us.storage + 0xa00) : 0).str(" tail ").u(us.storage ? *(uint64_t*)(us.storage + 0xa08) : 0));
     CostList* sl = g_objStepList; g_objStepList = nullptr;
     const int undoN = us.step0 ? (us.recorded < placed ? us.recorded : placed) : 0;
     if (sl && sl->data && sl->count <= 16 && undoN > 1)
@@ -498,73 +489,6 @@ static bool obj_hud_info(Buf& b) {
     return true;
 }
 
-// ---- undo for lines: place_prop begins an undo step only for objects with item flag 0x88 (most have
-// none, so the game cannot undo them). A small patch at that test (SIG_PROP_UNDO_TEST) also begins it
-// while the next click is the last one of a line; the hammer's undo then takes the line back.
-static volatile uint8_t* g_objUndoFlag = nullptr;
-static void obj_undo_flag() {
-    if (!g_objUndoFlag) return;
-    const int m = obj_mode();
-    *g_objUndoFlag = m != core::OBJ_SINGLE && !obj_remote() && g_objPtN + 1 >= core::obj_points(m) ? 1 : 0;
-}
-// The game's undo (player_building_undo, on the undo key's ChangeVoxel event): which step it takes and
-// whether its refund goes through (logged, to see why a line's step is not undone)
-typedef uint8_t* (*LatestStepFn)(uint8_t* storage);
-static LatestStepFn g_latestStepOrig = nullptr;
-static uint8_t* undo_latest_hook(uint8_t* storage) {
-    uint8_t* st = g_latestStepOrig(storage);
-    if (st && readable(st + 0x100, 0x100)) {
-        const CostList* l = (const CostList*)(st + 0x110);
-        LOG(.str("undo: step ").x((uint64_t)st).str(st == g_objLastStep ? " (the last object line)" : "")
-            .str(", records ").u(*(uint64_t*)(st + 0x100) - *(uint64_t*)(st + 0x108)).str(", cost entries ").u(l->count)
-            .str(", flag 1f8 ").u(st[0x1f8]));
-    } else LOG(.str("undo: no step"));
-    return st;
-}
-static PayFn g_undoPayNext = nullptr;
-static uint8_t undo_pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
-    uint8_t r = g_undoPayNext(mode, list, consume);
-    LOG(.str("undo: refund of ").u(list ? list->count : 0).str(" entries, consume ").u(consume).str(" -> ").u(r));
-    return r;
-}
-static void install_undo_log() {
-    auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
-    uint8_t* a = find_unique("UndoLatestCall", SIG_UNDO_LATEST);
-    uint8_t* b = find_unique("UndoPayCall", SIG_UNDO_PAY);
-    uint8_t* sa = a ? a + 3 : nullptr; uint8_t* sb = b ? b + 0x12 : nullptr;
-    if (rel(sa)) { g_latestStepOrig = (LatestStepFn)rel(sa); if (hook_calls(rel(sa), (void*)&undo_latest_hook, &sa, 1) != 1) g_latestStepOrig = nullptr; }
-    if (rel(sb)) { g_undoPayNext = (PayFn)rel(sb); if (hook_calls(rel(sb), (void*)&undo_pay_hook, &sb, 1) != 1) g_undoPayNext = nullptr; }
-    LOG(.str("undo log: step ").i(g_latestStepOrig != nullptr).str(", refund ").i(g_undoPayNext != nullptr));
-}
-static bool install_prop_undo() {
-    uint8_t* site = find_unique("PropUndoTest", SIG_PROP_UNDO_TEST);
-    if (!site) return false;
-    static const uint8_t code[30] = {
-        0x80, 0x3D, 23, 0, 0, 0, 0,                 // cmp byte [rip+flag], 0
-        0x75, 0x0F,                                 // jne force
-        0xF6, 0x87, 0xD8, 0x05, 0x00, 0x00, 0x88,   // test byte [rdi+0x5d8], 0x88 (the game's own test)
-        0x75, 0x06,                                 // jne force
-        0xFF, 0x25, 8, 0, 0, 0,                     // jmp [rip+cont]   (the next test, item +0x440)
-        0xFF, 0x25, 10, 0, 0, 0,                    // force: jmp [rip+undo] (the undo step's set up)
-    };
-    uint8_t* mem = alloc_near(site, 48);
-    if (!mem) return false;
-    memset(mem, 0, 48);
-    memcpy(mem, code, sizeof code);
-    uint64_t cont = (uint64_t)(site + 9), undo = (uint64_t)(site + 0x12);
-    memcpy(mem + 32, &cont, 8); memcpy(mem + 40, &undo, 8);
-    g_objUndoFlag = mem + 30;
-    FlushInstructionCache(GetCurrentProcess(), mem, 48);
-    DWORD old;
-    if (!VirtualProtect(site, 9, PAGE_EXECUTE_READWRITE, &old)) return false;
-    uint8_t patch[9] = { 0xE9, 0, 0, 0, 0, 0x90, 0x90, 0x90, 0x90 };
-    int32_t r = (int32_t)(mem - (site + 5)); memcpy(patch + 1, &r, 4);
-    memcpy(site, patch, 9);
-    VirtualProtect(site, 9, old, &old);
-    FlushInstructionCache(GetCurrentProcess(), site, 9);
-    return true;
-}
-
 // ---- install (client and single player server)
 static void install_objects() {
     if (g_dedicated) { LOG(.str("object placement: not on a dedicated server yet")); return; }
@@ -594,10 +518,6 @@ static void install_objects() {
     int a = hook_calls(placeFn, (void*)&prop_place_hook, &placeSite, 1);
     int b = hook_calls(pay, (void*)&prop_pay_hook, paySites, 2);
     int c = hook_calls(queryFn, (void*)&cursor_query_hook, &cqSite, 1);
-    // 0.30.0-dev5/6 test: the step gets no records (PlaceProp skips them for these objects) and the
-    // game's undo never takes it, while its refund would still be there: off until undo is understood
-    bool undo = false; (void)&install_prop_undo;
-    install_undo_log();
-    LOG(.str("object placement: ").str(a == 1 && b == 2 && c == 1 ? "available" : "partly hooked").str(undo ? ", lines undoable" : ", no undo for lines").str(" (place ").i(a).str(", pay ").i(b)
+    LOG(.str("object placement: ").str(a == 1 && b == 2 && c == 1 ? "available" : "partly hooked").str(" (place ").i(a).str(", pay ").i(b)
         .str(", held item ").i(c).str(", ghost ").str(g_cxClientRet ? "yes" : "no").str("); mode ").i(g_cfg.objMode));
 }

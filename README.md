@@ -42,11 +42,16 @@ A mod for **Enshrouded 1.0, Patch #1 and Hotfix #4** (single player and dedicate
   not only the one you stand in, also outside a base. The material picker, the red
   "missing materials" ghost and the crafting menus count them too. Chests of the base you
   are in are used first; the loot deposit still only fills local chests.
+- **Object placement**: with an object (chair, torch, plant...) in hand, the tools wheel
+  picks Single, Line, Curve, Circle, Arch or Standing circle. The line and a ring for each
+  object are drawn over the world; the last click places them all, evenly spaced, with
+  optional random spacing, rotation and height, on the ground under each object, level
+  or along a slope, turned with the line if you like. In worlds you host.
 - **Tools wheel** (hold Caps Lock): a blurred wheel drawn with the game's own wheel;
   point the mouse at an option and let go. It shows only what applies right now
   (Replace style while Replace is on, fill and corners in Area mode).
 - **Pick your tools**: the menu's Options tab switches whole tools on or off (Replace, Area
-  mode, Area shapes, Free placement, Creative building, Magic chests of all bases). A tool
+  mode, Area shapes, Free placement, Object placement, Creative building, Magic chests of all bases). A tool
   that is off gives its keys back to the game and leaves the hints and the wheel.
 - **Menu in the game's own UI** (Home): change keys (also Shift / Ctrl / Alt combinations)
   and options in a full-screen menu with the game's tabs. While you build, the mod's keys

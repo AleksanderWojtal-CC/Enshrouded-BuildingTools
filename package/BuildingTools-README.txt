@@ -1,4 +1,4 @@
-Enshrouded Building Tools 0.29.1
+Enshrouded Building Tools 0.30.0
 ================================
 
 Files in the game folder
@@ -151,6 +151,29 @@ Undo after area actions
   undo press; for big areas it covers only the first shapes ("undo covers N" in
   the banner) and gives back exactly their materials. Remove the rest with an
   area remove.
+
+Object placement (an object in hand)
+  Hold an object (chair, torch, plant, anything that is not a building material)
+  and hold Caps Lock: the wheel shows Objects (the mode), Object settings, Clear
+  points and the menu.
+    Single           as the game (with random rotation / height if set)
+    Line             click the start, then the end
+    Curve            start, end, then a point the line bends through
+    Circle           the centre, then a point on the circle
+    Arch             its two ends: a half circle standing up between them
+    Standing circle  the centre, then a point on it (stands upright)
+  While you aim, the line and a ring for each object are drawn over the world.
+  The clicks before the last only mark points; the last click places all
+  objects and charges them at once (not enough: nothing is placed).
+  Object settings: number of objects (2-200), random spacing (% of the gap),
+  random rotation (degrees), random height (cm), New random values, the
+  reference plane (Ground = the ground under each object, objects on walls keep
+  the line's height; Level = the first click's height; Slope = straight from
+  click to click) and Turn with the line (each object faces along the line; on
+  arches and standing circles it turns round the centre).
+  Works in a world you host (also alone); not yet on a server you join or a
+  dedicated server. The game has no undo for objects: pick them up to take a
+  line back. Saved in [Objects] of the ini; keys ObjectMode / ObjectSettings.
 
 Tools wheel (hold Caps Lock)
   With the hammer or a building material in hand: a blurred wheel in the middle of the screen, drawn with the game's own wheel.
