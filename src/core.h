@@ -767,7 +767,7 @@ inline double obj_rand(uint32_t seed, int i, int k) {
     return (double)(z >> 11) / (double)(1ull << 52) - 1.0;
 }
 struct ObjOpts { int mode, count, spacing, rot, elev, ref, turn; uint32_t seed; };
-struct ObjSpot { double p[3]; double yaw; };   // base position (metres), turn about up (radians) on top of the held rotation
+struct ObjSpot { double p[3]; double yaw; double axis[3]; double tilt; };   // turned by yaw about up, then by tilt about axis   // base position (metres), turn about up (radians) on top of the held rotation
 // ground under (x, z) near height yRef; false = none found (the slope height stays)
 typedef bool (*ObjGroundFn)(void* ctx, double x, double z, double yRef, double* y);
 
@@ -867,6 +867,23 @@ inline int obj_layout(const ObjOpts& o, const double (*pt)[3], int n, ObjGroundF
         s.p[0] = p[0]; s.p[1] = y + obj_rand(o.seed, i, 2) * o.elev / 100.0; s.p[2] = p[2];
         double yaw = o.turn && !upright && (t[0] != 0 || t[2] != 0) ? d_atan2(t[0], t[2]) - yaw0 : 0;
         s.yaw = yaw + obj_rand(o.seed, i, 1) * o.rot * kPi / 180.0;
+        s.axis[0] = 0; s.axis[1] = 1; s.axis[2] = 0; s.tilt = 0;
+        if (upright && o.turn) {
+            // standing shapes: turned about the plane's axis as far as the spot is round it, so the side
+            // the first object turns to the centre keeps facing the centre
+            double tl[3], e[3];
+            obj_eval(o.mode, pt, n, 0.25, tl, e);                          // a point a quarter round
+            double c0[3], r0[3], r1[3];
+            if (o.mode == OBJ_VCIRCLE) for (int k = 0; k < 3; k++) c0[k] = pt[0][k];
+            else for (int k = 0; k < 3; k++) c0[k] = 0.5 * (pt[0][k] + (n > 1 ? pt[1][k] : pt[0][k]));
+            for (int k = 0; k < 3; k++) { r0[k] = p0[k] - c0[k]; r1[k] = tl[k] - c0[k]; }
+            double ax[3] = { r0[1] * r1[2] - r0[2] * r1[1], r0[2] * r1[0] - r0[0] * r1[2], r0[0] * r1[1] - r0[1] * r1[0] };
+            double al = d_sqrt(ax[0] * ax[0] + ax[1] * ax[1] + ax[2] * ax[2]);
+            if (al > 1e-9) {
+                for (int k = 0; k < 3; k++) s.axis[k] = ax[k] / al;
+                s.tilt = (o.mode == OBJ_VCIRCLE ? 2 * kPi : kPi) * u;
+            }
+        }
     }
     return N;
 }
@@ -903,6 +920,21 @@ inline void obj_turn(const float* q, double yaw, float* out) {
     out[1] = (float)(c * y + s * w);
     out[2] = (float)(c * z - s * x);
     out[3] = (float)(c * w - s * y);
+}
+// q turned by angle about a unit axis (world space): (axis sin, cos) * q.
+inline void obj_rotate(const float* q, const double* a, double ang, float* out) {
+    double c = d_cos(ang * 0.5), s = d_sin(ang * 0.5);
+    double x = q[0], y = q[1], z = q[2], w = q[3];
+    out[0] = (float)(c * x + s * a[0] * w + s * (a[1] * z - a[2] * y));
+    out[1] = (float)(c * y + s * a[1] * w + s * (a[2] * x - a[0] * z));
+    out[2] = (float)(c * z + s * a[2] * w + s * (a[0] * y - a[1] * x));
+    out[3] = (float)(c * w - s * (a[0] * x + a[1] * y + a[2] * z));
+}
+// The held rotation of spot s: random / line yaw about up, then the standing shapes' turn.
+inline void obj_spot_rot(const float* q, const ObjSpot& s, float* out) {
+    float t[4];
+    obj_turn(q, s.yaw, t);
+    if (s.tilt != 0) obj_rotate(t, s.axis, s.tilt, out); else for (int k = 0; k < 4; k++) out[k] = t[k];
 }
 // Height of the ground in a column of voxels (0.5 m): bit k of `taken` = voxel v0 + k holds
 // something. The surface = top of a taken voxel with a free one above; the one nearest yRef.

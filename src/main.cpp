@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.30.0-dev4"
+#define MOD_VERSION "0.30.0-dev5"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -709,6 +709,8 @@ static const char* SIG_CURSOR_XF = "48 8B C4 55 53 56 57 41 56 48 8D 6C 24 90 48
 static const char* SIG_PROP_PLACE_CALL = "44 8B 07 48 8D 95 20 01 00 00 48 8D 8D 70 01 00 00 E8 ?? ?? ?? ?? 0F B6 D8";
 static const char* SIG_PROP_PAY_A = "49 8D 90 10 01 00 00 45 0F B6 80 F8 01 00 00 E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ??";
 static const char* SIG_PROP_PAY_B = "41 B0 01 48 8D 95 C0 04 00 00 48 8D 8D D0 03 00 00 E8 ?? ?? ?? ?? 84 C0";
+// place_prop's "may this object be undone" test (item flags 0x88) right before the undo step is set up
+static const char* SIG_PROP_UNDO_TEST = "F6 87 D8 05 00 00 88 75 09 44 38 A7 40 04 00 00 74 ?? 4C 39 A5 88 00 00 00";
 static const char* SIG_CURSOR_QUERY = "4D 8B CD 40 88 7C 24 28 4D 8B C6 88 5C 24 20 48 8D 95 F0 03 00 00 48 8D 4D 20 E8 ?? ?? ?? ??";
 // System dependency copy, and the dismantle system's call of it (writer at +0x180)
 static const char* SIG_SYS_DEPS = "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 60 4C 8B 09 48 8B D9";

@@ -66,6 +66,7 @@ static void obj_clear(const char* why) {
     LeaveCriticalSection(&g_stateLock);
     if (had) LOG(.str("objects: points cleared (").str(why).c(')'));
 }
+static void obj_undo_flag();
 static const Str kObjModeName[core::OBJ_MODE_COUNT] = { S_OBJ_SINGLE, S_OBJ_LINE, S_OBJ_CURVE, S_OBJ_CIRCLE, S_OBJ_ARCH, S_OBJ_VCIRCLE };
 static void obj_set_mode(int m) {
     g_cfg.objMode = ((m % core::OBJ_MODE_COUNT) + core::OBJ_MODE_COUNT) % core::OBJ_MODE_COUNT;
@@ -147,6 +148,7 @@ static void obj_plan_update(bool probe) {
     busy = 0;
 }
 static void obj_plan_body(bool probe) {
+    obj_undo_flag();
     const int mode = obj_mode();
     if (mode == core::OBJ_SINGLE || !prop_now() || obj_remote()) { set_draw_path(nullptr, 0, nullptr, 0); return; }
     g_objProbeBudget = probe ? 40 : 0;
@@ -294,6 +296,7 @@ static uint8_t prop_place_hook(void* ctx, uint8_t* info, uint32_t item) {
         memcpy(g_objPtRot, info + 0x1c, 16);
         g_objPtN = k + 1;
         LeaveCriticalSection(&g_stateLock);
+        obj_undo_flag();
         Buf b; b.fmt(T(S_OBJ_POINT), T(kObjModeName[m]), num(k + 1).s, num(need).s); flash(b.z());
         beep(MB_OK);
         LOG(.str("objects: point ").i(k + 1).str(" of ").i(need).str(" at (").f(click[0]).c(',').f(click[1]).c(',').f(click[2]).c(')'));
@@ -316,6 +319,7 @@ static uint8_t prop_place_hook(void* ctx, uint8_t* info, uint32_t item) {
     }
     g_objPtN = 0;
     LeaveCriticalSection(&g_stateLock);
+    obj_undo_flag();
     if (clicked != need - 1) { LOG(.str("objects: ").i(clicked).str(" points clicked, ").i(need - 1).str(" needed; placed one")); return g_placePropOrig(ctx, info, item); }
     if (!fromClient) {
         for (int a = 0; a < 3; a++) pt[need - 1][a] = click[a];
@@ -334,7 +338,7 @@ static uint8_t prop_place_hook(void* ctx, uint8_t* info, uint32_t item) {
         memcpy(one, info, sizeof one);
         float* pos = (float*)(one + 0x10);
         pos[0] = (float)spot[i].p[0]; pos[1] = (float)spot[i].p[1]; pos[2] = (float)spot[i].p[2];
-        core::obj_turn(base, spot[i].yaw, (float*)(one + 0x1c));
+        core::obj_spot_rot(base, spot[i], (float*)(one + 0x1c));
         undo_before(us, i);
         if (g_placePropOrig(ctx, one, item)) placed++;
         undo_after(us);
@@ -434,10 +438,10 @@ static void draw_obj_window() {
         if (ui_int(T(S_OBJ_ROT), g_cfg.objRot, 0, 180, 5, &iv)) g_cfg.objRot = iv;
         if (ui_int(T(S_OBJ_ELEV), g_cfg.objElev, 0, 300, 5, &iv)) g_cfg.objElev = iv;
         const char* refs[core::OBJ_REF_COUNT] = { T(S_OBJ_REF_GROUND), T(S_OBJ_REF_LEVEL), T(S_OBJ_REF_SLOPE) };
-        const bool flat = many && !core::obj_upright(g_cfg.objMode);   // arch / vertical circle: their own height, facing as held
+        const bool flat = many && !core::obj_upright(g_cfg.objMode);   // arch / standing circle: their own height
         if (flat && ui_option(T(S_OBJ_REF), refs, core::OBJ_REF_COUNT, g_cfg.objRef, &v)) g_cfg.objRef = v;
         const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
-        if (flat && ui_option(T(S_OBJ_TURN), offOn, 2, g_cfg.objTurn ? 1 : 0, &v)) g_cfg.objTurn = v;
+        if (many && ui_option(T(S_OBJ_TURN), offOn, 2, g_cfg.objTurn ? 1 : 0, &v)) g_cfg.objTurn = v;
     }
     ui.endBox(list);
     if (scroll) ui.endScroll(st);
@@ -489,6 +493,44 @@ static bool obj_hud_info(Buf& b) {
     return true;
 }
 
+// ---- undo for lines: place_prop begins an undo step only for objects with item flag 0x88 (most have
+// none, so the game cannot undo them). A small patch at that test (SIG_PROP_UNDO_TEST) also begins it
+// while the next click is the last one of a line; the hammer's undo then takes the line back.
+static volatile uint8_t* g_objUndoFlag = nullptr;
+static void obj_undo_flag() {
+    if (!g_objUndoFlag) return;
+    const int m = obj_mode();
+    *g_objUndoFlag = m != core::OBJ_SINGLE && !obj_remote() && g_objPtN + 1 >= core::obj_points(m) ? 1 : 0;
+}
+static bool install_prop_undo() {
+    uint8_t* site = find_unique("PropUndoTest", SIG_PROP_UNDO_TEST);
+    if (!site) return false;
+    static const uint8_t code[30] = {
+        0x80, 0x3D, 23, 0, 0, 0, 0,                 // cmp byte [rip+flag], 0
+        0x75, 0x0F,                                 // jne force
+        0xF6, 0x87, 0xD8, 0x05, 0x00, 0x00, 0x88,   // test byte [rdi+0x5d8], 0x88 (the game's own test)
+        0x75, 0x06,                                 // jne force
+        0xFF, 0x25, 8, 0, 0, 0,                     // jmp [rip+cont]   (the next test, item +0x440)
+        0xFF, 0x25, 10, 0, 0, 0,                    // force: jmp [rip+undo] (the undo step's set up)
+    };
+    uint8_t* mem = alloc_near(site, 48);
+    if (!mem) return false;
+    memset(mem, 0, 48);
+    memcpy(mem, code, sizeof code);
+    uint64_t cont = (uint64_t)(site + 9), undo = (uint64_t)(site + 0x12);
+    memcpy(mem + 32, &cont, 8); memcpy(mem + 40, &undo, 8);
+    g_objUndoFlag = mem + 30;
+    FlushInstructionCache(GetCurrentProcess(), mem, 48);
+    DWORD old;
+    if (!VirtualProtect(site, 9, PAGE_EXECUTE_READWRITE, &old)) return false;
+    uint8_t patch[9] = { 0xE9, 0, 0, 0, 0, 0x90, 0x90, 0x90, 0x90 };
+    int32_t r = (int32_t)(mem - (site + 5)); memcpy(patch + 1, &r, 4);
+    memcpy(site, patch, 9);
+    VirtualProtect(site, 9, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), site, 9);
+    return true;
+}
+
 // ---- install (client and single player server)
 static void install_objects() {
     if (g_dedicated) { LOG(.str("object placement: not on a dedicated server yet")); return; }
@@ -518,6 +560,7 @@ static void install_objects() {
     int a = hook_calls(placeFn, (void*)&prop_place_hook, &placeSite, 1);
     int b = hook_calls(pay, (void*)&prop_pay_hook, paySites, 2);
     int c = hook_calls(queryFn, (void*)&cursor_query_hook, &cqSite, 1);
-    LOG(.str("object placement: ").str(a == 1 && b == 2 && c == 1 ? "available" : "partly hooked").str(" (place ").i(a).str(", pay ").i(b)
+    bool undo = install_prop_undo();
+    LOG(.str("object placement: ").str(a == 1 && b == 2 && c == 1 ? "available" : "partly hooked").str(undo ? ", lines undoable" : ", no undo for lines").str(" (place ").i(a).str(", pay ").i(b)
         .str(", held item ").i(c).str(", ghost ").str(g_cxClientRet ? "yes" : "no").str("); mode ").i(g_cfg.objMode));
 }
