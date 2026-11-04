@@ -231,6 +231,7 @@ static void obj_ghost(const uint8_t* out, const uint8_t* q) {
 typedef uint8_t (*PlacePropFn)(void* ctx, uint8_t* info, uint32_t item);
 static PlacePropFn g_placePropOrig = nullptr;
 static CostList* volatile g_objStepList = nullptr;
+static uint8_t* volatile g_objLastStep = nullptr;     // the last line's undo step (log)
 static volatile LONG g_objStage = 0;            // 0 = vanilla, -1 = this click marks a point, N = place N
 static volatile DWORD g_objStageTid = 0;
 static uint8_t prop_pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
@@ -344,6 +345,10 @@ static uint8_t prop_place_hook(void* ctx, uint8_t* info, uint32_t item) {
         undo_after(us);
     }
     undo_end(us);
+    g_objLastStep = us.step0;
+    if (us.step0) LOG(.str("objects: undo step ").x((uint64_t)us.step0).str(" storage ").x((uint64_t)us.storage)
+        .str(" records ").u(*(uint64_t*)(us.step0 + 0x100) - *(uint64_t*)(us.step0 + 0x108)).str(" flag 1f8 ").u(us.step0[0x1f8])
+        .str(" head ").u(us.storage ? *(uint64_t*)(us.storage + 0xa00) : 0).str(" tail ").u(us.storage ? *(uint64_t*)(us.storage + 0xa08) : 0));
     CostList* sl = g_objStepList; g_objStepList = nullptr;
     const int undoN = us.step0 ? (us.recorded < placed ? us.recorded : placed) : 0;
     if (sl && sl->data && sl->count <= 16 && undoN > 1)
@@ -502,6 +507,35 @@ static void obj_undo_flag() {
     const int m = obj_mode();
     *g_objUndoFlag = m != core::OBJ_SINGLE && !obj_remote() && g_objPtN + 1 >= core::obj_points(m) ? 1 : 0;
 }
+// The game's undo (player_building_undo, on the undo key's ChangeVoxel event): which step it takes and
+// whether its refund goes through (logged, to see why a line's step is not undone)
+typedef uint8_t* (*LatestStepFn)(uint8_t* storage);
+static LatestStepFn g_latestStepOrig = nullptr;
+static uint8_t* undo_latest_hook(uint8_t* storage) {
+    uint8_t* st = g_latestStepOrig(storage);
+    if (st && readable(st + 0x100, 0x100)) {
+        const CostList* l = (const CostList*)(st + 0x110);
+        LOG(.str("undo: step ").x((uint64_t)st).str(st == g_objLastStep ? " (the last object line)" : "")
+            .str(", records ").u(*(uint64_t*)(st + 0x100) - *(uint64_t*)(st + 0x108)).str(", cost entries ").u(l->count)
+            .str(", flag 1f8 ").u(st[0x1f8]));
+    } else LOG(.str("undo: no step"));
+    return st;
+}
+static PayFn g_undoPayNext = nullptr;
+static uint8_t undo_pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
+    uint8_t r = g_undoPayNext(mode, list, consume);
+    LOG(.str("undo: refund of ").u(list ? list->count : 0).str(" entries, consume ").u(consume).str(" -> ").u(r));
+    return r;
+}
+static void install_undo_log() {
+    auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
+    uint8_t* a = find_unique("UndoLatestCall", SIG_UNDO_LATEST);
+    uint8_t* b = find_unique("UndoPayCall", SIG_UNDO_PAY);
+    uint8_t* sa = a ? a + 3 : nullptr; uint8_t* sb = b ? b + 0x12 : nullptr;
+    if (rel(sa)) { g_latestStepOrig = (LatestStepFn)rel(sa); if (hook_calls(rel(sa), (void*)&undo_latest_hook, &sa, 1) != 1) g_latestStepOrig = nullptr; }
+    if (rel(sb)) { g_undoPayNext = (PayFn)rel(sb); if (hook_calls(rel(sb), (void*)&undo_pay_hook, &sb, 1) != 1) g_undoPayNext = nullptr; }
+    LOG(.str("undo log: step ").i(g_latestStepOrig != nullptr).str(", refund ").i(g_undoPayNext != nullptr));
+}
 static bool install_prop_undo() {
     uint8_t* site = find_unique("PropUndoTest", SIG_PROP_UNDO_TEST);
     if (!site) return false;
@@ -561,6 +595,7 @@ static void install_objects() {
     int b = hook_calls(pay, (void*)&prop_pay_hook, paySites, 2);
     int c = hook_calls(queryFn, (void*)&cursor_query_hook, &cqSite, 1);
     bool undo = install_prop_undo();
+    install_undo_log();
     LOG(.str("object placement: ").str(a == 1 && b == 2 && c == 1 ? "available" : "partly hooked").str(undo ? ", lines undoable" : ", no undo for lines").str(" (place ").i(a).str(", pay ").i(b)
         .str(", held item ").i(c).str(", ghost ").str(g_cxClientRet ? "yes" : "no").str("); mode ").i(g_cfg.objMode));
 }
