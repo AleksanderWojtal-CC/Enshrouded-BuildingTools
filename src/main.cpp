@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.30.0-dev2"
+#define MOD_VERSION "0.30.0-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -3345,7 +3345,9 @@ static DWORD g_buildingSince = 0;              // start of the current building 
 static void remote_update() {
     if (g_dedicated) return;
     const DWORD now = GetTickCount();
-    if (!building_now()) { g_buildingSince = 0; return; }
+    // an object in hand shows the building box too, but its cursor read is not the one that tells
+    // a local world (only building items read it): not counted
+    if (!building_now() || prop_now()) { g_buildingSince = 0; return; }
     if (!g_buildingSince) g_buildingSince = now;
     LONG was = g_remoteKnown, is = was;
     if (now - g_serverWorldTick < 500) is = 0;
