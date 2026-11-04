@@ -217,6 +217,7 @@ static void obj_ghost(const uint8_t* out, const uint8_t* q) {
 // ---- server: the clicks (single player)
 typedef uint8_t (*PlacePropFn)(void* ctx, uint8_t* info, uint32_t item);
 static PlacePropFn g_placePropOrig = nullptr;
+static CostList* volatile g_objStepList = nullptr;
 static volatile LONG g_objStage = 0;            // 0 = vanilla, -1 = this click marks a point, N = place N
 static volatile DWORD g_objStageTid = 0;
 static uint8_t prop_pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
@@ -251,11 +252,26 @@ static uint8_t prop_pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
         return 0;
     }
     g_objStage = many.data ? n : 1; g_objStageTid = GetCurrentThreadId();
+    // the undo step's own cost list (first call; the second call's list is on the stack): undo gives
+    // back what it holds, set to the objects undo covers after placing
+    g_objStepList = (uint8_t*)list != mode + 0xf0 && many.data ? list : nullptr;
     return 1;
 }
 static uint8_t prop_place_hook(void* ctx, uint8_t* info, uint32_t item) {
     LONG stage = g_objStageTid == GetCurrentThreadId() ? InterlockedExchange(&g_objStage, 0) : 0;
     const int m = obj_mode();
+    if (!stage && info && m == core::OBJ_SINGLE && obj_tool_on() && !g_dedicated && (g_cfg.objRot || g_cfg.objElev) &&
+        own_click((const float*)(info + 0x10))) {
+        // single: the random turn and height on each object too
+        static uint32_t k = 0; k++;
+        alignas(16) uint8_t one[0x50];
+        memcpy(one, info, sizeof one);
+        float* pos = (float*)(one + 0x10);
+        pos[1] += (float)(core::obj_rand((uint32_t)g_cfg.objSeed, (int)k, 2) * g_cfg.objElev / 100.0);
+        float base[4]; memcpy(base, info + 0x1c, 16);
+        core::obj_turn(base, core::obj_rand((uint32_t)g_cfg.objSeed, (int)k, 1) * g_cfg.objRot * core::kPi / 180.0, (float*)(one + 0x1c));
+        return g_placePropOrig(ctx, one, item);
+    }
     if (!stage || !info || m == core::OBJ_SINGLE) return g_placePropOrig(ctx, info, item);
     const float* fp = (const float*)(info + 0x10);
     const double click[3] = { fp[0], fp[1], fp[2] };
@@ -300,14 +316,25 @@ static uint8_t prop_place_hook(void* ctx, uint8_t* info, uint32_t item) {
     float base[4]; memcpy(base, info + 0x1c, 16);
     alignas(16) uint8_t one[0x50];
     int placed = 0;
+    // one undo step for the line: each object adds a record to the click's step, which holds 32 at
+    // most (the game stops when it is full), so past that the objects are placed without undo
+    UndoSplit us; undo_begin(us, ctx, nullptr, nullptr, n);
     for (int i = 0; i < n; i++) {
         memcpy(one, info, sizeof one);
         float* pos = (float*)(one + 0x10);
         pos[0] = (float)spot[i].p[0]; pos[1] = (float)spot[i].p[1]; pos[2] = (float)spot[i].p[2];
         core::obj_turn(base, spot[i].yaw, (float*)(one + 0x1c));
+        undo_before(us, i);
         if (g_placePropOrig(ctx, one, item)) placed++;
+        undo_after(us);
     }
-    LOG(.str("objects: placed ").i(placed).str(" of ").i(n).str(fromClient ? " (spots from the preview)" : " (spots worked out on the click)"));
+    undo_end(us);
+    CostList* sl = g_objStepList; g_objStepList = nullptr;
+    const int undoN = us.step0 ? (us.recorded < placed ? us.recorded : placed) : 0;
+    if (sl && sl->data && sl->count <= 16 && undoN > 1)
+        for (uint64_t k = 0; k < sl->count; k++) *(uint32_t*)(((CostEntry*)sl->data)[k].b + 0x14) *= (uint32_t)undoN;
+    LOG(.str("objects: placed ").i(placed).str(" of ").i(n).str(fromClient ? " (spots from the preview)" : " (spots worked out on the click)")
+        .str(", undo covers ").i(undoN).str(sl ? " (refund set)" : ""));
     Buf b; b.fmt(T(S_OBJ_PLACED), num(placed).s); flash(b.z());
     beep(MB_ICONASTERISK);
     return placed > 0;
@@ -390,14 +417,15 @@ static void draw_obj_window() {
         if (ui_option(T(S_OBJ_MODE_LABEL), modes, core::OBJ_MODE_COUNT, g_cfg.objMode, &v) && v != g_cfg.objMode) obj_set_mode(v);
         int iv;
         const int m = g_cfg.objMode == core::OBJ_SINGLE ? core::OBJ_LINE : g_cfg.objMode;
-        if (ui_int(T(S_OBJ_COUNT), core::obj_clamp_count(m, g_cfg.objCount), core::obj_min_count(m), kObjMax, 1, &iv)) g_cfg.objCount = iv;
-        if (ui_int(T(S_OBJ_SPACING), g_cfg.objSpacing, 0, 100, 5, &iv)) g_cfg.objSpacing = iv;
+        const bool many = g_cfg.objMode != core::OBJ_SINGLE;     // single: only the random turn and height
+        if (many && ui_int(T(S_OBJ_COUNT), core::obj_clamp_count(m, g_cfg.objCount), core::obj_min_count(m), kObjMax, 1, &iv)) g_cfg.objCount = iv;
+        if (many && ui_int(T(S_OBJ_SPACING), g_cfg.objSpacing, 0, 100, 5, &iv)) g_cfg.objSpacing = iv;
         if (ui_int(T(S_OBJ_ROT), g_cfg.objRot, 0, 180, 5, &iv)) g_cfg.objRot = iv;
         if (ui_int(T(S_OBJ_ELEV), g_cfg.objElev, 0, 300, 5, &iv)) g_cfg.objElev = iv;
         const char* refs[core::OBJ_REF_COUNT] = { T(S_OBJ_REF_GROUND), T(S_OBJ_REF_LEVEL), T(S_OBJ_REF_SLOPE) };
-        if (ui_option(T(S_OBJ_REF), refs, core::OBJ_REF_COUNT, g_cfg.objRef, &v)) g_cfg.objRef = v;
+        if (many && ui_option(T(S_OBJ_REF), refs, core::OBJ_REF_COUNT, g_cfg.objRef, &v)) g_cfg.objRef = v;
         const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
-        if (ui_option(T(S_OBJ_TURN), offOn, 2, g_cfg.objTurn ? 1 : 0, &v)) g_cfg.objTurn = v;
+        if (many && ui_option(T(S_OBJ_TURN), offOn, 2, g_cfg.objTurn ? 1 : 0, &v)) g_cfg.objTurn = v;
     }
     ui.endBox(list);
     if (scroll) ui.endScroll(st);
