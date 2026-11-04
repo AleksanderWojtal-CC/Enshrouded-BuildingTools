@@ -66,7 +66,7 @@ static void obj_clear(const char* why) {
     LeaveCriticalSection(&g_stateLock);
     if (had) LOG(.str("objects: points cleared (").str(why).c(')'));
 }
-static const Str kObjModeName[core::OBJ_MODE_COUNT] = { S_OBJ_SINGLE, S_OBJ_LINE, S_OBJ_CURVE, S_OBJ_CIRCLE };
+static const Str kObjModeName[core::OBJ_MODE_COUNT] = { S_OBJ_SINGLE, S_OBJ_LINE, S_OBJ_CURVE, S_OBJ_CIRCLE, S_OBJ_ARCH, S_OBJ_VCIRCLE };
 static void obj_set_mode(int m) {
     g_cfg.objMode = ((m % core::OBJ_MODE_COUNT) + core::OBJ_MODE_COUNT) % core::OBJ_MODE_COUNT;
     obj_clear("mode");
@@ -82,8 +82,10 @@ static int g_objProbeBudget = 0;
 static LONG g_objProbes = 0;
 static bool obj_ground(void*, double x, double z, double yRef, double* y) {
     int32_t vx = (int32_t)core::d_floor(x * 2), vz = (int32_t)core::d_floor(z * 2);
-    int32_t v0 = (int32_t)core::d_floor((yRef - 12) * 2);
-    v0 = (int32_t)core::floor_div(v0, 8) * 8;                   // a few heights share a column
+    // the column (48 voxels) starts 12..20 m below yRef on a 8 m grid: the same column for heights a
+    // few metres apart, so a moving line keeps reading the cache (no jumps while the camera turns)
+    int32_t v0 = (int32_t)core::d_floor(yRef * 2) - 24;
+    v0 = (int32_t)core::floor_div(v0, 16) * 16;
     if (vx < 0 || vz < 0 || v0 < 0) return false;
     uint32_t h = ((uint32_t)vx * 73856093u ^ (uint32_t)vz * 19349663u ^ (uint32_t)v0 * 83492791u) & 4095;
     ObjCol& c = g_objCol[h];
@@ -162,8 +164,17 @@ static void obj_plan_body(bool probe) {
     }
     static ObjPlan p;
     p.pts = n; p.clicked = clicked; memcpy(p.pt, pt, sizeof pt); p.opts = o;
+    // Ground: only when the clicks sit on the ground (an object on a wall keeps the line's height)
+    ObjOpts lo = o;
+    bool onWall = false;
+    if (lo.ref == core::OBJ_REF_GROUND && !core::obj_upright(mode))
+        for (int k = 0; k < n; k++) {
+            double g;
+            if (!obj_ground(nullptr, pt[k][0], pt[k][2], pt[k][1], &g) || g - pt[k][1] > 0.6 || pt[k][1] - g > 0.6) { onWall = true; break; }
+        }
+    if (onWall) lo.ref = core::OBJ_REF_SLOPE;
     GroundCtx gc = { true };
-    p.n = n >= 2 ? core::obj_layout(o, pt, n, obj_ground_note, &gc, p.spot, kObjMax) : 0;
+    p.n = n >= 2 ? core::obj_layout(lo, pt, n, obj_ground_note, &gc, p.spot, kObjMax) : 0;
     p.ground = gc.all;
     p.tick = now;
     EnterCriticalSection(&g_stateLock);
@@ -172,7 +183,7 @@ static void obj_plan_body(bool probe) {
     // drawn: the path (a little above the ground) and a marker per object
     static double path[kPathMax][3];
     static int64_t pf[kPathMax][3], mf[kObjMax][3];
-    int np = n >= 2 ? core::obj_path(o, pt, n, obj_ground, nullptr, path, kPathMax) : 0;
+    int np = n >= 2 ? core::obj_path(lo, pt, n, obj_ground, nullptr, path, kPathMax) : 0;
     for (int i = 0; i < np; i++) { pf[i][0] = (int64_t)(path[i][0] * core::kFix); pf[i][1] = (int64_t)((path[i][1] + 0.06) * core::kFix); pf[i][2] = (int64_t)(path[i][2] * core::kFix); }
     for (int i = 0; i < p.n; i++) { mf[i][0] = (int64_t)(p.spot[i].p[0] * core::kFix); mf[i][1] = (int64_t)((p.spot[i].p[1] + 0.12) * core::kFix); mf[i][2] = (int64_t)(p.spot[i].p[2] * core::kFix); }
     set_draw_path(pf, np, mf, p.n);
@@ -180,7 +191,7 @@ static void obj_plan_body(bool probe) {
     if (g_cfg.log && now - logAt > 5000 && n >= 2) {
         logAt = now;
         LOG(.str("objects: plan mode ").i(mode).str(" points ").i(clicked).c('+').i(n - clicked).str(", ").i(p.n).str(" spots, path ").i(np)
-            .str(", ground ").str(o.ref == core::OBJ_REF_GROUND ? (p.ground ? "all found" : "partly") : "not used")
+            .str(", ground ").str(o.ref == core::OBJ_REF_GROUND ? (onWall ? "off (clicks not on the ground)" : p.ground ? "all found" : "partly") : "not used")
             .str(", columns read ").i(g_objProbes).str(", world ").str(g_objWorld ? "yes" : "no"));
     }
 }
@@ -423,9 +434,10 @@ static void draw_obj_window() {
         if (ui_int(T(S_OBJ_ROT), g_cfg.objRot, 0, 180, 5, &iv)) g_cfg.objRot = iv;
         if (ui_int(T(S_OBJ_ELEV), g_cfg.objElev, 0, 300, 5, &iv)) g_cfg.objElev = iv;
         const char* refs[core::OBJ_REF_COUNT] = { T(S_OBJ_REF_GROUND), T(S_OBJ_REF_LEVEL), T(S_OBJ_REF_SLOPE) };
-        if (many && ui_option(T(S_OBJ_REF), refs, core::OBJ_REF_COUNT, g_cfg.objRef, &v)) g_cfg.objRef = v;
+        const bool flat = many && !core::obj_upright(g_cfg.objMode);   // arch / vertical circle: their own height, facing as held
+        if (flat && ui_option(T(S_OBJ_REF), refs, core::OBJ_REF_COUNT, g_cfg.objRef, &v)) g_cfg.objRef = v;
         const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
-        if (many && ui_option(T(S_OBJ_TURN), offOn, 2, g_cfg.objTurn ? 1 : 0, &v)) g_cfg.objTurn = v;
+        if (flat && ui_option(T(S_OBJ_TURN), offOn, 2, g_cfg.objTurn ? 1 : 0, &v)) g_cfg.objTurn = v;
     }
     ui.endBox(list);
     if (scroll) ui.endScroll(st);

@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.30.0-dev3"
+#define MOD_VERSION "0.30.0-dev4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -233,8 +233,9 @@ static void write_full_ini(const Config& c) {
      .t(";     (lower = earlier). Change only if the box drifts from the blocks when the camera moves.\r\n")
      .t("DrawBoxFov=").i(c.drawBoxFov).t("\r\nDrawBoxDelay100=").i(c.drawBoxDelay).t("\r\n")
      .t("\r\n[Objects]\r\n")
-     .t("; Placing objects (an object in hand, single player): 0 = single (as the game), 1 = line (2 clicks),\r\n")
-     .t(";     2 = curve (start, end, then a point it bends through), 3 = circle (centre, then a point on it)\r\nMode=").i(c.objMode).t("\r\n")
+     .t("; Placing objects (an object in hand, in a world you host): 0 = single (as the game), 1 = line (2 clicks),\r\n")
+     .t(";     2 = curve (start, end, then a point it bends through), 3 = circle (centre, then a point on it),\r\n")
+     .t(";     4 = arch (its two ends, a half circle standing up), 5 = standing circle (centre, then a point on it)\r\nMode=").i(c.objMode).t("\r\n")
      .t("; Objects placed evenly along the line (2..200, circle 3..200)\r\nCount=").i(c.objCount).t("\r\n")
      .t("; Random spacing (percent of the gap), random turn (degrees), random height (cm)\r\nSpacing=").i(c.objSpacing)
      .t("\r\nRotation=").i(c.objRot).t("\r\nElevation=").i(c.objElev).t("\r\n")

@@ -727,6 +727,21 @@ int main(int argc, char** argv) {
         n = obj_layout(cv, cur, 3, nullptr, nullptr, sp, kObjMax);
         CHECK(n == 3 && fabs(sp[1].p[0] - 5) < 1e-6 && fabs(sp[1].p[2] - 5) < 1e-6 && fabs(sp[2].p[0] - 10) < 1e-9,
               "objects: curve passes through the third click half way");
+        {   // arch: half circle up between the clicks; vertical circle: centre + point, standing
+            const double ar[3][3] = { { 0, 0, 0 }, { 10, 0, 0 } };
+            ObjOpts ao = { OBJ_ARCH, 3, 0, 0, 0, OBJ_REF_GROUND, 1, 1 };
+            int na = obj_layout(ao, ar, 2, nullptr, nullptr, sp, kObjMax);
+            CHECK(na == 3 && fabs(sp[0].p[0]) < 1e-9 && fabs(sp[1].p[0] - 5) < 1e-6 && fabs(sp[1].p[1] - 5) < 1e-6 &&
+                  fabs(sp[2].p[0] - 10) < 1e-6 && fabs(sp[2].p[1]) < 1e-6 && fabs(sp[1].yaw) < 1e-9, "objects: arch over the top, not turned");
+            const double vc[3][3] = { { 0, 5, 0 }, { 0, 5, 3 } };
+            ObjOpts vo = { OBJ_VCIRCLE, 4, 0, 0, 0, OBJ_REF_LEVEL, 1, 1 };
+            int nv = obj_layout(vo, vc, 2, nullptr, nullptr, sp, kObjMax);
+            CHECK(nv == 4 && fabs(sp[0].p[2] - 3) < 1e-9 && fabs(sp[1].p[1] - 8) < 1e-6 && fabs(sp[1].p[2]) < 1e-6 &&
+                  fabs(sp[2].p[2] + 3) < 1e-6 && fabs(sp[3].p[1] - 2) < 1e-6 && fabs(sp[0].p[0]) < 1e-9, "objects: vertical circle stands");
+            double path[300][3];
+            int pn = obj_path(vo, vc, 2, nullptr, nullptr, path, 300);
+            CHECK(pn >= 49 && fabs(path[pn - 1][2] - 3) < 1e-6 && fabs(path[pn - 1][1] - 5) < 1e-6, "objects: vertical circle path closed");
+        }
         ObjOpts r = { OBJ_LINE, 20, 50, 30, 40, OBJ_REF_SLOPE, 0, 77 };
         n = obj_layout(r, line, 2, nullptr, nullptr, sp, kObjMax);
         bool in = true, moved = false;
