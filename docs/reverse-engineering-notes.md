@@ -878,3 +878,19 @@ the hotfix client shows every feature available.
   the last click pays the cost list with every count times N and calls PlaceProp N times.
   Clicks more than 1.5 m from this game's ghost are other players' (a hosted game runs their
   placements too) and stay vanilla.
+
+## Hotfix #5 (1.0.1.2, build 1287369, 2026-11-04): no mod change
+
+0.30.0 works unchanged (checked offline on the hotfix exes). All 86 client signatures
+match once. Almost all client code moved +0xE0 (PlaceShape 491a10, HudUpdate b34ce0,
+UiSound b3651a, InputEncode 3aba10, ...); the 0x11a..0x11d UI primitives moved +0xD0.
+Data did not move (UI sound context 283f4a8, hover spawn defaults 1528a88, highlight guid
+b0718612). The bytes the mod patches or steals are the same: hook prologues, blit patch
+site/continue/skip, dismantle pickup writer (rbp+0x350) and aim state (rbp+0x1d8), zone
+vis getter (now 3aa980). The cursor query hook moved to 28c430.
+
+Reflection: all 12,658 reflected types (names, sizes, field offsets and enum values) hash
+the same as on Hotfix #4, so FbUiBundle and every struct the mod reads are unchanged.
+
+Server: the same 31 signatures match as on Hotfix #4, at the same RVAs except BlitCheck
+a38bb7 -> a38ba7 and MaterialItem 9333c0 -> 9333b0.
