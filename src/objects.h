@@ -206,7 +206,8 @@ static void obj_plan_body(bool probe) {
 }
 
 static uint64_t cursor_query_hook(uint8_t* q, uint8_t* sys, uint8_t* item, void* d, uint64_t e, uint64_t f) {
-    uint64_t r = g_cursorQueryOrig(q, sys, item, d, e, f);
+    PROF(PF_CQUERY);
+    uint64_t r = PROF_CALL(PF_CQUERY_G, g_cursorQueryOrig(q, sys, item, d, e, f));
     if (sys && readable(sys - 0x220, 8)) g_objWorld = *(void**)(sys - 0x220);     // client_cursor's deps (rbp+0xa0) + 0x130
     uint8_t* it = prop_item(item) ? item : nullptr;
     if (it != g_propItem && g_propItem && it && g_objPtN) {
@@ -601,7 +602,8 @@ typedef uint8_t (*UndoKeyFn)(uint8_t* sys);
 static BuildModeFn g_buildModeOrig = nullptr;
 static UndoKeyFn g_undoKey = nullptr;
 static void build_mode_hook(uint8_t* out, uint8_t* sys, void* item) {
-    g_buildModeOrig(out, sys, item);
+    PROF(PF_BMODE);
+    PROF_CALL(PF_BMODE_G, g_buildModeOrig(out, sys, item));
     if (!out || out[0] || !g_undoKey || !g_objUndoFlag || !obj_tool_on() || !prop_now() || !sys) return;
     uint8_t* sc = readable(sys + 0x90, 8) ? *(uint8_t**)(sys + 0x90) : nullptr;
     uint8_t flags = sc && readable(sc + 0x69, 1) ? sc[0x69] : 0xff;

@@ -817,11 +817,12 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
 
 static VkResult VKAPI_CALL vk_present_hook(VkQueue q, const VkPresentInfoKHR* pi) {
     InterlockedIncrement(&g_vkPresents);
+    prof_frame();
     if (pi && pi->swapchainCount == 1 && pi->waitSemaphoreCount <= 16 && draw_box_on()) {
         EnterCriticalSection(&g_vkLock);
         bool drawn = false;
         uint32_t i = pi->pImageIndices[0];
-        if (g_vs.ready && !g_vs.failed && pi->pSwapchains[0] == g_vs.sc && i < g_vs.n) drawn = vk_draw(q, i, pi);
+        if (g_vs.ready && !g_vs.failed && pi->pSwapchains[0] == g_vs.sc && i < g_vs.n) { PROF(PF_VKDRAW); drawn = vk_draw(q, i, pi); }
         if (drawn) {
             VkPresentInfoKHR p2 = *pi;
             p2.waitSemaphoreCount = 1; p2.pWaitSemaphores = &g_vs.sem[i];

@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.0"
+#define MOD_VERSION "0.31.1-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -84,6 +84,67 @@ static void log_line(Buf& b) {
     LeaveCriticalSection(&g_logLock);
 }
 #define LOG(expr) do { Buf _b; _b expr; log_line(_b); } while (0)
+
+// ---- frame-time measurement ([Debug] Profile=1)
+// Each hook adds its time (QueryPerformanceCounter) to a slot; the "game:" slots time
+// the game's own function called from a hook, so slot minus its game slot is the mod's
+// own work. Every 10 s the frame time and the time per frame of each slot are logged.
+enum ProfId {
+    PF_HOVER, PF_HOVER_G, PF_OCC, PF_STOCKS, PF_STOCKS_G, PF_STOCKFIN, PF_STOCKFIN_G, PF_CSTOCK, PF_CSTOCK_G,
+    PF_CHEST, PF_CHEST_G, PF_SCOUNT, PF_MISSING, PF_MISSING_G, PF_CXF, PF_CXF_G, PF_PLAYUI, PF_PLAYUI_G,
+    PF_MODSCR, PF_HUDROW, PF_HUDROW_G, PF_HUDFIN, PF_HUDFIN_G, PF_INPUT, PF_INPUT_G, PF_ZONEVIS, PF_DEPS, PF_DEPS_G,
+    PF_VKDRAW, PF_CQUERY, PF_CQUERY_G, PF_BMODE, PF_BMODE_G, PF_HUD, PF_HUD_G, PF_N };
+static const char* const kProfName[PF_N] = {
+    "hover", "game:hover", "block bits", "picker lists", "game:picker lists", "picker final", "game:picker final",
+    "chest stock", "game:chest stock", "chest list", "game:chest list", "server stock check", "material check",
+    "game:material check", "cursor", "game:cursor", "play ui", "game:play ui", "menu screen", "hud row", "game:hud row",
+    "hud box", "game:hud box", "input", "game:input", "zone box", "deps", "game:deps", "vulkan box", "object cursor",
+    "game:object cursor", "build mode", "game:build mode", "hud", "game:hud" };
+static volatile LONG g_prof = 0;
+static volatile LONG64 g_pfTicks[PF_N];
+static volatile LONG g_pfCalls[PF_N];
+struct ProfScope {
+    int id; LARGE_INTEGER t0;
+    explicit ProfScope(int i) : id(g_prof ? i : -1) { if (id >= 0) QueryPerformanceCounter(&t0); }
+    ~ProfScope() {
+        if (id < 0) return;
+        LARGE_INTEGER t; QueryPerformanceCounter(&t);
+        InterlockedAdd64(&g_pfTicks[id], t.QuadPart - t0.QuadPart);
+        InterlockedIncrement(&g_pfCalls[id]);
+    }
+};
+#define PROF(id) ProfScope _prof(id)
+#define PROF_CALL(id, call) ([&]() { ProfScope _pg(id); return call; }())
+#define PROF_VCALL(id, call) do { ProfScope _pg(id); call; } while (0)
+static const char* prof_state();     // what the player is doing (hammer, chests, ...)
+// Called once per presented frame (vk_present_hook).
+static void prof_frame() {
+    if (!g_prof) return;
+    static LARGE_INTEGER t0, last; static LONG frames = 0; static LONG64 worst = 0;
+    LARGE_INTEGER t, f; QueryPerformanceCounter(&t); QueryPerformanceFrequency(&f);
+    if (!t0.QuadPart) { t0 = last = t; for (int k = 0; k < PF_N; k++) { g_pfTicks[k] = 0; g_pfCalls[k] = 0; } return; }
+    if (t.QuadPart - last.QuadPart > worst) worst = t.QuadPart - last.QuadPart;
+    last = t; frames++;
+    if (t.QuadPart - t0.QuadPart < f.QuadPart * 10) return;
+    const double span = (double)(t.QuadPart - t0.QuadPart) / f.QuadPart;
+    const double perFrameMs = 1000.0 / (double)f.QuadPart / frames;
+    Buf b;
+    b.str("perf: ").f(frames / span).str(" fps, ").f(span * 1000.0 / frames).str(" ms a frame (worst ")
+     .f(worst * 1000.0 / f.QuadPart).str(" ms), ").str(prof_state());
+    double mod = 0.0;
+    for (int k = 0; k < PF_N; k++) {
+        LONG64 ticks = InterlockedExchange64(&g_pfTicks[k], 0);
+        LONG calls = InterlockedExchange(&g_pfCalls[k], 0);
+        const bool game = kProfName[k][0] == 'g' && kProfName[k][4] == ':';
+        if (!game) mod += ticks * perFrameMs;
+        if (game && k > 0) mod -= ticks * perFrameMs;
+        if (!calls || ticks * perFrameMs < 0.005) continue;
+        b.str(" | ").str(kProfName[k]).c(' ').f(ticks * perFrameMs).str(" ms x").f((double)calls / frames);
+    }
+    log_line(b);
+    LOG(.str("perf: mod's own work about ").f(mod).str(" ms a frame (all threads)"));
+    t0 = t; frames = 0; worst = 0;
+}
 
 static void open_log() {
     wchar_t p[MAX_PATH];
@@ -269,6 +330,7 @@ static void load_config() {
     g_cfg.maxShapes    = ini_int(L"Limits", L"MaxShapes", 2000);
     g_cfg.sound        = ini_int(L"Interface", L"Sound", 1);
     g_cfg.log          = ini_int(L"Debug", L"Log", 1);
+    g_prof             = ini_int(L"Debug", L"Profile", 1) != 0 && g_cfg.log;
     {   int cn = ini_int(L"Area", L"Corners", 2);
         g_cfg.corners = cn == 3 ? 3 : 2; g_cfg.exact = cn == 1; }
     {   auto clampv = [](int v, int lo, int hi, int def) { return v < lo || v > hi ? def : v; };
@@ -1064,7 +1126,8 @@ static uint8_t* g_cxClientRet = nullptr;          // return address of client_cu
 static bool prop_now();
 static void obj_ghost(const uint8_t* out, const uint8_t* q);
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
-    uint8_t* r = g_cxOrig(out, sys, q, ray);
+    PROF(PF_CXF);
+    uint8_t* r = PROF_CALL(PF_CXF_G, g_cxOrig(out, sys, q, ray));
     if (out && q && g_cxClientRet && (uint8_t*)__builtin_return_address(0) == g_cxClientRet) obj_ghost(out, q);
     if (out && sys && q && q[3] != 4 && prop_now() && g_cxClientRet && (uint8_t*)__builtin_return_address(0) == g_cxClientRet) {
         // an object in hand: the camera for the drawn path (the building cursor is not running)
@@ -1121,7 +1184,11 @@ static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* 
 
 typedef void (*HudUpdateFn)(void* a, void* b, void* c, void* d);
 static HudUpdateFn g_hudOrig = nullptr;
-static void hud_hook(void* a, void* b, void* c, void* d) { g_hudTick = GetTickCount(); drain_sounds(); g_hudOrig(a, b, c, d); }
+static void hud_hook(void* a, void* b, void* c, void* d) {
+    PROF(PF_HUD);
+    g_hudTick = GetTickCount(); drain_sounds();
+    PROF_CALL(PF_HUD_G, g_hudOrig(a, b, c, d));
+}
 
 // ---------------------------------------------------------------- utilities
 static bool readable(const void* p, size_t n) {
@@ -1419,7 +1486,8 @@ typedef uint64_t (*DepsFn)(void* sys, uint8_t* out, uint32_t size);
 static DepsFn g_depsOrig = nullptr;
 static void piece_target_restore();
 static uint64_t deps_hook(void* sys, uint8_t* out, uint32_t size) {
-    uint64_t r = g_depsOrig(sys, out, size);
+    PROF(PF_DEPS);
+    uint64_t r = PROF_CALL(PF_DEPS_G, g_depsOrig(sys, out, size));
     if ((uint8_t*)__builtin_return_address(0) == g_dismDepsRet && sys && out && size >= 0x188) {
         piece_target_restore();
         void* world = *(void**)sys, *w = *(void**)(out + 0x180);
@@ -1624,10 +1692,11 @@ static bool point_in_base(uint8_t* sys, int b, float* p) {
     return false;
 }
 static uint8_t* client_stock_hook(uint8_t* out, uint8_t* sys, const float* pos, uint32_t player) {
-    if (!global_chests_on() || !sys || !pos) return g_clientStockOrig(out, sys, pos, player);
+    PROF(PF_CSTOCK);
+    if (!global_chests_on() || !sys || !pos) return PROF_CALL(PF_CSTOCK_G, g_clientStockOrig(out, sys, pos, player));
     ClientChests* cc = client_chests(sys);
     int nb = cc ? base_count(sys) : 0;
-    if (!nb) return g_clientStockOrig(out, sys, pos, player);
+    if (!nb) return PROF_CALL(PF_CSTOCK_G, g_clientStockOrig(out, sys, pos, player));
     // A pass over the chests starts with both chunk counters at 0. The list is rebuilt
     // only then (or when the player changes base), so it stays the same while the game
     // walks through it over several frames.
@@ -1644,15 +1713,15 @@ static uint8_t* client_stock_hook(uint8_t* out, uint8_t* sys, const float* pos, 
                 .str(here >= 0 ? "" : " (outside every base)"));
     }
     int b = cc->base;
-    if (b < 0) return g_clientStockOrig(out, sys, pos, player);
+    if (b < 0) return PROF_CALL(PF_CSTOCK_G, g_clientStockOrig(out, sys, pos, player));
     const float* at = here >= 0 ? pos : cc->at;
     volatile uint64_t* slot = (volatile uint64_t*)base_rec(sys, b);
     uint64_t ids0 = slot[0], n0 = slot[1];
-    if ((uint64_t)cc->n <= n0 && at == pos) return g_clientStockOrig(out, sys, pos, player);
+    if ((uint64_t)cc->n <= n0 && at == pos) return PROF_CALL(PF_CSTOCK_G, g_clientStockOrig(out, sys, pos, player));
     // The list starts with base b's own chests, so another reader that sees the new
     // pointer with the old count still reads valid ids: pointer first in, count first out.
     slot[0] = (uint64_t)cc->buf; slot[1] = (uint64_t)cc->n;
-    uint8_t* r = g_clientStockOrig(out, sys, at, player);
+    uint8_t* r = PROF_CALL(PF_CSTOCK_G, g_clientStockOrig(out, sys, at, player));
     slot[1] = n0; slot[0] = ids0;
     return r;
 }
@@ -1682,8 +1751,9 @@ struct ChestScope {
     ~ChestScope() { if (t) t->building = was; }
 };
 static uint8_t* chest_list_hook(uint8_t* out, uint64_t* list, uint8_t* sysA, uint8_t* sysB, const float* pos, uint32_t player) {
+    PROF(PF_CHEST);
     uint8_t* ret = (uint8_t*)__builtin_return_address(0);
-    uint8_t* r = g_chestListOrig(out, list, sysA, sysB, pos, player);
+    uint8_t* r = PROF_CALL(PF_CHEST_G, g_chestListOrig(out, list, sysA, sysB, pos, player));
     // cheap tests first: the UI asks thousands of times per second
     if (!global_chests_on() || !out || !list || ret == g_depositRet) return r;
     uint8_t st = out[0];
@@ -1722,6 +1792,7 @@ static uint8_t* chest_list_hook(uint8_t* out, uint64_t* list, uint8_t* sysA, uin
 typedef uint32_t (*StockCountFn)(void* map, uint8_t* sys, uint32_t item, const float* pos);
 static StockCountFn g_stockCountOrig = nullptr;
 static uint32_t stock_count_hook(void* map, uint8_t* sys, uint32_t item, const float* pos) {
+    PROF(PF_SCOUNT);
     // a system that is not a known client world's is the server's; until the client
     // world has shown up nothing is changed
     if (!global_chests_on() || !sys || !g_clientChests[0] || is_client_sys(sys))
@@ -1853,7 +1924,8 @@ static uint8_t pay_body(uint8_t* mode, CostList* list, uint8_t consume, uint8_t*
 typedef uint8_t (*MissingFn)(void* cursor, uint8_t* sel, float scale);
 static MissingFn g_missingOrig = nullptr;
 static uint8_t missing_hook(void* cursor, uint8_t* sel, float scale) {
-    uint8_t r = g_missingOrig(cursor, sel, scale);
+    PROF(PF_MISSING);
+    uint8_t r = PROF_CALL(PF_MISSING_G, g_missingOrig(cursor, sel, scale));
     if (r && creative_on() && sel && readable(sel + 0x60, 8)) {
         uint8_t* bp = *(uint8_t**)(sel + 0x60);
         if (bp && readable(bp + 0x458, 0x20) &&
@@ -1887,9 +1959,10 @@ static uint32_t* g_noContainer; static DWORD g_stocksTls = TLS_OUT_OF_INDEXES;
 static volatile LONG g_stocksLog = 0;
 struct StocksCall { uint8_t* ctx; uint8_t onlyShown; };
 static void stocks_hook(void* stocks, void* ctx, uint8_t onlyShown) {
+    PROF(PF_STOCKS);
     StocksCall c = { (uint8_t*)ctx, onlyShown };
     TlsSetValue(g_stocksTls, &c);
-    g_stocksOrig(stocks, ctx, onlyShown);
+    PROF_CALL(PF_STOCKS_G, g_stocksOrig(stocks, ctx, onlyShown));
     TlsSetValue(g_stocksTls, nullptr);
 }
 // The item groups never change while the game runs, so their material ids are
@@ -2026,6 +2099,7 @@ static int64_t stock_of(uint32_t item) {
     return 0;                       // listed types are complete: not there = none
 }
 static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, void* e) {
+    PROF(PF_STOCKFIN);
     // only while the hammer is out (the lists are rebuilt every frame; longer lists
     // cost the game time even when the picker is closed)
     bool building = !g_cxOrig || GetTickCount() - g_buildTick < 1500;
@@ -2033,7 +2107,7 @@ static void stock_final_hook(void* stocks, void* a, void* b, void* cc, void* d, 
         add_all_materials((uint8_t*)stocks, (StocksCall*)TlsGetValue(g_stocksTls));
     uint8_t* sb = (uint8_t*)stocks; int st = sb[0x2bf8];
     uint64_t before = st < 7 ? ((StockList*)(sb + st * 0x648))->count : 0;
-    g_stockFinalOrig(stocks, a, b, cc, d, e);
+    PROF_CALL(PF_STOCKFIN_G, g_stockFinalOrig(stocks, a, b, cc, d, e));
     if (!creative_on()) note_stock((uint8_t*)stocks);
     // The game selects the entry of the material chosen last (+0x628 index, +0x630
     // valid). With none of a type in the inventory nothing is chosen, so the picker
@@ -2551,6 +2625,15 @@ static int world_of(CostList* list, CursorXf* xf) {
 static CRITICAL_SECTION g_stateLock;
 static LONG g_sc = 0;            // corners set (0..2)
 static I3   g_scPos[3];
+static const char* prof_state() {
+    static char out[96]; Buf b;
+    b.str(g_modOff ? "mod off" : building_now(500) ? "hammer or material in hand" : "no hammer");
+    if (g_cfg.globalChests) b.str(", magic chests of all bases");
+    if (g_cfg.creative) b.str(", creative");
+    if (g_sc) b.str(", area corners ").i(g_sc);
+    memcpy(out, b.z(), b.n + 1 < (int)sizeof(out) ? b.n + 1 : sizeof(out) - 1); out[sizeof(out) - 1] = 0;
+    return out;
+}
 enum { OP_BUILD = 0, OP_REMOVE = 1 };
 static volatile LONG g_scOp = OP_BUILD;   // what the corners being collected are for
 static void reset_corners() { g_sc = 0; g_corners = 0; }
@@ -3497,6 +3580,7 @@ static void remote_clicks(uint8_t* src, uint8_t flags) {
 }
 
 static uint64_t input_encode_hook(uint8_t* out, uint8_t* src, uint8_t* flags, uint64_t a4) {
+    PROF(PF_INPUT);
     uint8_t* item = flags && (*flags & 1) && !g_modOff && src && (building_now() || GetTickCount() - g_liveItemTick < 500) ? building_item() : nullptr;
     CursorXf saved, aim;
     const bool patch = item && freecam_aim(src, item, &aim);
@@ -3519,7 +3603,7 @@ static uint64_t input_encode_hook(uint8_t* out, uint8_t* src, uint8_t* flags, ui
         exPatch = true;
         LOG(.str("exact: click ").i(g_exactPhase + 1).str(" sent at (").fix(x.pos[0]).c(',').fix(x.pos[1]).c(',').fix(x.pos[2]).c(')'));
     }
-    uint64_t r = g_inputEncodeOrig(out, src, flags, a4);
+    uint64_t r = PROF_CALL(PF_INPUT_G, g_inputEncodeOrig(out, src, flags, a4));
     if (out && src) {
         const uint64_t prev = g_prevDigital;
         remote_clicks(src, flags ? *flags : 0);         // first: this packet carries the click's result
@@ -3652,6 +3736,7 @@ static bool preview_edges_on() { if (g_cfg.drawBox && g_vkDrawOk) return false;
     return (g_cfg.preview & 1) || (g_cfg.preview == 2 && !g_zoneVisOrig); }
 
 static uint8_t* zone_vis_hook(uint8_t* world) {
+    PROF(PF_ZONEVIS);
     uint8_t* st = g_zoneVisOrig(world);
     DWORD t = g_boxTick;
     if (!st || !t || GetTickCount() - t > 250 || !preview_box_on()) return st;
@@ -3778,6 +3863,7 @@ static bool occ_wanted() {
     return g_voxQuery && g_cfg.drawBoxCells && draw_box_on() && (op == 2 || (op == 1 && g_replaceStyle != STYLE_FULL));
 }
 static void occ_update(uint8_t* ctx) {
+    PROF(PF_OCC);
     if (!occ_wanted() || !g_dbTick) { g_occReady = 0; g_occValid = false; return; }
     void* world = *(void**)(ctx + 0x130);
     if (!world || readable_len(world, 16) < 16) return;
@@ -3860,7 +3946,8 @@ static void occ_update(uint8_t* ctx) {
 
 volatile DWORD g_hoverTick = 0;
 static void hover_fx_hook(uint8_t* ctx, void* b, void* c) {
-    g_hoverFxOrig(ctx, b, c);
+    PROF(PF_HOVER);
+    PROF_CALL(PF_HOVER_G, g_hoverFxOrig(ctx, b, c));
     g_hoverTick = GetTickCount();
     update_preview_box();
     if (ctx) occ_update(ctx);
@@ -4320,6 +4407,7 @@ static volatile DWORD g_hudScreenTick = 0;
 static volatile LONG g_objWinShown = 0;           // the object settings window was drawn (objects.h)
 static void obj_window_closed();
 static void play_ui_hook(void* a, void* b, void* c, void* d) {
+    PROF(PF_PLAYUI);
     uint8_t* scr = hud_screen_byte();
     if (scr) { g_hudScreen = *scr; g_hudScreenTick = GetTickCount(); }
     if (scr) {
@@ -4389,7 +4477,7 @@ static void play_ui_hook(void* a, void* b, void* c, void* d) {
         if (!g_menuOpen) g_bindWaiting = -1;
         if (!g_menuOpen && g_objWinShown) obj_window_closed();
     }
-    g_playUiOrig(a, b, c, d);
+    PROF_CALL(PF_PLAYUI_G, g_playUiOrig(a, b, c, d));
     draw_float_info();
     if (g_radialOpen && scr && wheel_screen(*scr)) draw_radial();
 }
@@ -5043,6 +5131,7 @@ static void draw_exact_window() {
 #include "objects.h"
 
 static void mod_screen_hook(void*, void*, void*, void*) {
+    PROF(PF_MODSCR);
     static LONG logged = 0;
     if (!InterlockedExchange(&logged, 1)) LOG(.str("menu: screen drawn"));
     if (g_exactOpen) draw_exact_window(); else if (g_objWin) draw_obj_window(); else draw_mod_menu();
@@ -5104,10 +5193,11 @@ static bool make_binding(int code, uint8_t* b) {
 }
 
 static void hud_row_hook(uint8_t action, void* params) {
+    PROF(PF_HUDROW);
     g_gameRowTick = GetTickCount();
     memcpy(g_hudRowTpl, params, 0x78);
     g_hudRowTplOk = true;
-    g_hudRowOrig(action, params);
+    PROF_CALL(PF_HUDROW_G, g_hudRowOrig(action, params));
 }
 
 // The small on/off mark the bottom-left HUD slots use (21 x 21).
@@ -5357,10 +5447,11 @@ static void draw_radial() {
 }
 
 static void hud_finish_hook(void* box) {
+    PROF(PF_HUDFIN);
     static LONG logged = 0;
     if (g_cfg.hudRows && g_hudRowTplOk && !InterlockedExchange(&logged, 1)) LOG(.str("hud rows: drawn"));
     draw_hud_rows();
-    g_hudFinishOrig(box);
+    PROF_CALL(PF_HUDFIN_G, g_hudFinishOrig(box));
 }
 
 static void install_hud_rows() {
