@@ -253,7 +253,7 @@
     X(S_OBJ_PLACED, "obj.placed", "Objects placed: {0}") \
     X(S_OBJ_NOT_ENOUGH, "obj.not_enough", "Not enough for {0} objects") \
     X(S_OBJ_CLEARED, "obj.cleared", "Object line points cleared") \
-    X(S_OBJ_REMOTE, "obj.remote", "Object lines work in single player only (for now)") \
+    X(S_OBJ_REMOTE, "obj.remote", "Object lines work only in a world you host (not yet when you join a server)") \
     X(S_FLOAT_OBJ, "obj.float", "{0}: click {1} of {2}, {3} objects") \
     X(S_OBJ_TITLE, "obj.title", "Object placement") \
     X(S_OBJ_HELP, "obj.help", "With an object in hand: Line = 2 clicks, Curve = start, end, then a point it bends through, Circle = centre, then a point on it. The last click places all objects.") \

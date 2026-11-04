@@ -263,7 +263,7 @@ obj.point = {0}: punkt {1} z {2} ustawiony
 obj.placed = Postawione obiekty: {0}
 obj.not_enough = Za mało na {0} obiektów
 obj.cleared = Punkty linii obiektów wyczyszczone
-obj.remote = Linie obiektów działają na razie tylko w grze jednoosobowej
+obj.remote = Linie obiektów działają tylko w świecie, który hostujesz (jeszcze nie po dołączeniu do serwera)
 obj.float = {0}: kliknięcie {1} z {2}, obiektów: {3}
 obj.title = Stawianie obiektów
 obj.help = Z obiektem w ręce: Linia = 2 kliknięcia, Łuk = początek, koniec, potem punkt, przez który przechodzi, Okrąg = środek, potem punkt na okręgu. Ostatnie kliknięcie stawia wszystkie obiekty.
