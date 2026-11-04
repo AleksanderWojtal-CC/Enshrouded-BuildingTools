@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.0-dev2"
+#define MOD_VERSION "0.31.0-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -135,6 +135,7 @@ struct Config {
     int keyRoundLying = 0;                       // round / diagonal fill standing <-> lying
     int keyFillDiag = 0;                         // diagonal fill quick key
     int keyExact = 0;                            // exact mode on / off (Area mode)
+    int keyObjUndo = 'Y';                        // undo with an object in hand (the game's undo key is read only with the hammer)
     int keyCreative  = 0;      // creative building on / off
     int keyReplaceHold = 0;    // Replace on while this key is held
     int keyPrefab = 0, keyAreaOn = 0, keyReplaceOn = 0, keyReplaceOff = 0;   // set a mode / Replace directly
@@ -194,6 +195,7 @@ static void write_full_ini(const Config& c) {
      .t("FillSolid=").i(c.keyFillSolid).t("\r\nFillHollow=").i(c.keyFillHollow).t("\r\nFillWalls=").i(c.keyFillWalls).t("\r\n")
      .t("FillRoof=").i(c.keyFillRoof).t("\r\nFillRound=").i(c.keyFillRound).t("\r\nFillDiagonal=").i(c.keyFillDiag).t("\r\n")
      .t("; Area corners: two -> base + height -> exact (one click, then the sizes in a window)\r\nToggleExact=").i(c.keyExact).t("\r\n")
+     .t("; Undo with an object in hand (the game reads its own undo key only with the hammer)\r\nObjectUndo=").i(c.keyObjUndo).t("\r\n")
      .t("ToggleCreative=").i(c.keyCreative).t("\r\n")
      .t("PrefabMode=").i(c.keyPrefab).t("\r\nAreaMode=").i(c.keyAreaOn).t("\r\n")
      .t("ReplaceOn=").i(c.keyReplaceOn).t("\r\nReplaceOff=").i(c.keyReplaceOff).t("\r\n")
@@ -311,6 +313,7 @@ static void load_config() {
     g_cfg.keyRoundLying = ini_int(L"Keys", L"RoundLying", 0);
     g_cfg.keyFillDiag   = ini_int(L"Keys", L"FillDiagonal", 0);
     g_cfg.keyExact      = ini_int(L"Keys", L"ToggleExact", 0);
+    g_cfg.keyObjUndo    = ini_int(L"Keys", L"ObjectUndo", 'Y');
     g_cfg.keyCreative   = ini_int(L"Keys", L"ToggleCreative", 0);
     g_cfg.keyPrefab     = ini_int(L"Keys", L"PrefabMode", 0);
     g_cfg.keyAreaOn     = ini_int(L"Keys", L"AreaMode", 0);

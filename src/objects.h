@@ -600,7 +600,21 @@ static void build_mode_hook(uint8_t* out, uint8_t* sys, void* item) {
     uint8_t flags = sc && readable(sc + 0x69, 1) ? sc[0x69] : 0xff;
     static int lastFlags = -1;
     if (flags != lastFlags) { lastFlags = flags; LOG(.str("object undo: object in hand, server flags ").x(flags).str((flags & 0xc) == 0xc ? " (undo possible)" : "")); }
-    if (g_undoKey(sys)) LOG(.str("object undo: undo key with an object in hand -> undo sent"));
+    // The game's undo key is an input action (BuildingUndo, bit 40 of the action set at sys+0x2f8: +8
+    // down, +0 already taken) that only the hammer's controls produce. On the mod's key (default Y,
+    // [Keys] ObjectUndo) that bit is set for this one call, so the game's own undo code runs.
+    static bool was = false;
+    const bool down = g_cfg.keyObjUndo > 0 && game_focused() && !g_objWin && key_down(g_cfg.keyObjUndo);
+    const bool press = down && !was;
+    was = down;
+    if (!press) return;
+    uint64_t* in = readable(sys + 0x2f8, 8) ? *(uint64_t**)(sys + 0x2f8) : nullptr;
+    if (!in || !readable(in, 16)) return;
+    const uint64_t bit = 1ull << 40, in0 = in[0], in1 = in[1];
+    in[1] |= bit; in[0] &= ~bit;
+    uint8_t r = g_undoKey(sys);
+    in[0] = in0; in[1] = in1;
+    LOG(.str("object undo: undo key with an object in hand, server flags ").x(flags).str(r ? " -> undo sent" : " -> not sent"));
 }
 static void install_undo_key() {
     auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
