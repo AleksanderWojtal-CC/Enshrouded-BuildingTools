@@ -46,7 +46,8 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   picks Single, Line, Curve, Circle, Arch or Standing circle. The line and a ring for each
   object are drawn over the world; the last click places them all, evenly spaced, with
   optional random spacing, rotation and height, on the ground under each object, level
-  or along a slope, turned with the line if you like. In worlds you host.
+  or along a slope, turned with the line if you like. In worlds you host. Undo (Y with
+  the object in hand, or the hammer's undo) takes back the last object or the whole line.
 - **Tools wheel** (hold Caps Lock): a blurred wheel drawn with the game's own wheel;
   point the mouse at an option and let go. It shows only what applies right now
   (Replace style while Replace is on, fill and corners in Area mode).

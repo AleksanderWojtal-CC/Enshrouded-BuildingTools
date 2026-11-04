@@ -292,4 +292,5 @@ obj.wheel_menu = 物体设置
 obj.wheel_clear = 清除点
 obj.key_mode = 物体放置：下一模式（单个、直线、曲线、圆、拱形、竖圆）
 obj.key_menu = 物体放置：设置窗口
+obj.key_undo = 物体放置：撤销（手持物体）
 obj.tool = 物体线

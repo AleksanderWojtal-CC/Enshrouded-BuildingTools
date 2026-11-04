@@ -292,4 +292,5 @@ obj.wheel_menu = Impostazioni oggetti
 obj.wheel_clear = Cancella punti
 obj.key_mode = Piazzamento oggetti: modalità successiva (singolo, linea, curva, cerchio, arco, cerchio verticale)
 obj.key_menu = Piazzamento oggetti: finestra impostazioni
+obj.key_undo = Piazzamento oggetti: annulla (oggetto in mano)
 obj.tool = Linee di oggetti

@@ -292,4 +292,5 @@ obj.wheel_menu = Objekt-Einstellungen
 obj.wheel_clear = Punkte löschen
 obj.key_mode = Objekte platzieren: nächster Modus (einzeln, Linie, Kurve, Kreis, Bogen, stehender Kreis)
 obj.key_menu = Objekte platzieren: Einstellungsfenster
+obj.key_undo = Objekte platzieren: Rückgängig (Objekt in der Hand)
 obj.tool = Objektlinien

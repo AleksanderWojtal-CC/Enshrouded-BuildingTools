@@ -879,6 +879,27 @@ the hotfix client shows every feature available.
   Clicks more than 1.5 m from this game's ghost are other players' (a hosted game runs their
   placements too) and stay vanilla.
 
+## Object undo (0.31.0, client 1.0.1.1 RVAs; 1.0.1.2 about +0xE0)
+
+- Undo apply 491320 switches on record type (+0x4c): 0 PlaceProp 48ddd0, 1 RemoveProp
+  490950, 2 48e610, 3 48f9d0, 4 48ee40, 5 48e0f0, 6 490d10, 9 terrain. Record +0x48 = item.
+- RemoveProp 490950(ctx, {u32 entity, u8 method}, item): queues the entity's destroy
+  (9601f0), then method 1 (PickUp) event 0x795389e9 or 2 (TearDown) 4974e0. The dismantle
+  system's pick-up (2d9fdb) calls it after paying the refund (492750 list).
+- PlaceProp adds {entity (spawn 48d330's result), method = item ? 1 : 2} with 498830 at
+  48df63, behind `call eb39e0` (`mov al,1; ret`), ctx+0x151 and ctx+0xf0. eb39e0 also gates
+  the pick-up's own record in 490950 and the dismantle pick-up's undo step.
+- Server cursor (server_cursor_no_prediction 297760) sets ServerCursor +0x69 bit 3
+  CanUndoBuildingAction from 4962f0(player, item, nearZone) (same item test as place_prop,
+  then 21d7b0(player, 0x6000000080) == 0), the storage and 4999e0 (a step exists).
+- Client player_control_action_sequence (2dcbc0; body 2dde25): 2c5de0(out, sys, item) at
+  2de6d4 picks the hammer branch (out[0] != 0), which calls 2c72b0(sys) at 2df35e: needs
+  ServerCursor bits 4 and 8 and input action 40 (BuildingUndo) pressed in the action set
+  at sys+0x2f8 (4739a0: bit set in +8, clear in +0), then requests action sequence 0x28
+  (219ae0, 0x8d132f0e). With an object in hand bit 40 is never set.
+- Mod: SIG_PROP_UNDO_TEST (cave), SIG_PROP_REC_CALL, SIG_CAN_UNDO_CALL, SIG_BUILD_MODE_CALL,
+  SIG_UNDO_KEY_CALL. The undo's refund call (SIG_PAY_UNDO) tells the key code the undo ran.
+
 ## Hotfix #5 (1.0.1.2, build 1287369, 2026-11-04): no mod change
 
 0.30.0 works unchanged (checked offline on the hotfix exes). All 86 client signatures

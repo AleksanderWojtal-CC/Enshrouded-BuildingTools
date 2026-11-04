@@ -172,8 +172,10 @@ Object placement (an object in hand)
   click to click) and Turn with the line (each object faces along the line; on
   arches and standing circles it turns round the centre).
   Works in a world you host (also alone); not yet on a server you join or a
-  dedicated server. The game has no undo for objects: pick them up to take a
-  line back. Saved in [Objects] of the ini; keys ObjectMode / ObjectSettings.
+  dedicated server. Undo: press Y with the object still in hand (key ObjectUndo)
+  or the game's undo with the hammer; it takes back the last object or the whole
+  line and gives them back (a line of more than 30 objects: its first 30). Saved
+  in [Objects] of the ini; keys ObjectMode / ObjectSettings / ObjectUndo.
 
 Tools wheel (hold Caps Lock)
   With the hammer or a building material in hand: a blurred wheel in the middle of the screen, drawn with the game's own wheel.

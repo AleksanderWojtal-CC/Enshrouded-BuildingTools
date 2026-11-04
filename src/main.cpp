@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.0-dev5"
+#define MOD_VERSION "0.31.0"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -3923,7 +3923,7 @@ static int* const g_allKeys[] = { &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg
                                   &g_cfg.keyReplaceHold, &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
                                   &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape,
                                   &g_cfg.keyThick, &g_cfg.keyOverhang, &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying,
-                                  &g_cfg.keyFillDiag, &g_cfg.keyExact };
+                                  &g_cfg.keyFillDiag, &g_cfg.keyExact, &g_cfg.keyObjUndo };
 // Down with exactly its modifiers. A key without modifiers ignores held modifiers (Shift
 // while sprinting), unless another setting uses the same key with the held ones.
 static bool key_down(int code) {
@@ -4613,6 +4613,7 @@ static KeyAction g_keyActions[] = {
     { S_ACT_EXACT, &g_cfg.keyExact, 0 },
     { S_ACT_OBJ_MODE, &g_cfg.keyObjMode, 0 },
     { S_ACT_OBJ_MENU, &g_cfg.keyObjMenu, 0 },
+    { S_ACT_OBJ_UNDO, &g_cfg.keyObjUndo, 0 },
     { S_ACT_CLEAR, &g_cfg.keyCancel, 0 },
     { S_ACT_FREE, &g_cfg.keyHover, 0 },
     { S_ACT_FARTHER, &g_cfg.keyFarther, 0 },

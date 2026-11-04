@@ -292,4 +292,5 @@ obj.wheel_menu = Nesne ayarları
 obj.wheel_clear = Noktaları temizle
 obj.key_mode = Nesne yerleştirme: sonraki mod (tekli, çizgi, eğri, daire, kemer, dik daire)
 obj.key_menu = Nesne yerleştirme: ayarlar penceresi
+obj.key_undo = Nesne yerleştirme: geri al (nesne elde)
 obj.tool = Nesne çizgileri

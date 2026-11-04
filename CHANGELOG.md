@@ -3,6 +3,18 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.31.0
+
+- **Undo for objects** (#51). The game's undo now also takes back objects you placed
+  (chairs, torches, plants...): one object, or a whole line, curve or circle in one press,
+  and gives them back. Press Y with the object still in hand (`ObjectUndo` on the Keys
+  tab), or the game's undo with the hammer. It uses the game's own undo and its own
+  "pick up" removal. A line of more than 30 objects can undo its first 30 (the game's
+  undo holds 32 entries). On while Object lines is on; worlds you host, not yet on a
+  dedicated server.
+- **Smoother object lines**: the preview of a long line no longer costs many frames
+  (it is worked out again only when something moves, and reads the ground in fewer steps).
+
 ## 0.30.0
 
 - **Object placement** (#18). With an object in hand (a chair, torch, plant...), the tools

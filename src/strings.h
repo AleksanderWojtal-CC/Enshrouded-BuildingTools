@@ -282,6 +282,7 @@
     X(S_WHEEL_OBJ_CLEAR, "obj.wheel_clear", "Clear points") \
     X(S_ACT_OBJ_MODE, "obj.key_mode", "Object placement: next mode (single, line, curve, circle, arch, standing circle)") \
     X(S_ACT_OBJ_MENU, "obj.key_menu", "Object placement: settings window") \
+    X(S_ACT_OBJ_UNDO, "obj.key_undo", "Object placement: undo (object in hand)") \
     X(S_OPT_TOOL_OBJECTS, "obj.tool", "Object lines")
 
 enum Str {

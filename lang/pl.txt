@@ -292,4 +292,5 @@ obj.wheel_menu = Ustawienia obiektów
 obj.wheel_clear = Wyczyść punkty
 obj.key_mode = Stawianie obiektów: następny tryb (pojedynczo, linia, krzywa, okrąg, łuk, okrąg pionowy)
 obj.key_menu = Stawianie obiektów: okno ustawień
+obj.key_undo = Stawianie obiektów: cofnij (obiekt w ręce)
 obj.tool = Linie obiektów

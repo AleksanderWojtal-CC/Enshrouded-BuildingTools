@@ -292,4 +292,5 @@ obj.wheel_menu = 오브젝트 설정
 obj.wheel_clear = 점 지우기
 obj.key_mode = 오브젝트 배치: 다음 모드 (단일, 직선, 곡선, 원, 아치, 세운 원)
 obj.key_menu = 오브젝트 배치: 설정 창
+obj.key_undo = 오브젝트 배치: 실행 취소 (오브젝트를 손에 들고)
 obj.tool = 오브젝트 라인
