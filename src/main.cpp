@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.1-dev1"
+#define MOD_VERSION "0.31.1-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1191,12 +1191,36 @@ static void hud_hook(void* a, void* b, void* c, void* d) {
 }
 
 // ---------------------------------------------------------------- utilities
+// VirtualQuery is slow in the game's process: it works out the size of the whole region,
+// and the game's large heaps made each call cost up to a millisecond (measured 0.31.1-dev1:
+// 2 ms a frame for the held item's checks, 3-4 ms for the magic chests of all bases).
+// So a 64 KB block found readable is remembered for 3 seconds (one word per cache slot:
+// block number << 32 | tick, never 0 for a used slot). Only "readable" is remembered.
+static const int kReadCache = 256;
+static volatile uint64_t g_readCache[kReadCache];
+static bool read_cached(uint64_t blk, DWORD now) {
+    uint64_t e = g_readCache[(blk * 0x9E3779B1u) >> 8 & (kReadCache - 1)];
+    return e && (e >> 32) == (blk & 0xffffffffu) && now - (DWORD)e < 3000;
+}
+static void read_note(uint64_t blk, DWORD now) {
+    g_readCache[(blk * 0x9E3779B1u) >> 8 & (kReadCache - 1)] = (blk & 0xffffffffu) << 32 | (now ? now : 1);
+}
 static bool readable(const void* p, size_t n) {
+    if (!p) return false;
+    const uint64_t a = (uint64_t)p, last = a + (n ? n - 1 : 0);
+    const uint64_t b0 = a >> 16, b1 = last >> 16;
+    const DWORD now = GetTickCount();
+    if (b1 - b0 <= 1 && read_cached(b0, now) && read_cached(b1, now)) return true;
     MEMORY_BASIC_INFORMATION mi;
     if (!VirtualQuery(p, &mi, sizeof(mi))) return false;
     if (mi.State != MEM_COMMIT) return false;
     if (mi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) return false;
-    return (const uint8_t*)p + n <= (const uint8_t*)mi.BaseAddress + mi.RegionSize;
+    const uint8_t* end = (const uint8_t*)mi.BaseAddress + mi.RegionSize;
+    if ((const uint8_t*)p + n > end) return false;
+    // whole 64 KB blocks inside this region (same protection throughout)
+    const uint64_t lo = ((uint64_t)mi.BaseAddress + 0xffff) >> 16, hi = (uint64_t)end >> 16;   // [lo, hi)
+    if (b1 - b0 <= 1) for (uint64_t k = b0; k <= b1; k++) if (k >= lo && k < hi) read_note(k, now);
+    return true;
 }
 
 static uint8_t* g_textBase; static size_t g_textSize;
