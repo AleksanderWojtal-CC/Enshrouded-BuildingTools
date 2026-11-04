@@ -252,3 +252,36 @@ exact.build = 建造
 exact.remove = 移除
 exact.replace = 替换
 exact.cancel = 取消
+
+# Object placement (an object in hand)
+# obj.single = Single
+# obj.line = Line
+# obj.curve = Curve
+# obj.circle = Circle
+# obj.mode = Objects: {0}
+# obj.point = {0}: point {1} of {2} set
+# obj.placed = Objects placed: {0}
+# obj.not_enough = Not enough for {0} objects
+# obj.cleared = Object line points cleared
+# obj.remote = Object lines work in single player only (for now)
+# obj.float = {0}: click {1} of {2}, {3} objects
+# obj.title = Object placement
+# obj.help = With an object in hand: Line = 2 clicks, Curve = start, end, then a point it bends through, Circle = centre, then a point on it. The last click places all objects.
+# obj.mode_label = Mode
+# obj.count = Number of objects
+# obj.spacing = Random spacing (%)
+# obj.rotation = Random rotation (degrees)
+# obj.elevation = Random elevation (cm)
+# obj.reference = Reference plane
+# obj.ref_ground = Ground under each object
+# obj.ref_level = Level (first click height)
+# obj.ref_slope = Slope (straight from click to click)
+# obj.turn = Turn with the line
+# obj.reroll = New random values
+# obj.close = Close
+# obj.wheel_mode = Objects
+# obj.wheel_menu = Object settings
+# obj.wheel_clear = Clear points
+# obj.key_mode = Object placement: next mode (single, line, curve, circle)
+# obj.key_menu = Object placement: settings window
+# obj.tool = Object placement (line, curve, circle)

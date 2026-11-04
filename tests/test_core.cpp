@@ -4,6 +4,7 @@
 #include "../src/strings.h"
 #include <cstdio>
 #include <cstring>
+#include <cmath>
 #include <cstdlib>
 #include <vector>
 #include <fstream>
@@ -691,6 +692,69 @@ int main(int argc, char** argv) {
         CHECK(c[0].x == p.x + 2 * H && c[1].x == p.x - 2 * H, "exact: odd width centred on the click");
         core::exact_corners(p, core::EXACT_FRONT_RIGHT, 0, 0, 0, fa, fs, ra, rs, st, c);
         CHECK(c[0].x == c[1].x && c[0].y == c[1].y && c[0].z == c[1].z && c[0].x == p.x, "exact: 0, 0, 0 is the clicked shape");
+    }
+
+
+    // ---- object placement
+    {
+        using namespace core;
+        bool trig = true;
+        for (int i = -40; i <= 40; i++) {
+            double x = i * 0.37;
+            if (fabs(d_sin(x) - sin(x)) > 1e-8 || fabs(d_cos(x) - cos(x)) > 1e-8) trig = false;
+            double y = sin(i * 0.9) * 3; double xx = cos(i * 1.3) * 2;
+            if (fabs(d_atan2(y, xx) - atan2(y, xx)) > 1e-8) trig = false;
+        }
+        CHECK(trig, "objects: sin / cos / atan2 without a C runtime");
+        const double line[2][3] = { { 10, 5, 20 }, { 20, 7, 20 } };
+        ObjOpts o = { OBJ_LINE, 5, 0, 0, 0, OBJ_REF_SLOPE, 0, 1 };
+        ObjSpot sp[kObjMax];
+        int n = obj_layout(o, line, 2, nullptr, nullptr, sp, kObjMax);
+        CHECK(n == 5 && fabs(sp[0].p[0] - 10) < 1e-9 && fabs(sp[4].p[0] - 20) < 1e-9 && fabs(sp[2].p[0] - 15) < 1e-9 &&
+              fabs(sp[2].p[1] - 6) < 1e-9 && sp[1].yaw == 0, "objects: line of 5, both ends, slope height");
+        o.ref = OBJ_REF_LEVEL;
+        n = obj_layout(o, line, 2, nullptr, nullptr, sp, kObjMax);
+        CHECK(fabs(sp[4].p[1] - 5) < 1e-9, "objects: level = the first click's height");
+        const double circ[2][3] = { { 0, 1, 0 }, { 4, 3, 0 } };
+        ObjOpts c = { OBJ_CIRCLE, 4, 0, 0, 0, OBJ_REF_SLOPE, 1, 1 };
+        n = obj_layout(c, circ, 2, nullptr, nullptr, sp, kObjMax);
+        CHECK(n == 4 && fabs(sp[0].p[0] - 4) < 1e-9 && fabs(sp[1].p[2] - 4) < 1e-9 && fabs(sp[2].p[0] + 4) < 1e-9 &&
+              fabs(sp[3].p[1] - 1) < 1e-9, "objects: circle of 4 from the clicked point, level at the centre");
+        CHECK(fabs(sp[0].yaw) < 1e-9 && fabs(sp[1].yaw + kPi / 2) < 1e-6 && fabs(fabs(sp[2].yaw) - kPi) < 1e-6,
+              "objects: circle, turned with the line");
+        const double cur[3][3] = { { 0, 0, 0 }, { 10, 0, 0 }, { 5, 0, 5 } };
+        ObjOpts cv = { OBJ_CURVE, 3, 0, 0, 0, OBJ_REF_SLOPE, 0, 1 };
+        n = obj_layout(cv, cur, 3, nullptr, nullptr, sp, kObjMax);
+        CHECK(n == 3 && fabs(sp[1].p[0] - 5) < 1e-6 && fabs(sp[1].p[2] - 5) < 1e-6 && fabs(sp[2].p[0] - 10) < 1e-9,
+              "objects: curve passes through the third click half way");
+        ObjOpts r = { OBJ_LINE, 20, 50, 30, 40, OBJ_REF_SLOPE, 0, 77 };
+        n = obj_layout(r, line, 2, nullptr, nullptr, sp, kObjMax);
+        bool in = true, moved = false;
+        for (int i = 0; i < n; i++) {
+            double ideal = 10 + 10.0 * i / 19;
+            if (fabs(sp[i].p[0] - ideal) > 0.5 * 10.0 / 19 + 1e-9 || sp[i].p[0] < 10 || sp[i].p[0] > 20) in = false;
+            if (fabs(sp[i].yaw) > 30 * kPi / 180 + 1e-9) in = false;
+            double h = 5 + 2 * (sp[i].p[0] - 10) / 10;   // slope height at its x
+            if (fabs(sp[i].p[1] - h) > 0.4 + 1e-9) in = false;
+            if (fabs(sp[i].p[0] - ideal) > 1e-3) moved = true;
+        }
+        ObjSpot sp2[kObjMax];
+        obj_layout(r, line, 2, nullptr, nullptr, sp2, kObjMax);
+        CHECK(in && moved && !memcmp(sp, sp2, sizeof(ObjSpot) * n), "objects: random offsets within the limits, same seed same spots");
+        double path[64][3];
+        int pn = obj_path(c, circ, 2, nullptr, nullptr, path, 64);
+        CHECK(pn >= 48 && fabs(path[0][0] - path[pn - 1][0]) < 1e-6 && fabs(path[0][2] - path[pn - 1][2]) < 1e-6, "objects: circle path closed");
+        auto flat = [](void*, double, double, double, double* y) { *y = 2.5; return true; };
+        o.ref = OBJ_REF_GROUND;
+        n = obj_layout(o, line, 2, flat, nullptr, sp, kObjMax);
+        pn = obj_path(o, line, 2, flat, nullptr, path, 64);
+        CHECK(fabs(sp[3].p[1] - 2.5) < 1e-9 && pn >= 21 && pn <= 23 && fabs(path[7][1] - 2.5) < 1e-9, "objects: ground reference, path every 0.5 m");
+        double y = 0;
+        CHECK(obj_column_top(0x0Full | (0x3ull << 10), 48, 100, 50.0, &y) && fabs(y - 52.0) < 1e-9 &&
+              obj_column_top(0x0Full | (0x3ull << 10), 48, 100, 55.0, &y) && fabs(y - 56.0) < 1e-9, "objects: ground = nearest surface top");
+        float q[4] = { 0, 0, 0, 1 }, t[4];
+        obj_turn(q, kPi / 2, t);
+        CHECK(fabs(t[1] - sin(kPi / 4)) < 1e-6 && fabs(t[3] - cos(kPi / 4)) < 1e-6, "objects: turn about up");
     }
 
     printf(fails ? "\n%d FAILED\n" : "\nall tests passed\n", fails);

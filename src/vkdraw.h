@@ -17,6 +17,8 @@
 #include "cells_vert.h"
 #include "cells_frag.h"
 #include "cells_frag_depth.h"
+#include "path_vert.h"
+#include "path_frag.h"
 
 static FARPROC (WINAPI* g_realGPA)(HMODULE, LPCSTR) = nullptr;
 static PFN_vkGetInstanceProcAddr g_vkGIPA = nullptr;
@@ -168,7 +170,7 @@ struct VkSc {
     VkSemaphore sem[kVkMaxImages] = {};
     VkRenderPass rp = VK_NULL_HANDLE;
     VkPipelineLayout layout = VK_NULL_HANDLE;
-    VkPipeline fill = VK_NULL_HANDLE, fillDepth = VK_NULL_HANDLE, cells = VK_NULL_HANDLE, cellsDepth = VK_NULL_HANDLE;
+    VkPipeline fill = VK_NULL_HANDLE, fillDepth = VK_NULL_HANDLE, cells = VK_NULL_HANDLE, cellsDepth = VK_NULL_HANDLE, path = VK_NULL_HANDLE;
     VkCommandPool pool = VK_NULL_HANDLE;
     VkSampler sampler = VK_NULL_HANDLE;
     VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
@@ -216,6 +218,7 @@ static void vk_destroy_sc() {
     if (s.fillDepth) g_vd.vkDestroyPipeline(d, s.fillDepth, nullptr);
     if (s.cells) g_vd.vkDestroyPipeline(d, s.cells, nullptr);
     if (s.cellsDepth) g_vd.vkDestroyPipeline(d, s.cellsDepth, nullptr);
+    if (s.path) g_vd.vkDestroyPipeline(d, s.path, nullptr);
     for (int k = 0; k < 4; k++) if (s.depthView[k]) g_vd.vkDestroyImageView(d, s.depthView[k], nullptr);
     if (s.descPool) g_vd.vkDestroyDescriptorPool(d, s.descPool, nullptr);
     if (s.occPool) g_vd.vkDestroyDescriptorPool(d, s.occPool, nullptr);
@@ -271,6 +274,9 @@ static VkPipeline vk_make_pipeline(VkShaderModule vs, VkShaderModule fs, bool li
 // One small host-visible buffer for the occupied-cells bits. Needs the GPU's memory types
 // (instance function on the physical device the game created its device on).
 static const uint32_t kOccWords = 1250;              // 40000 cells
+static const uint32_t kPathMax = 300, kMarkMax = 200; // object placement path points, spots (objects.h)
+static const uint32_t kPathOff = 1280;               // the path's floats after the cell bits, same buffer
+static const uint32_t kOccBufWords = kPathOff + 3 * (kPathMax + kMarkMax);
 static void vk_init_occ(VkDevice dev) {
     VkSc& s = g_vs;
     if (!s.occSet || !g_vkInst || !g_vkPhys || !g_vkGIPA) { LOG(.str("vulkan: block bits not available (no GPU handle)")); return; }
@@ -285,7 +291,7 @@ static void vk_init_occ(VkDevice dev) {
     VkPhysicalDeviceMemoryProperties mp = {};
     getMem(g_vkPhys, &mp);
     VkBufferCreateInfo bi = {}; bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bi.size = kOccWords * 4; bi.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    bi.size = kOccBufWords * 4; bi.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     if (g_vd.vkCreateBuffer(dev, &bi, nullptr, &s.occBuf) != VK_SUCCESS) { s.occBuf = VK_NULL_HANDLE; return; }
     VkMemoryRequirements mr = {};
     g_vd.vkGetBufferMemoryRequirements(dev, s.occBuf, &mr);
@@ -300,8 +306,8 @@ static void vk_init_occ(VkDevice dev) {
     if (g_vd.vkAllocateMemory(dev, &ai, nullptr, &s.occMem) != VK_SUCCESS) { s.occMem = VK_NULL_HANDLE; return; }
     if (g_vd.vkBindBufferMemory(dev, s.occBuf, s.occMem, 0) != VK_SUCCESS ||
         g_vd.vkMapMemory(dev, s.occMem, 0, VK_WHOLE_SIZE, 0, &map) != VK_SUCCESS || !map) return;
-    memset(map, 0, kOccWords * 4);
-    VkDescriptorBufferInfo dbi = { s.occBuf, 0, kOccWords * 4 };
+    memset(map, 0, kOccBufWords * 4);
+    VkDescriptorBufferInfo dbi = { s.occBuf, 0, kOccBufWords * 4 };
     VkWriteDescriptorSet w = {}; w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     w.dstSet = s.occSet; w.descriptorCount = 1; w.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; w.pBufferInfo = &dbi;
     g_vd.vkUpdateDescriptorSets(dev, 1, &w, 0, nullptr);
@@ -422,6 +428,15 @@ static bool vk_init_sc(VkDevice dev, VkSwapchainKHR sc, const VkSwapchainCreateI
         if (cfd) g_vd.vkDestroyShaderModule(dev, cfd, nullptr);
         if (!s.cells || !s.cellsDepth) LOG(.str("vulkan: block pipelines failed (box only)"));
     }
+    {   // the object placement path
+        VkShaderModule pv = VK_NULL_HANDLE, pf = VK_NULL_HANDLE;
+        mi.codeSize = sizeof(kPathVert); mi.pCode = kPathVert; g_vd.vkCreateShaderModule(dev, &mi, nullptr, &pv);
+        mi.codeSize = sizeof(kPathFrag); mi.pCode = kPathFrag; g_vd.vkCreateShaderModule(dev, &mi, nullptr, &pf);
+        if (pv && pf) s.path = vk_make_pipeline(pv, pf, false);
+        if (pv) g_vd.vkDestroyShaderModule(dev, pv, nullptr);
+        if (pf) g_vd.vkDestroyShaderModule(dev, pf, nullptr);
+        if (!s.path) LOG(.str("vulkan: path pipeline failed (no object placement line)"));
+    }
     fs = VK_NULL_HANDLE;
     if (fs) g_vd.vkDestroyShaderModule(dev, fs, nullptr);
     if (!s.fill) { LOG(.str("vulkan: pipelines failed")); return false; }
@@ -466,6 +481,38 @@ static void set_draw_box(bool on, const int64_t* lo, const int64_t* hi) {
     DWORD t = GetTickCount(); g_dbTick = t ? t : 1;
 }
 
+// The camera of the frame on screen: DrawBoxDelay100 hundredths of a game frame back, or ahead
+// (negative: predicted from the last two frames); torn copies retried.
+static bool frame_cam(int64_t* cam, float* q) {
+    LONG n = g_camN, d = g_cfg.drawBoxDelay < -400 ? -400 : (g_cfg.drawBoxDelay > 1200 ? 1200 : g_cfg.drawBoxDelay);
+    LONG back = d > 0 ? d / 100 : 0;
+    double k = d > 0 ? -(double)(d - back * 100) / 100.0 : -(double)d / 100.0;   // along (newest - previous)
+    if (n <= back + 1) return false;
+    int64_t cam2[3]; float q2[4];
+    bool ok = false;
+    for (int tries = 0; tries < 4 && !ok; tries++) {
+        const CamSnap& c = g_camRing[(n - 1 - back) & 15];
+        const CamSnap& p = g_camRing[(n - 2 - back) & 15];
+        LONG s0 = c.seq, s1 = p.seq;
+        if ((s0 | s1) & 1) continue;
+        memcpy(cam, c.cam, 24); memcpy(q, c.rot, 16);
+        memcpy(cam2, p.cam, 24); memcpy(q2, p.rot, 16);
+        ok = c.seq == s0 && p.seq == s1;
+    }
+    if (!ok) return false;
+    if (k != 0) {
+        for (int i = 0; i < 3; i++) cam[i] += (int64_t)((double)(cam[i] - cam2[i]) * k);
+        float dot = q[0] * q2[0] + q[1] * q2[1] + q[2] * q2[2] + q[3] * q2[3];
+        float sg = dot < 0 ? -1.f : 1.f, len = 0;
+        for (int i = 0; i < 4; i++) { q[i] += (float)k * (q[i] - sg * q2[i]); len += q[i] * q[i]; }
+        if (len < 1e-6f) return false;
+        // 1/sqrt without a C runtime: Newton steps from 1 (len is close to 1)
+        float r = 1.f; for (int it = 0; it < 4; it++) r = r * (1.5f - 0.5f * len * r * r);
+        for (int i = 0; i < 4; i++) q[i] *= r;
+    }
+    return true;
+}
+
 // Model-view-projection for the unit cube onto the box, camera relative (column major).
 // Camera axes from its quaternion: right = R*(1,0,0), up = R*(0,1,0), forward = R*(0,0,1).
 static bool box_mvp(VkPush& P, float aspect, bool* inside) {
@@ -479,35 +526,7 @@ static bool box_mvp(VkPush& P, float aspect, bool* inside) {
     if (a0 & 1) return false;
     memcpy(lo, g_dbLo, 24); memcpy(hi, g_dbHi, 24);
     if (g_dbSeq != a0) return false;
-    {   // the camera of the frame on screen: DrawBoxDelay100 hundredths of a game frame back, or ahead
-        // (negative: predicted from the last two frames); torn copies retried
-        LONG n = g_camN, d = g_cfg.drawBoxDelay < -400 ? -400 : (g_cfg.drawBoxDelay > 1200 ? 1200 : g_cfg.drawBoxDelay);
-        LONG back = d > 0 ? d / 100 : 0;
-        double k = d > 0 ? -(double)(d - back * 100) / 100.0 : -(double)d / 100.0;   // along (newest - previous)
-        if (n <= back + 1) return false;
-        int64_t cam2[3]; float q2[4];
-        bool ok = false;
-        for (int tries = 0; tries < 4 && !ok; tries++) {
-            const CamSnap& c = g_camRing[(n - 1 - back) & 15];
-            const CamSnap& p = g_camRing[(n - 2 - back) & 15];
-            LONG s0 = c.seq, s1 = p.seq;
-            if ((s0 | s1) & 1) continue;
-            memcpy(cam, c.cam, 24); memcpy(q, c.rot, 16);
-            memcpy(cam2, p.cam, 24); memcpy(q2, p.rot, 16);
-            ok = c.seq == s0 && p.seq == s1;
-        }
-        if (!ok) return false;
-        if (k != 0) {
-            for (int i = 0; i < 3; i++) cam[i] += (int64_t)((double)(cam[i] - cam2[i]) * k);
-            float dot = q[0] * q2[0] + q[1] * q2[1] + q[2] * q2[2] + q[3] * q2[3];
-            float sg = dot < 0 ? -1.f : 1.f, len = 0;
-            for (int i = 0; i < 4; i++) { q[i] += (float)k * (q[i] - sg * q2[i]); len += q[i] * q[i]; }
-            if (len < 1e-6f) return false;
-            // 1/sqrt without a C runtime: Newton steps from 1 (len is close to 1)
-            float r = 1.f; for (int it = 0; it < 4; it++) r = r * (1.5f - 0.5f * len * r * r);
-            for (int i = 0; i < 4; i++) q[i] *= r;
-        }
-    }
+    if (!frame_cam(cam, q)) return false;
     double x = q[0], y = q[1], z = q[2], w = q[3];
     double R[3] = { 1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * z - w * y) };
     double U[3] = { 2 * (x * y - w * z), 1 - 2 * (x * x + z * z), 2 * (y * z + w * x) };
@@ -551,11 +570,65 @@ static bool box_mvp(VkPush& P, float aspect, bool* inside) {
     return true;
 }
 
+// ---- the object placement path (objects.h): points and spots in world fixed point, from the game thread
+static volatile LONG g_dpSeq = 0, g_dpN = 0, g_dpM = 0;
+static int64_t g_dpPts[kPathMax][3], g_dpMarks[kMarkMax][3];
+static volatile DWORD g_dpTick = 0;
+static volatile LONG g_objWin = 0;        // the object settings window is open (objects.h): drawn beside its panel
+static void set_draw_path(const int64_t (*pts)[3], int n, const int64_t (*marks)[3], int m) {
+    if (n < 2 && m < 1) { g_dpTick = 0; return; }
+    if (n > (int)kPathMax) n = kPathMax;
+    if (m > (int)kMarkMax) m = kMarkMax;
+    InterlockedIncrement(&g_dpSeq);
+    if (n > 0) memcpy(g_dpPts, pts, (size_t)n * 24);
+    if (m > 0) memcpy(g_dpMarks, marks, (size_t)m * 24);
+    g_dpN = n < 2 ? 0 : n; g_dpM = m;
+    InterlockedIncrement(&g_dpSeq);
+    DWORD t = GetTickCount(); g_dpTick = t ? t : 1;
+}
+// View-projection of camera relative metres (column major) and the path as camera relative floats.
+static bool path_mvp(VkPush& P, float aspect, float* outPts, uint32_t* nPath, uint32_t* nMark) {
+    DWORD t = g_dpTick;
+    if (!t || GetTickCount() - t > 300) return false;
+    if (GetTickCount() - g_camSysTick > 300 && !g_objWin) return false;
+    int64_t cam[3]; float q[4];
+    if (!frame_cam(cam, q)) return false;
+    LONG a0 = g_dpSeq;
+    if (a0 & 1) return false;
+    LONG n = g_dpN, m = g_dpM;
+    if (n > (LONG)kPathMax || m > (LONG)kMarkMax) return false;
+    const double inv = 1.0 / 4294967296.0;
+    for (LONG i = 0; i < n; i++) for (int a = 0; a < 3; a++) outPts[3 * i + a] = (float)((double)(g_dpPts[i][a] - cam[a]) * inv);
+    for (LONG i = 0; i < m; i++) for (int a = 0; a < 3; a++) outPts[3 * (n + i) + a] = (float)((double)(g_dpMarks[i][a] - cam[a]) * inv);
+    if (g_dpSeq != a0) return false;
+    double x = q[0], y = q[1], z = q[2], w = q[3];
+    double R[3] = { 1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * z - w * y) };
+    double U[3] = { 2 * (x * y - w * z), 1 - 2 * (x * x + z * z), 2 * (y * z + w * x) };
+    double F[3] = { 2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x * x + y * y) };
+    double fov = (g_cfg.drawBoxFov >= 10 && g_cfg.drawBoxFov <= 170 ? g_cfg.drawBoxFov : 60) * 3.14159265358979 / 180.0;
+    double h = fov * 0.5, h2 = h * h;
+    double sn = h * (1 - h2 / 6 * (1 - h2 / 20 * (1 - h2 / 42 * (1 - h2 / 72 * (1 - h2 / 110)))));
+    double cs = 1 - h2 / 2 * (1 - h2 / 12 * (1 - h2 / 30 * (1 - h2 / 56 * (1 - h2 / 90 * (1 - h2 / 132)))));
+    double sy = cs / sn, sx = sy / (aspect > 0 ? aspect : 1.f);
+    double mm[4][4] = {};
+    for (int i = 0; i < 3; i++) { mm[0][i] = sx * R[i]; mm[1][i] = -sy * U[i]; mm[3][i] = F[i]; }
+    mm[2][3] = 0.05;
+    for (int col = 0; col < 4; col++) for (int row = 0; row < 4; row++) P.mvp[col * 4 + row] = (float)mm[row][col];
+    *nPath = (uint32_t)n; *nMark = (uint32_t)m;
+    return n >= 2 || m > 0;
+}
+
 static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
     VkSc& s = g_vs;
     VkPush push = {};
     bool inside = false;
-    if (!box_mvp(push, (float)s.ext.width / (float)(s.ext.height ? s.ext.height : 1), &inside)) return false;
+    const float aspect = (float)s.ext.width / (float)(s.ext.height ? s.ext.height : 1);
+    const bool haveBox = box_mvp(push, aspect, &inside);
+    VkPush pathPush = {};
+    static float pathPts[3 * (kPathMax + kMarkMax)];
+    uint32_t nPath = 0, nMark = 0;
+    const bool havePath = !haveBox && s.path && s.occMap && s.occSet && path_mvp(pathPush, aspect, pathPts, &nPath, &nMark);
+    if (!haveBox && !havePath) return false;
     if (!vk_init_pool(q)) return false;
     VkDevice d = g_vd.dev;
     if (g_vd.vkWaitForFences(d, 1, &s.fence[i], VK_TRUE, 100000000ull) != VK_SUCCESS) return false;
@@ -569,7 +642,7 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
     VkImage dimg = VK_NULL_HANDLE;
     VkImageLayout dlay = VK_IMAGE_LAYOUT_UNDEFINED, readLay = VK_IMAGE_LAYOUT_UNDEFINED;
     VkImageAspectFlags dasp = VK_IMAGE_ASPECT_DEPTH_BIT;
-    if (g_cfg.drawBoxDepth && s.fillDepth) {
+    if (haveBox && g_cfg.drawBoxDepth && s.fillDepth) {
         uint64_t img = g_depthImg; LONG lay = g_depthLayout; uint32_t fmt = g_depthFmt;
         bool dfmt = fmt == VK_FORMAT_D32_SFLOAT || fmt == VK_FORMAT_D16_UNORM || fmt == VK_FORMAT_X8_D24_UNORM_PACK32 ||
                     fmt == VK_FORMAT_D24_UNORM_S8_UINT || fmt == VK_FORMAT_D32_SFLOAT_S8_UINT;
@@ -611,7 +684,7 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
     g_vd.vkCmdBeginRenderPass(cb, &rb, VK_SUBPASS_CONTENTS_INLINE);
     VkViewport vp = { 0.f, 0.f, (float)s.ext.width, (float)s.ext.height, 0.f, 1.f };
     VkRect2D sc = { { 0, 0 }, s.ext };
-    if (g_exactOpen && !g_exactHidden && g_exactPanelX > 0.f) {   // the exact window covers the box: draw it beside the window
+    if (((g_exactOpen && !g_exactHidden) || g_objWin) && g_exactPanelX > 0.f) {   // the exact window covers the box: draw it beside the window
         int32_t x = (int32_t)(g_exactPanelX * (float)s.ext.width);
         sc.offset.x = x; sc.extent.width = s.ext.width > (uint32_t)x ? s.ext.width - (uint32_t)x : 0;
     }
@@ -621,7 +694,7 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
     if (dimg) g_vd.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, s.layout, 0, 1, &s.set[i], 0, nullptr);
     // the blocks the action will touch (fill mode cells), drawn after the box
     uint32_t cellN = 0;
-    if (g_cfg.drawBoxCells && g_cellStep[0] > 0.f && (dimg ? s.cellsDepth : s.cells)) {
+    if (haveBox && g_cfg.drawBoxCells && g_cellStep[0] > 0.f && (dimg ? s.cellsDepth : s.cells)) {
         uint64_t nn = 1;
         for (int a = 0; a < 3; a++) {
             float c = push.size[a] / g_cellStep[a];
@@ -697,9 +770,23 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
     }
     push.eye[3] = (dimg ? (float)g_cfg.drawBoxDepth : 0.f) + (inside ? 4.f : 0.f);
     push.size[3] = (float)(GetTickCount() % 100000) * 0.001f;
-    g_vd.vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, dimg ? s.fillDepth : s.fill);
-    g_vd.vkCmdPushConstants(cb, s.layout, stages, 0, sizeof(push), &push);
-    g_vd.vkCmdDraw(cb, 36, 1, 0, 0);
+    if (haveBox) {
+        g_vd.vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, dimg ? s.fillDepth : s.fill);
+        g_vd.vkCmdPushConstants(cb, s.layout, stages, 0, sizeof(push), &push);
+        g_vd.vkCmdDraw(cb, 36, 1, 0, 0);
+    }
+    if (havePath) {   // the object placement path: its points after the cell bits in the shared buffer
+        memcpy(s.occMap + kPathOff, pathPts, (size_t)(nPath + nMark) * 12);
+        pathPush.cells[0] = (float)nPath; pathPush.cells[1] = (float)nMark;
+        pathPush.cells[2] = (float)s.ext.width; pathPush.cells[3] = (float)s.ext.height;
+        float px = (float)s.ext.height / 1080.f; if (px < 1.f) px = 1.f;
+        pathPush.size[0] = 3.5f * px; pathPush.size[1] = 10.f * px; pathPush.size[2] = (float)kPathOff;
+        g_vd.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, s.layout, 1, 1, &s.occSet, 0, nullptr);
+        g_vd.vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, s.path);
+        g_vd.vkCmdPushConstants(cb, s.layout, stages, 0, sizeof(pathPush), &pathPush);
+        uint32_t inst = (nPath > 1 ? nPath - 1 : 0) + nMark;
+        if (inst) g_vd.vkCmdDraw(cb, 6, inst, 0, 0);
+    }
     if (cellN) {   // the blocks over the box, so the box's blue does not tint them
         g_vd.vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, dimg ? s.cellsDepth : s.cells);
         g_vd.vkCmdPushConstants(cb, s.layout, stages, 0, sizeof(push), &push);
