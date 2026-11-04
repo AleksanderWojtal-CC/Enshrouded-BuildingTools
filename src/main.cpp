@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.1-dev2"
+#define MOD_VERSION "0.31.1-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -93,12 +93,12 @@ enum ProfId {
     PF_HOVER, PF_HOVER_G, PF_OCC, PF_STOCKS, PF_STOCKS_G, PF_STOCKFIN, PF_STOCKFIN_G, PF_CSTOCK, PF_CSTOCK_G,
     PF_CHEST, PF_CHEST_G, PF_SCOUNT, PF_MISSING, PF_MISSING_G, PF_CXF, PF_CXF_G, PF_PLAYUI, PF_PLAYUI_G,
     PF_MODSCR, PF_HUDROW, PF_HUDROW_G, PF_HUDFIN, PF_HUDFIN_G, PF_INPUT, PF_INPUT_G, PF_ZONEVIS, PF_DEPS, PF_DEPS_G,
-    PF_VKDRAW, PF_CQUERY, PF_CQUERY_G, PF_BMODE, PF_BMODE_G, PF_HUD, PF_HUD_G, PF_N };
+    PF_VKDRAW, PF_VQ, PF_BASEAT, PF_CQUERY, PF_CQUERY_G, PF_BMODE, PF_BMODE_G, PF_HUD, PF_HUD_G, PF_N };
 static const char* const kProfName[PF_N] = {
     "hover", "game:hover", "block bits", "picker lists", "game:picker lists", "picker final", "game:picker final",
     "chest stock", "game:chest stock", "chest list", "game:chest list", "server stock check", "material check",
     "game:material check", "cursor", "game:cursor", "play ui", "game:play ui", "menu screen", "hud row", "game:hud row",
-    "hud box", "game:hud box", "input", "game:input", "zone box", "deps", "game:deps", "vulkan box", "object cursor",
+    "hud box", "game:hud box", "input", "game:input", "zone box", "deps", "game:deps", "vulkan box", "(memory checks)", "game:base lookup", "object cursor",
     "game:object cursor", "build mode", "game:build mode", "hud", "game:hud" };
 static volatile LONG g_prof = 0;
 static volatile LONG64 g_pfTicks[PF_N];
@@ -136,7 +136,7 @@ static void prof_frame() {
         LONG64 ticks = InterlockedExchange64(&g_pfTicks[k], 0);
         LONG calls = InterlockedExchange(&g_pfCalls[k], 0);
         const bool game = kProfName[k][0] == 'g' && kProfName[k][4] == ':';
-        if (!game) mod += ticks * perFrameMs;
+        if (!game && kProfName[k][0] != '(' && k != PF_OCC) mod += ticks * perFrameMs;
         if (game && k > 0) mod -= ticks * perFrameMs;
         if (!calls || ticks * perFrameMs < 0.005) continue;
         b.str(" | ").str(kProfName[k]).c(' ').f(ticks * perFrameMs).str(" ms x").f((double)calls / frames);
@@ -1194,32 +1194,32 @@ static void hud_hook(void* a, void* b, void* c, void* d) {
 // VirtualQuery is slow in the game's process: it works out the size of the whole region,
 // and the game's large heaps made each call cost up to a millisecond (measured 0.31.1-dev1:
 // 2 ms a frame for the held item's checks, 3-4 ms for the magic chests of all bases).
-// So a 64 KB block found readable is remembered for 3 seconds (one word per cache slot:
-// block number << 32 | tick, never 0 for a used slot). Only "readable" is remembered.
-static const int kReadCache = 256;
+// So a 4 KB page found readable is remembered for 3 seconds (one word per cache slot:
+// page number << 28 | tick; no page below 0x10 is ever mapped, so a used slot is never 0). Only "readable" is remembered.
+static const int kReadCache = 1024;
 static volatile uint64_t g_readCache[kReadCache];
 static bool read_cached(uint64_t blk, DWORD now) {
     uint64_t e = g_readCache[(blk * 0x9E3779B1u) >> 8 & (kReadCache - 1)];
-    return e && (e >> 32) == (blk & 0xffffffffu) && now - (DWORD)e < 3000;
+    return e && (e >> 28) == blk && ((now - (DWORD)e) & 0xfffffff) < 3000;
 }
 static void read_note(uint64_t blk, DWORD now) {
-    g_readCache[(blk * 0x9E3779B1u) >> 8 & (kReadCache - 1)] = (blk & 0xffffffffu) << 32 | (now ? now : 1);
+    g_readCache[(blk * 0x9E3779B1u) >> 8 & (kReadCache - 1)] = blk << 28 | (now & 0xfffffff);
 }
 static bool readable(const void* p, size_t n) {
     if (!p) return false;
     const uint64_t a = (uint64_t)p, last = a + (n ? n - 1 : 0);
-    const uint64_t b0 = a >> 16, b1 = last >> 16;
+    const uint64_t b0 = a >> 12, b1 = last >> 12;
     const DWORD now = GetTickCount();
     if (b1 - b0 <= 1 && read_cached(b0, now) && read_cached(b1, now)) return true;
+    PROF(PF_VQ);
     MEMORY_BASIC_INFORMATION mi;
     if (!VirtualQuery(p, &mi, sizeof(mi))) return false;
     if (mi.State != MEM_COMMIT) return false;
     if (mi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) return false;
     const uint8_t* end = (const uint8_t*)mi.BaseAddress + mi.RegionSize;
     if ((const uint8_t*)p + n > end) return false;
-    // whole 64 KB blocks inside this region (same protection throughout)
-    const uint64_t lo = ((uint64_t)mi.BaseAddress + 0xffff) >> 16, hi = (uint64_t)end >> 16;   // [lo, hi)
-    if (b1 - b0 <= 1) for (uint64_t k = b0; k <= b1; k++) if (k >= lo && k < hi) read_note(k, now);
+    // the pages of [p, p + n) are all inside this committed, readable region
+    if (b1 - b0 <= 1) for (uint64_t k = b0; k <= b1; k++) read_note(k, now);
     return true;
 }
 
@@ -1695,7 +1695,7 @@ static ClientChests* client_chests(uint8_t* sys) {
 }
 static int base_at(uint8_t* sys, const float* pos) {
     uint8_t r[16]; memset(r, 0, sizeof(r));
-    g_baseAt(r, sys, pos);
+    PROF_CALL(PF_BASEAT, g_baseAt(r, sys, pos));
     return r[0] == 0 ? r[8] : -1;
 }
 // A point the game places inside base b: the centre of its box, or of one of its sub-boxes.
