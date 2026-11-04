@@ -263,7 +263,7 @@ exact.cancel = ยกเลิก
 # obj.placed = Objects placed: {0}
 # obj.not_enough = Not enough for {0} objects
 # obj.cleared = Object line points cleared
-# obj.remote = Object lines work in single player only (for now)
+# obj.remote = Object lines work only in a world you host (not yet when you join a server)
 # obj.float = {0}: click {1} of {2}, {3} objects
 # obj.title = Object placement
 # obj.help = With an object in hand: Line = 2 clicks, Curve = start, end, then a point it bends through, Circle = centre, then a point on it. The last click places all objects.

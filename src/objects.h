@@ -37,7 +37,17 @@ static bool prop_item(const uint8_t* it) {
     return true;
 }
 static bool prop_now() { return g_propItem && (GetTickCount() - g_propTick < 300 || g_objWin); }   // the window stops the cursor
-static bool obj_remote() { return g_dedicated || remote_session(); }
+// Joined someone else's world (the host's game runs the placement): only when known for sure. A game
+// you host (also when alone) runs the world in this process, so the lines work there.
+static bool obj_remote() { return g_dedicated || g_remoteKnown == 1; }
+// The click is this player's own (a hosted game also places the objects of the players who joined):
+// the click's spot is next to this game's own ghost of the held object.
+static bool own_click(const float* pos) {
+    if (!pos || !prop_now() || !g_ghost.valid || GetTickCount() - g_ghost.tick > 1500) return false;
+    double d2 = 0;
+    for (int a = 0; a < 3; a++) { double d = (double)g_ghost.pos[a] / core::kFix - pos[a]; d2 += d * d; }
+    return d2 < 1.5 * 1.5;
+}
 static bool obj_tool_on() { return g_cfg.toolObjects && !g_modOff; }
 static int obj_mode() { return obj_tool_on() ? g_cfg.objMode : core::OBJ_SINGLE; }
 static ObjOpts obj_opts() {
@@ -213,7 +223,13 @@ static uint8_t prop_pay_hook(uint8_t* mode, CostList* list, uint8_t consume) {
     g_objStage = 0;
     const int m = obj_mode();
     if (m == core::OBJ_SINGLE || g_dedicated) return g_payOrig(mode, list, consume);   // consume 0: the game charges nothing (counts x n are harmless)
-    if (remote_session()) return g_payOrig(mode, list, consume);
+    // the place info (rbp+0x120) is filled before the pay call; mode is rbp+0x3d0 at both calls
+    const float* clickPos = readable(mode - 0x2b0 + 0x10, 12) ? (const float*)(mode - 0x2b0 + 0x10) : nullptr;
+    if (!own_click(clickPos)) {
+        static LONG logged = 0;
+        if (InterlockedIncrement(&logged) <= 5) LOG(.str("objects: a click not next to this player's ghost (another player?): placed as in the game"));
+        return g_payOrig(mode, list, consume);
+    }
     const int need = core::obj_points(m);
     if (g_objPtN + 1 < need) {                    // a point of the line: nothing paid, nothing placed
         g_objStage = -1; g_objStageTid = GetCurrentThreadId();
