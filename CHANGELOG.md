@@ -10,6 +10,12 @@ changelog on Nexus Mods, so keep it short and written for players.
   on-screen messages use, which hid it from the mod: the menu said "not available" and
   keys like F7 gave no message on screen. The mod now finds that function behind the other
   mod's hook and runs next to it.
+- **Tools wheel with Find**: Find also hooks a drawing function the wheel uses; the wheel now
+  draws through that hook.
+- **Works with XHL Planting Assistant.** Its planting stayed off ("live body/ABI mismatch")
+  because the object undo patch changed the game's object placement code before Planting
+  Assistant checked it. That patch is now written only when you first hold an object with
+  Object lines on, after Planting Assistant has started.
 
 ## 0.31.1
 

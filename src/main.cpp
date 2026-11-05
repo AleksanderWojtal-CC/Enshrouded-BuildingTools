@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.2-dev1"
+#define MOD_VERSION "0.31.2-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1251,8 +1251,9 @@ static uint8_t* find_unique(const char* name, const char* sig) {
 
 // A function this mod hooks may already be hooked by another mod (its first bytes
 // replaced by a jump), so its signature no longer matches. Retry with the first
-// `stolen` bytes as wildcards and accept a match whose start is a jump (E9 rel32 or
-// FF 25 [rip]); hook() then chains to the other mod's hook.
+// `stolen` bytes as wildcards and accept a match whose start is a jump (E9 rel32,
+// FF 25 [rip], or mov rax/r11, imm64; jmp rax/r11 as the GreeneyeDS loader writes);
+// hook() then chains to the other mod's hook, a direct call goes through it.
 // `sig` with its first `stolen` bytes as wildcards (the bytes another mod's hook overwrites).
 static void wildcard_head(const char* sig, int stolen, char* pat, int cap) {
     int o = 0, tok = 0;
@@ -1277,7 +1278,10 @@ static uint8_t* find_hookable(const char* name, const char* sig, int stolen) {
     uint8_t* found = nullptr;
     for (int i = 0; i < n && i < 8; i++) {
         const uint8_t* h = hits[i];
-        if (h[0] == 0xE9 || (h[0] == 0xFF && h[1] == 0x25)) { found = (uint8_t*)h; k++; }
+        bool jmp = h[0] == 0xE9 || (h[0] == 0xFF && h[1] == 0x25) ||
+                   (h[0] == 0x48 && h[1] == 0xB8 && h[10] == 0xFF && h[11] == 0xE0) ||
+                   (h[0] == 0x49 && h[1] == 0xBB && h[10] == 0x41 && h[11] == 0xFF && h[12] == 0xE3);
+        if (jmp) { found = (uint8_t*)h; k++; }
     }
     if (k == 1) {
         LOG(.str("  ").str(name).str(": found at rva ").x((uint64_t)(found - g_base))
@@ -1345,6 +1349,10 @@ static void* hook(uint8_t* target, int stolen, void* detour) {
         uint8_t* to = *(uint8_t**)(target + 6 + *(int32_t*)(target + 2));
         put_absjmp(tramp, to);
         stolen = 6;
+    } else if ((target[0] == 0x48 && target[1] == 0xB8 && target[10] == 0xFF && target[11] == 0xE0) ||
+               (target[0] == 0x49 && target[1] == 0xBB && target[10] == 0x41 && target[11] == 0xFF && target[12] == 0xE3)) {
+        put_absjmp(tramp, *(uint8_t**)(target + 2));   // mov rax/r11, imm64; jmp rax/r11
+        stolen = target[0] == 0x48 ? 12 : 13;
     } else {
         memcpy(tramp, target, stolen);
         put_absjmp(tramp + stolen, target + stolen);
@@ -5589,7 +5597,7 @@ static void install_menu() {
             ui.imageCtx = (void* (*)())(t + 0x45 + *(int32_t*)(t + 0x41));
         }
     }
-    ui.drawRect = (void (*)(void*, const float*, uint32_t, uint64_t))find_unique("UiDrawRect", SIG_UI_DRAW_RECT);
+    ui.drawRect = (void (*)(void*, const float*, uint32_t, uint64_t))find_hookable("UiDrawRect", SIG_UI_DRAW_RECT, 12);   // Find hooks it (chest glow)
     ui.drawRotated = (void (*)(void*, const float*, float, uint32_t, uint64_t))find_unique("UiDrawRotated", SIG_UI_DRAW_ROTATED);
     ui.boxBlend = (void (*)(void*, uint8_t))find_unique("UiBoxBlend", SIG_UI_BOX_BLEND);
     ui.scrollParams = (void (*)(void*))find_unique("UiScrollParams", SIG_UI_SCROLL_PARAMS);
