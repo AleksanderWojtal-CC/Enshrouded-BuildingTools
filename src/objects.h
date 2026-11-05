@@ -522,12 +522,36 @@ static bool obj_hud_info(Buf& b) {
 //     yes: that call (SIG_PROP_REC_CALL) is redirected to obj_rec_check
 //  3. the server cursor tells the client "can undo" (ServerCursor +0x69 bit 3, without it the undo
 //     key does nothing) through 4962f0, which has the same item test: redirected to can_undo_hook
-static volatile uint8_t* g_objUndoFlag = nullptr;
+static volatile uint8_t* g_objUndoFlag = nullptr;   // set once the step's jump is written
 static int g_objUndoParts = 0;                     // patches in place (3 = undo works)
+// The step's jump goes into place_prop's body, which XHL Planting Assistant compares with the
+// game file when it starts (it accepts redirected calls, not a jump in place of an instruction).
+// So it is written only when an object is first used with Object lines on, after the other mod
+// has checked the body; until then the cave waits here.
+static uint8_t* g_objUndoSite = nullptr;
+static uint8_t* g_objUndoMem = nullptr;
+static void obj_undo_arm() {
+    uint8_t* site = (uint8_t*)InterlockedExchangePointer((void* volatile*)&g_objUndoSite, nullptr);
+    if (!site) return;
+    static const uint8_t orig[9] = { 0xF6, 0x87, 0xD8, 0x05, 0x00, 0x00, 0x88, 0x75, 0x09 };
+    if (memcmp(site, orig, 9)) { LOG(.str("object undo: place_prop changed by another mod, undo off")); return; }
+    DWORD old;
+    if (!VirtualProtect(site, 9, PAGE_EXECUTE_READWRITE, &old)) return;
+    uint8_t patch[9] = { 0xE9, 0, 0, 0, 0, 0x90, 0x90, 0x90, 0x90 };
+    int32_t r = (int32_t)(g_objUndoMem - (site + 5)); memcpy(patch + 1, &r, 4);
+    memcpy(site + 5, patch + 5, 4);                  // the tail first: the jump skips it
+    memcpy(site, patch, 5);
+    VirtualProtect(site, 9, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), site, 9);
+    g_objUndoFlag = g_objUndoMem + 30;
+    LOG(.str("object undo: step patch written"));
+}
 static void obj_undo_flag() {
-    if (!g_objUndoFlag) return;
+    if (!g_objUndoFlag && !g_objUndoSite) return;
     const int m = obj_mode();
-    *g_objUndoFlag = obj_tool_on() && !obj_remote() && (m == core::OBJ_SINGLE || g_objPtN + 1 >= core::obj_points(m)) ? 1 : 0;
+    const uint8_t on = obj_tool_on() && !obj_remote() && (m == core::OBJ_SINGLE || g_objPtN + 1 >= core::obj_points(m)) ? 1 : 0;
+    if (on && !g_objUndoFlag && prop_now()) obj_undo_arm();
+    if (g_objUndoFlag) *g_objUndoFlag = on;
 }
 static uint8_t obj_rec_check() { return g_objUndoFlag && obj_tool_on() ? 0 : 1; }   // 0: add the record
 typedef uint8_t (*CanUndoFn)(void* player, uint8_t* item, uint8_t nearZone);
@@ -580,16 +604,9 @@ static bool install_prop_undo() {
     if (hook_calls(recFn, (void*)&obj_rec_check, &rec, 1) != 1) return false;
     g_objUndoParts = 1;
     if (hook_calls(cuFn, (void*)&can_undo_hook, &cuSite, 1) == 1) g_objUndoParts++;
-    DWORD old;
-    if (!VirtualProtect(site, 9, PAGE_EXECUTE_READWRITE, &old)) return false;
-    uint8_t patch[9] = { 0xE9, 0, 0, 0, 0, 0x90, 0x90, 0x90, 0x90 };
-    int32_t r = (int32_t)(mem - (site + 5)); memcpy(patch + 1, &r, 4);
-    memcpy(site, patch, 9);
-    VirtualProtect(site, 9, old, &old);
-    FlushInstructionCache(GetCurrentProcess(), site, 9);
-    g_objUndoFlag = mem + 30;
+    g_objUndoMem = mem;                           // the jump to it: obj_undo_arm
+    g_objUndoSite = site;
     g_objUndoParts++;
-    obj_undo_flag();
     return g_objUndoParts == 3;
 }
 

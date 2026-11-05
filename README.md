@@ -157,7 +157,13 @@ otherwise.
 `dbgcore.dll` and need no chain entry. Find and The Worst Map Mod hook the start of the
 game's play-state UI function, which the menu, the tools wheel and the on-screen messages
 draw in; since 0.31.2 Building Tools finds that function by the rest of its code and goes
-through their hook, so the order in which the mods start does not matter.
+through their hook, so the order in which the mods start does not matter. The tools wheel's
+draw function is found the same way.
+
+**XHL Planting Assistant** compares the game's object placement function with the game file
+when it starts and accepts redirected calls there, not other changes. The object undo patch
+(a jump in that function) is therefore written only when an object is first held with Object
+lines on.
 
 ## License
 
