@@ -17,6 +17,8 @@ changelog on Nexus Mods, so keep it short and written for players.
   Assistant checked it. That patch is now written only when you first hold an object with
   Object lines on, after Planting Assistant has started.
 - Planting seedlings (or placing any object) with Area mode on no longer marks Area corners.
+- With XHL Planting Assistant (planting on), seeds and seedlings are left to it: Object lines
+  (line, curve, circle...) still work for plants when it is not there, and for all other objects.
 
 ## 0.31.1
 
