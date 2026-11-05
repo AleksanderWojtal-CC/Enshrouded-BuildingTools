@@ -306,3 +306,7 @@ With other mods that ship a dinput8.dll (Creative Mode, XHL mods)
 With GreeneyeDS mods (Find, The Worst Map Mod, Quick Deposit, Continue)
   Nothing to set up: they load through their own dbgcore.dll, next to
   Building Tools' dinput8.dll.
+
+With XHL Planting Assistant
+  While its planting is on (its config file), seeds and seedlings are planted
+  by it; Object lines still work for all other objects.

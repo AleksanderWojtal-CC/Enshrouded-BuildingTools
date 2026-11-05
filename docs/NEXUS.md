@@ -157,6 +157,8 @@ Works next to XHL mods such as XHL Vein Mining (0.20.2 and later).
 [b]With GreeneyeDS mods[/b] (Find, The Worst Map Mod, Quick Deposit, Continue)
 Nothing to set up: they load through their own dbgcore.dll. Use 0.31.2 or later with Find
 or The Worst Map Mod (older versions show "menu: not available" with them).
+With XHL Planting Assistant (planting on), seeds and seedlings are planted by it; Object lines
+still work for all other objects, and for plants when Planting Assistant is not installed.
 
 [b]Found a bug?[/b]
 Please report it here, with your BuildingTools.log attached:
