@@ -154,6 +154,10 @@ CreativeMode=CreativeModeLoader.dll
 BuildingTools=BuildingTools.dll[/code]
 Works next to XHL mods such as XHL Vein Mining (0.20.2 and later).
 
+[b]With GreeneyeDS mods[/b] (Find, The Worst Map Mod, Quick Deposit, Continue)
+Nothing to set up: they load through their own dbgcore.dll. Use 0.31.2 or later with Find
+or The Worst Map Mod (older versions show "menu: not available" with them).
+
 [b]Found a bug?[/b]
 Please report it here, with your BuildingTools.log attached:
 [url=https://github.com/AleksanderWojtal-CC/Enshrouded-BuildingTools/issues/new?template=bug_report.yml]Bug report form[/url]

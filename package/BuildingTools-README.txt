@@ -302,3 +302,7 @@ With other mods that ship a dinput8.dll (Creative Mode, XHL mods)
   with "ready".
   XHL mods with their own folder under mods\ (e.g. XHL Vein Mining) are loaded
   by the XHL dinput8.dll as before; Building Tools runs next to them.
+
+With GreeneyeDS mods (Find, The Worst Map Mod, Quick Deposit, Continue)
+  Nothing to set up: they load through their own dbgcore.dll, next to
+  Building Tools' dinput8.dll.
