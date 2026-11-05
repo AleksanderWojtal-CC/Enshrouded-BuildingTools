@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.2-dev2"
+#define MOD_VERSION "0.31.2-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1128,6 +1128,7 @@ static bool exact_hold();
 static uint8_t* g_cxFn = nullptr;                 // the cursor transform function (hooked)
 static uint8_t* g_cxClientRet = nullptr;          // return address of client_cursor's call of it (objects.h)
 static bool prop_now();
+static bool prop_item(const uint8_t* it);
 static void obj_ghost(const uint8_t* out, const uint8_t* q);
 static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
     PROF(PF_CXF);
@@ -3488,7 +3489,7 @@ static void remote_update() {
     const DWORD now = GetTickCount();
     // an object in hand shows the building box too, but its cursor read is not the one that tells
     // a local world (only building items read it): not counted
-    if (!building_now() || prop_now()) { g_buildingSince = 0; return; }
+    if (!building_now() || prop_now() || prop_item(g_liveItem)) { g_buildingSince = 0; return; }
     if (!g_buildingSince) g_buildingSince = now;
     LONG was = g_remoteKnown, is = was;
     if (now - g_serverWorldTick < 500) is = 0;
@@ -3617,6 +3618,7 @@ static void remote_clicks(uint8_t* src, uint8_t flags) {
     if (!building_now() && GetTickCount() - g_liveItemTick >= 500) return;
     uint8_t* item = building_item();
     if (!item) return;                                 // no building item in hand
+    if (prop_item(item)) return;                       // an object (seedling, chair...): the game's or Object lines
     remote_corner(rise & 1 ? OP_BUILD : OP_REMOVE, item, (const CursorXf*)(src + 0x2f8), (const CursorXf*)(src + 0x330));
 }
 
