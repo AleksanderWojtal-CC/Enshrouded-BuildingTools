@@ -3,6 +3,14 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.31.2
+
+- **Works with GreeneyeDS mods** (Find - Base Storage Search, The Worst Map Mod). They hook
+  the game's HUD drawing function that Building Tools' menu, tools wheel, HUD rows and
+  on-screen messages use, which hid it from the mod: the menu said "not available" and
+  keys like F7 gave no message on screen. The mod now finds that function behind the other
+  mod's hook and runs next to it.
+
 ## 0.31.1
 
 - **Higher frame rate.** The mod's checks before it reads game memory were far slower than

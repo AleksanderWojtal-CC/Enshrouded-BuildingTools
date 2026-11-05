@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.31.1"
+#define MOD_VERSION "0.31.2-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1253,20 +1253,25 @@ static uint8_t* find_unique(const char* name, const char* sig) {
 // replaced by a jump), so its signature no longer matches. Retry with the first
 // `stolen` bytes as wildcards and accept a match whose start is a jump (E9 rel32 or
 // FF 25 [rip]); hook() then chains to the other mod's hook.
-static uint8_t* find_hookable(const char* name, const char* sig, int stolen) {
-    uint8_t* p = find_unique(name, sig);
-    if (p) return p;
-    char pat[512]; int o = 0, tok = 0;
-    for (const char* q = sig; *q && o < (int)sizeof(pat) - 4; ) {
+// `sig` with its first `stolen` bytes as wildcards (the bytes another mod's hook overwrites).
+static void wildcard_head(const char* sig, int stolen, char* pat, int cap) {
+    int o = 0, tok = 0;
+    for (const char* q = sig; *q && o < cap - 4; ) {
         while (*q == ' ') q++;
         if (!*q) break;
         const char* e = q; while (*e && *e != ' ') e++;
         if (o) pat[o++] = ' ';
         if (tok < stolen) { pat[o++] = '?'; pat[o++] = '?'; }
-        else for (const char* c = q; c < e && o < (int)sizeof(pat) - 2; c++) pat[o++] = *c;
+        else for (const char* c = q; c < e && o < cap - 2; c++) pat[o++] = *c;
         tok++; q = e;
     }
     pat[o] = 0;
+}
+static uint8_t* find_hookable(const char* name, const char* sig, int stolen) {
+    uint8_t* p = find_unique(name, sig);
+    if (p) return p;
+    char pat[512];
+    wildcard_head(sig, stolen, pat, sizeof(pat));
     const uint8_t* hits[8];
     int n = core::scan(g_textBase, g_textSize, pat, hits, 8), k = 0;
     uint8_t* found = nullptr;
@@ -5501,21 +5506,47 @@ static void install_hud_rows() {
     LOG(.str("hud rows: available"));
 }
 
-static void install_menu() {
+// The play-state UI draws every HUD screen, so other mods that draw on the HUD hook it
+// too: Find - Base Storage Search and The Worst Map Mod (GreeneyeDS) replace its first
+// bytes with a jump, which hides its signature. The mod only redirects the one call
+// to it, so it accepts a hooked start when the rest of the function and that call
+// both match, and then calls whatever the call reached before (the other mod's hook,
+// which runs the game's function).
+static uint8_t* find_play_ui() {
     uint8_t* pu = find_unique("PlayUi", SIG_PLAY_UI);
+    if (pu) return pu;
+    enum { kPrologue = 0x12 };   // mov r11,rsp; push rbp; lea rbp,[r11-218h]; sub rsp,310h
+    char pat[512];
+    wildcard_head(SIG_PLAY_UI, kPrologue, pat, sizeof(pat));
+    const uint8_t* hits[4];
+    int n = core::scan(g_textBase, g_textSize, pat, hits, 4);
+    if (n != 1) { LOG(.str("  PlayUi: ").i(n).str(" matches with its start left out")); return nullptr; }
+    pu = (uint8_t*)hits[0];
+    { Buf b; b.str("  PlayUi: found at rva ").x((uint64_t)(pu - g_base)).str(", its start changed by another mod (");
+      for (int k = 0; k < 6; k++) b.u(pu[k], 16, 2).c(k < 5 ? ' ' : ')');
+      b.str("; the menu goes through its hook"); log_line(b); }
+    return pu;
+}
+
+static void install_menu() {
     uint8_t* call = find_unique("PlayUiCall", SIG_PLAY_UI_CALL);
+    uint8_t* site = call ? call + 2 : nullptr;
+    uint8_t* pu = call ? find_play_ui() : nullptr;
     uint8_t* disp = find_unique("ScreenDispatch", SIG_SCREEN_DISPATCH);
     g_toggleScreen = (ToggleScreenFn)find_unique("ToggleScreen", SIG_TOGGLE_SCREEN);
     if (!pu || !call || !disp || !g_toggleScreen) { LOG(.str("menu: not available (UI code not found)")); return; }
-    uint8_t* site = call + 2;
     uint8_t* je = disp + 10;                                     // 0F 84 rel32 -> E8 <screen 52>
     uint8_t* s52 = je + 6 + *(int32_t*)(je + 2);
-    if (site + 5 + *(int32_t*)(site + 1) != pu || s52[0] != 0xE8 || !readable(s52, 5)) {
+    // the call reaches the play-state UI, or another mod's hook that took the call over
+    uint8_t* callee = site + 5 + *(int32_t*)(site + 1);
+    bool callOther = callee != pu && (callee < g_textBase || callee >= g_textBase + g_textSize);
+    if ((callee != pu && !callOther) || s52[0] != 0xE8 || !readable(s52, 5)) {
         LOG(.str("menu: not available (UI layout changed)")); return;
     }
+    if (callOther) LOG(.str("menu: the play-state UI call goes to another mod first; chained"));
     g_uiCtxGlobal = (uint8_t**)(pu + 0x12 + 7 + *(int32_t*)(pu + 0x12 + 3));
     g_modScreenOrig = (PlayUiFn)(s52 + 5 + *(int32_t*)(s52 + 1));
-    g_playUiOrig = (PlayUiFn)pu;
+    g_playUiOrig = (PlayUiFn)callee;
     g_beginWindow = (BeginWindowFn)find_unique("BeginWindow", SIG_BEGIN_WINDOW);
     struct { void** fn; const char* name; const char* sig; } need[] = {
         { (void**)&ui.windowContext, "UiWindowCtx", SIG_UI_WINDOW_CTX }, { (void**)&ui.beginRoot, "UiBeginRoot", SIG_UI_BEGIN_ROOT },
@@ -5582,7 +5613,7 @@ static void install_menu() {
         LOG(.str(g_tabsHooked ? "menu: game tab bar used" : "menu: game tab bar not found, plain tab buttons"));
     }
     if (hook_calls((uint8_t*)g_modScreenOrig, (void*)&mod_screen_hook, &s52, 1) != 1 ||
-        hook_calls(pu, (void*)&play_ui_hook, &site, 1) != 1) {
+        hook_calls(callee, (void*)&play_ui_hook, &site, 1) != 1) {
         LOG(.str("menu: not available (hook failed)")); g_playUiOrig = nullptr; return;
     }
     LOG(.str("menu: available (screen 52)"));

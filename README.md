@@ -153,6 +153,12 @@ can start in either order. Only the building systems' own `PayCost` calls are re
 XHL Vein Mining checks that the pickaxe's reward call still goes to `PayCost` and stays off
 otherwise.
 
+**GreeneyeDS mods** (Find, The Worst Map Mod, Quick Deposit, Continue) load with their own
+`dbgcore.dll` and need no chain entry. Find and The Worst Map Mod hook the start of the
+game's play-state UI function, which the menu, the tools wheel and the on-screen messages
+draw in; since 0.31.2 Building Tools finds that function by the rest of its code and goes
+through their hook, so the order in which the mods start does not matter.
+
 ## License
 
 MIT, see [LICENSE](LICENSE). This project is not affiliated with Keen Games.

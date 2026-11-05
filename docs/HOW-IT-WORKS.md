@@ -24,7 +24,10 @@ share one 64 KB block next to the game image. If another mod already put a jump 
 function's entry, the hook chains to that jump. Two functions that Creative Mode also
 finds by their first bytes (`PayCost` and 9bc1a0) are not patched at all: the mod
 retargets the `call` instructions that reach them instead, so both mods work whichever
-starts first.
+starts first. The play-state UI (the menu's entry point) is reached the same way, through
+its one call; Find and The Worst Map Mod hook its first bytes, so when its signature does
+not match the mod looks for it with the 18-byte prologue left out and calls whatever the
+call reached before.
 
 The DLL also works when loaded by another loader (for example as `BuildingTools.dll`
 listed in the XHL Native Core's `dinput8-chain.ini`): everything starts from `DllMain`,
