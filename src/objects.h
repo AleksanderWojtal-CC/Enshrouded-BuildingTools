@@ -48,7 +48,41 @@ static bool own_click(const float* pos) {
     for (int a = 0; a < 3; a++) { double d = (double)g_ghost.pos[a] / core::kFix - pos[a]; d2 += d * d; }
     return d2 < 1.5 * 1.5;
 }
-static bool obj_tool_on() { return g_cfg.toolObjects && !g_modOff; }
+// Plants (ItemInfo.growthInfo.hasGrowthInfo, +0x7d8: seeds and seedlings) are left to XHL
+// Planting Assistant when it is loaded with planting on (XHL\config\xhl-area-harvest.json,
+// "planting.enabled", read when its DLL is first seen): it plants rows and squares itself.
+static bool plant_item(const uint8_t* it) { return it && readable(it + 0x7d8, 1) && it[0x7d8] != 0; }
+static bool other_mod_plants() {
+    static volatile LONG known = -1;                 // -1 not looked yet, 0 no, 1 yes
+    static DWORD lookTick = 0;
+    if (known >= 0) return known == 1;
+    const DWORD now = GetTickCount();
+    if (now - lookTick < 2000) return false;
+    lookTick = now;
+    if (!GetModuleHandleW(L"XHL-Area-Harvest.dll")) return false;   // not (yet) loaded: look again later
+    bool on = true;                                  // its default
+    wchar_t path[MAX_PATH];
+    lstrcpynW(path, g_dir, MAX_PATH - 40); lstrcatW(path, L"XHL\\config\\xhl-area-harvest.json");
+    HANDLE h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h != INVALID_HANDLE_VALUE) {
+        char buf[2048 + 32] = {}; DWORD n = 0;
+        if (ReadFile(h, buf, 2048, &n, nullptr)) {
+            buf[n] = 0;
+            const char* k = buf;
+            for (; *k; k++) if (!memcmp(k, "\"planting.enabled\"", 18)) break;
+            if (*k) { k += 18; while (*k == ' ' || *k == ':') k++; on = *k != 'f'; }
+        }
+        CloseHandle(h);
+    }
+    known = on ? 1 : 0;
+    LOG(.str("objects: XHL Planting Assistant loaded, planting ").str(on ? "on: plants are left to it" : "off"));
+    return on;
+}
+static bool obj_tool_on() {
+    if (!g_cfg.toolObjects || g_modOff) return false;
+    uint8_t* it = g_propItem;
+    return !(it && plant_item(it) && other_mod_plants());
+}
 static int obj_mode() { return obj_tool_on() ? g_cfg.objMode : core::OBJ_SINGLE; }
 static ObjOpts obj_opts() {
     return ObjOpts{ g_cfg.objMode, g_cfg.objCount, g_cfg.objSpacing, g_cfg.objRot, g_cfg.objElev, g_cfg.objRef, g_cfg.objTurn,
@@ -219,7 +253,8 @@ static uint64_t cursor_query_hook(uint8_t* q, uint8_t* sys, uint8_t* item, void*
         if (logged != it) {
             logged = it;
             LOG(.str("objects: object in hand, item ").x(*(uint32_t*)it).str(" template ").x(*(uint64_t*)(it + 0x3c0))
-                .str(" flags ").x(*(uint32_t*)(it + 0x5d8)).str(" query mode ").u(q ? q[3] : 255));
+                .str(" flags ").x(*(uint32_t*)(it + 0x5d8)).str(" query mode ").u(q ? q[3] : 255)
+                .str(plant_item(it) ? " plant" : ""));
         }
         g_propItem = it; g_propTick = GetTickCount();
     } else if (item != nullptr || GetTickCount() - g_propTick > 300) g_propItem = nullptr;
