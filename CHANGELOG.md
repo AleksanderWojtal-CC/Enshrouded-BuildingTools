@@ -16,6 +16,7 @@ changelog on Nexus Mods, so keep it short and written for players.
   because the object undo patch changed the game's object placement code before Planting
   Assistant checked it. That patch is now written only when you first hold an object with
   Object lines on, after Planting Assistant has started.
+- Planting seedlings (or placing any object) with Area mode on no longer marks Area corners.
 
 ## 0.31.1
 
