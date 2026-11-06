@@ -141,21 +141,26 @@ Exact mode (Area corners: exact)
   goes back. Works while flying. The last sizes are kept.
   MaxShapes in the ini limits the size (default 2000 shapes).
 
-Blueprints (Blueprint mode: tools wheel, or a key in the Keys tab)
-  Save: right click two opposite corners (as an area remove; nothing is
-  removed). The blocks in that box are saved to a file in the folder
-  BuildingTools-Blueprints next to enshrouded.exe, named by date and time
-  (rename the files as you like). The box is cut into cells the size of the
-  shape in your hand: hold the small 0.5 m cube for full detail. A cell at
-  least half full of one material is saved as a full block of it.
-  Build: hold a block of the same size and left click where the blueprint's
-  bottom centre goes. A window opens beside the drawn ghost: pick the
-  blueprint, its rotation (0, 90, 180, 270 degrees) and Allow partial build
-  (on: builds what your materials cover; off: nothing unless all are there).
-  It lists the materials needed and how many you have ("?" until the game's
-  material picker was open once). Build (or Enter) builds every block with its
-  own material, Cancel (or Esc) goes back, the right mouse button hides the
-  window while held. Undo and big actions work as for areas.
+Blueprints (Blueprint mode: the mode on the tools wheel, Prefab -> Area -> Blueprint)
+  The tools wheel switches Blueprint between Save and Place.
+  Save: click a block (left button). A window opens like Exact mode's: where
+  the clicked block sits in the box (middle, a corner, front or back middle),
+  width, depth and height, and a name you type on the keyboard (empty = date
+  and time). The box is drawn beside the window; hold the right mouse button to
+  look around. Save writes the blocks in the box to a file in the folder
+  BuildingTools-Blueprints next to enshrouded.exe. The box is cut into cells the
+  size of the shape in your hand: hold the small 0.5 m cube for full detail. A
+  cell at least half full of one material is saved as a full block of it.
+  Place: hold a block of the same size and click. Pick a blueprint from the
+  list; the next page shows its size, the materials it needs and how many you
+  have ("?" until the game's material picker was open once), the rotation (0,
+  90, 180, 270 degrees), the point of the blueprint that sits at the block you
+  look at, and Allow partial build (on: builds what your materials cover; off:
+  nothing unless all are there). The ghost follows your aim while you hold the
+  right mouse button; Place here fixes it, then Left / Right / Away / Closer /
+  Up / Down move it by one block. Build (or Enter) builds every block with its
+  own material; Back returns to the list, Cancel (or Esc) closes. Undo and big
+  actions work as for areas.
   Not yet: building pieces (foundations, stairs...) and objects are not saved;
   blueprints work only in a world you host, not on a dedicated server.
 

@@ -90,12 +90,13 @@ reference plane (ground under each object, level or slope) and whether they turn
 line. In worlds you host. Undo works for objects too: Y with the object in hand (or the
 hammer's undo) takes back the last object or the whole line and gives them back.
 
-[b]Blueprints[/b] (Blueprint mode, on the tools wheel)
-Right click two corners to save the blocks of a box to a file, then left click anywhere to
-open the blueprint window: pick a blueprint, turn it in 90 degree steps, see the materials
-it needs against what you have, allow or forbid a partial build, and Build. A ghost of the
-whole structure shows where it goes, and every block keeps its own material. Building
-pieces and objects are not saved yet; in worlds you host (not yet on dedicated servers).
+[b]Blueprints[/b] (Blueprint mode, next to Prefab and Area)
+Save: click a block, set the box in a window like Exact mode's (reference, width, depth,
+height), type a name and save the blocks to a file. Place: pick a blueprint, see the
+materials it needs against what you have, turn it in 90 degree steps, aim its ghost or place
+it and move it block by block with the window's buttons, allow or forbid a partial build, and
+Build. Every block keeps its own material. Building pieces and objects are not saved yet; in
+worlds you host (not yet on dedicated servers).
 
 [b]Tools wheel[/b] (hold Caps Lock)
 A blurred wheel in the middle of the screen, drawn with the game's own wheel: point the

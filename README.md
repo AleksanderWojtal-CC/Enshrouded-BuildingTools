@@ -29,13 +29,14 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   and height as shapes past it (negative grows the other way), with the fill, its options
   and the material picker in the window. The 3D preview follows as you type; hold the right
   mouse button to hide the window and look around. Build or Cancel.
-- **Blueprints** (Blueprint mode): right click two corners to save the blocks of a box to
-  a file (`BuildingTools-Blueprints` next to `enshrouded.exe`), left click elsewhere to open
-  the blueprint window: pick one, turn it in 90 degree steps, see the materials it needs
-  against what you have, allow or forbid a partial build, and Build. A ghost of the whole
-  structure shows where it goes. Each block keeps its own material. Saved per cell of the
-  shape in hand (the 0.5 m cube for full detail). Building pieces and objects are not saved
-  yet; worlds you host only (not yet on a dedicated server).
+- **Blueprints** (Blueprint mode, next to Prefab and Area): **Save** - click a block, set
+  the box in a window like Exact mode's (reference, width, depth, height), type a name and
+  save the blocks to a file (`BuildingTools-Blueprints` next to `enshrouded.exe`). **Place** -
+  pick a blueprint, see the materials it needs against what you have, turn it in 90 degree
+  steps, aim its ghost (or place it and move it block by block with the window's buttons),
+  allow or forbid a partial build, and Build. Each block keeps its own material. Saved per
+  cell of the shape in hand (the 0.5 m cube for full detail). Building pieces and objects
+  are not saved yet; worlds you host only (not yet on a dedicated server).
 - **Free placement**: the block ghost hovers in front of you, snapped to the 0.5 m
   building grid, instead of sticking to surfaces. Hold Q and turn the mouse wheel to set
   the distance.

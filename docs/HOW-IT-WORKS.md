@@ -404,31 +404,41 @@ same functions, found by signatures, so everything looks like the game.
 
 ## Blueprints
 
-`src/blueprint.h` (logic) and `src/blueprint_ui.h` (window). The file format is in
-`core.h` (`bp_encode` / `bp_decode`, unit tested).
+`src/blueprint.h` (logic) and `src/blueprint_ui.h` (windows). The file format is in
+`core.h` (`bp_encode` / `bp_decode`, unit tested). Blueprint is a mode next to Prefab and
+Area; its action (Save / Place) is on the tools wheel. Both start with one left click,
+which notes the clicked block and opens screen 52 with a blueprint window instead of the
+exact window; the exact mode machinery does the rest (the right button hides the window,
+Save / Build arm the mod and the input thread sends a real left click, the cursor read
+keeps the ghost valid).
 
-- **Save.** In Blueprint mode the dismantle system's right click is caught in `remove_hook`
-  like an Area remove corner, and the commit is suppressed. After the second corner every
-  cell of the box (the held shape's size) is probed with the mod's removal dry run
-  (`RemoveShape`, refunds noted by `refund_build_hook`, not added), which reports the
-  removable volume per material. The building material (0x80..0xff) with the most volume
-  is kept when it fills at least half of the cell. Each material's item id comes from the
-  game's refund builder (48ae10) for that material, and the cost from `MaterialItem`.
-  The file stores item ids, so a patch that renumbers material bytes only costs a lookup.
-- **Build.** The first left click notes the clicked shape's centre (the blueprint's bottom
-  centre) and opens screen 52 with the blueprint window instead of the exact window; the
-  exact mode machinery does the rest (right button hides it, Build arms the mod and the
-  input thread sends a click, the cursor read keeps the ghost valid). On that click the
-  place hook maps every material back to a material byte (the saved one if the refund
-  builder gives the same item for it, else a search of 0x80..0xff), then for each saved
-  cell sets the player's material byte (pdata+0x454) and runs the game's dry run, and
-  overwrites the appended cost entry's item reference with the refund builder's entry for
-  that material. The commit hook sets the same byte before each cell's `PlaceCommit`.
-  Partial build and the undo budget are those of Area mode; with partial build off the
-  click is refused when the counts the picker knows do not cover the list.
-- **Ghost.** `area_box_live` returns the turned blueprint's box while its window is open or
-  armed, and vkdraw draws its cells from bits (`g_bpBits`, up to 40000 cells), as the round
-  fills do.
+- **Save.** The box is `core::exact_corners` of the aimed block (the aim cursor +0x338) with
+  the window's reference and sizes, drawn like an exact area. On the sent click every cell
+  (the held shape's size) is probed with `price_removal` (`RemoveShape` with the mod's
+  thread id, so `refund_build_hook` notes the removable volume per material and adds no
+  entries). The building material (0x80..0xff) with the most volume is kept when it fills
+  at least half of the cell. Each material's item id comes from the game's refund builder
+  (48ae10), the cost from `MaterialItem`. The file stores item ids, so a patch that
+  renumbers material bytes only costs a lookup. The name is typed while the window is up:
+  the input thread reads the keys and turns them into text with `ToUnicodeEx` and the game
+  window's keyboard layout.
+- **Place.** The ghost's reference point (one of the seven Exact references, as the player
+  faces) sits at the aimed shape's centre (`live_centre`: the place cursor plus the click's
+  offset, as Area mode's live corner) until Place here fixes it; the move buttons shift it by
+  one cell along the facing axes. `area_box_live` returns the turned blueprint's box and
+  vkdraw draws its cells from bits (`g_bpBits`, up to 40000 cells), as the round fills do.
+- **Build.** PlaceShape's 4th argument is the selected material's item definition (read-only
+  game data: +0 item id, +4 the 16 bytes the cost entry copies, +0x454 the voxel material
+  byte; writing it crashed 0.32.0-dev1). The mod maps every blueprint material back to a
+  material byte (the saved one if the refund builder gives the same item for it, else a
+  search of 0x80..0xff), finds that material's item definition in the same allocation (item
+  id at +0 and material byte at +0x454 match; a read-only scan, cached), and runs one dry run
+  per cell with it, so the game prices the right item. PlaceCommit builds the material the
+  player picked (the dry run changes nothing in the placement context, tested), so the
+  replace blit patch has a force byte: before each blueprint shape's commit it holds the
+  shape's material, and the patch writes it into the blit parameters' material (+0xa1) for
+  building placements. Partial build and the undo budget are those of Area mode; with partial
+  build off the click is refused when the counts the picker knows do not cover the list.
 - **Rotation.** Quarter turns about the vertical axis (`core::bp_turn` / `bp_unturn`); the
   cell size swaps x and z for odd turns, so the held shape must match the turned size.
 
