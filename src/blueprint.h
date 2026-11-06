@@ -12,9 +12,8 @@
 //            bottom centre and the blueprint window opens (the exact window's screen,
 //            ghost and right-button hiding). Build arms the mod and the input thread sends
 //            a click; the place hook then prices one shape per saved cell with that cell's
-//            material (the player's material byte, pdata+0x454, set around each dry run
-//            and commit; the cost entry's item taken from the refund builder for that
-//            material) and the commit hook writes them, with the usual undo budget and
+//            material (the dry run gets that material's own item definition, see bp_find_item;
+//            and commit) and the commit hook writes them, with the usual undo budget and
 //            partial build.
 // Building pieces and objects are not saved yet; a dedicated server cannot build blueprints yet.
 
@@ -285,6 +284,73 @@ static int bp_map(void* ctx, int* mat, CostEntry* tmpl) {
     }
     return missing;
 }
+// The material PlaceShape builds with comes from its 4th argument: the selected material's
+// item definition (+0 item id, +4 the 16 bytes the cost entry copies, +0x454 the voxel
+// material byte). It is read-only game data (writing +0x454 crashed in 0.32.0-dev1), so the
+// mod never writes it: it finds the item definition of every blueprint material in the
+// same block of memory (the u32 item id at +0 and the material byte at +0x454 both match)
+// and hands that to the game instead. Read-only scan, cached per item.
+struct BpItem { uint32_t id; uint8_t mat; uint8_t* p; };
+static BpItem g_bpItemCache[128]; static int g_bpItemN = 0;
+static uint8_t* bp_find_item(uint8_t* pdata, uint32_t id, uint8_t mat) {
+    if (*(uint32_t*)pdata == id && pdata[0x454] == mat) return pdata;
+    for (int q = 0; q < g_bpItemN; q++) if (g_bpItemCache[q].id == id && g_bpItemCache[q].mat == mat) return g_bpItemCache[q].p;
+    MEMORY_BASIC_INFORMATION mi;
+    if (!VirtualQuery(pdata, &mi, sizeof mi)) return nullptr;
+    uint8_t* base = (uint8_t*)mi.AllocationBase;
+    uint8_t* found = nullptr; uint64_t scanned = 0;
+    const DWORD t0 = GetTickCount();
+    for (uint8_t* r = base; !found && VirtualQuery(r, &mi, sizeof mi) && mi.AllocationBase == base; r = (uint8_t*)mi.BaseAddress + mi.RegionSize) {
+        const DWORD okProt = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE;
+        if (mi.State != MEM_COMMIT || !(mi.Protect & okProt) || (mi.Protect & (PAGE_GUARD | PAGE_NOACCESS))) continue;
+        uint8_t* lo = (uint8_t*)mi.BaseAddress; uint8_t* hi = lo + mi.RegionSize;
+        if (hi - lo < 0x460) continue;
+        scanned += mi.RegionSize;
+        // item definitions sit at the alignment pdata has (at least 8)
+        for (uint8_t* c = lo + (((uintptr_t)pdata - (uintptr_t)lo) & 7); c + 0x460 <= hi; c += 8)
+            if (*(uint32_t*)c == id && c[0x454] == mat) { found = c; break; }
+        if (scanned > (512ull << 20)) break;              // never more than 512 MB
+    }
+    LOG(.str("  blueprint: item ").x(id).str(" material ").x(mat).str(found ? " found" : " NOT found").str(" (scanned ")
+        .u(scanned >> 20).str(" MB in ").u(GetTickCount() - t0).str(" ms, ").str(found ? "offset " : "").x(found ? (uint64_t)(found - pdata) : 0).c(')'));
+    if (found && g_bpItemN < 128) g_bpItemCache[g_bpItemN++] = BpItem{ id, mat, found };
+    return found;
+}
+// Commit: PlaceCommit gets no material; the click's dry run sets it. Before each blueprint
+// shape's commit the mod repeats that shape's dry run (into a scratch list, so nothing is
+// priced twice), so the commit builds with the shape's own material.
+static uint8_t* g_bpItemOf[core::BP_MAX_MATS];
+static CursorXf g_bpXf;                               // the template cursor of the build (rotation, scale)
+static void* g_bpState = nullptr;
+static void bp_before_commit(void* ctx, int i) {
+    uint8_t mi = g_pendMat[i];
+    if (mi >= core::BP_MAX_MATS || !g_bpItemOf[mi]) return;
+    static CostEntry buf[64];
+    CostList scratch = { buf, 0, 64, nullptr };
+    CursorXf xf = g_bpXf;
+    memcpy(xf.pos, g_pendPos[i], 24);
+    g_placeOrig(&scratch, ctx, g_bpState, g_bpItemOf[mi], &xf);
+}
+// Which bytes of the placement context a dry run changes, for two different materials
+// (once per game start, in the log): where the commit may take the material from.
+static void bp_ctx_probe(void* ctx, void* state, uint8_t* itemA, uint8_t* itemB, const CursorXf& xf) {
+    static bool done = false;
+    if (done || !itemA || !itemB || itemA == itemB || !readable(ctx, 0x130)) return;
+    done = true;
+    static uint8_t s0[0x130], s1[0x130], s2[0x130];
+    static CostEntry buf[64];
+    CostList scratch = { buf, 0, 64, nullptr };
+    CursorXf x = xf;
+    memcpy(s0, ctx, 0x130);
+    g_placeOrig(&scratch, ctx, state, itemA, &x); memcpy(s1, ctx, 0x130); scratch.count = 0;
+    g_placeOrig(&scratch, ctx, state, itemB, &x); memcpy(s2, ctx, 0x130);
+    Buf b; b.str("  blueprint: context bytes a dry run changes (before / material A / B):");
+    int n = 0;
+    for (int k = 0; k < 0x130 && n < 24; k++)
+        if (s0[k] != s1[k] || s1[k] != s2[k]) { b.str(" +").u(k, 16).c('=').u(s0[k], 16, 2).c('/').u(s1[k], 16, 2).c('/').u(s2[k], 16, 2); n++; }
+    if (!n) b.str(" none");
+    log_line(b);
+}
 static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, const CursorXf& target) {
     if (!g_bp.ok || !pdata) { flash(T(S_BP_NOTHING)); beep(MB_ICONHAND); return 0; }
     Aabb box; shape_bounds(state, &target, &box);
@@ -299,13 +365,23 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
             return 0;
         }
     }
+    LOG(.str("  blueprint: material in hand item ").x(*(uint32_t*)pdata).str(" material ").x(pdata[0x454]));
     static int mat[core::BP_MAX_MATS]; static CostEntry tmpl[core::BP_MAX_MATS];
-    const int missing = bp_map(ctx, mat, tmpl);
+    int missing = bp_map(ctx, mat, tmpl);
+    uint8_t* firstItem = nullptr; uint8_t* otherItem = nullptr;
+    for (int q = 0; q < g_bp.h.nm; q++) {
+        g_bpItemOf[q] = nullptr;
+        if (mat[q] < 0) continue;
+        g_bpItemOf[q] = bp_find_item(pdata, *(uint32_t*)(tmpl[q].b + 0x10), (uint8_t)mat[q]);
+        if (!g_bpItemOf[q]) { mat[q] = -1; missing++; continue; }
+        if (!firstItem) firstItem = g_bpItemOf[q]; else if (!otherItem && g_bpItemOf[q] != firstItem) otherItem = g_bpItemOf[q];
+    }
     if (missing) { Buf b; b.fmt(T(S_BP_NO_MATERIAL), num(missing).s); flash(b.z()); }
+    bp_ctx_probe(ctx, state, firstItem, otherItem, target);
     const uint64_t listBefore = list->count;
     pend_begin(ctx, target, false, state ? *(uint32_t*)state : 0);
-    g_pend.bp = true; g_pend.pdata = pdata;
-    const uint8_t savedMat = pdata[0x454];
+    g_pend.bp = true;
+    g_bpXf = target; g_bpState = state;
     const I3 tc = box_centre(box);                       // positions are centres; the dry run takes the cursor
     const int64_t off[3] = { target.pos[0] - tc.x, target.pos[1] - tc.y, target.pos[2] - tc.z };
     CursorXf xf = target;
@@ -320,23 +396,17 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
                 if (g_pend.n >= kMaxPending) continue;
                 I3 p = bp_cell_pos(g_scPos[0], rn, rs, ri, j, rk);
                 xf.pos[0] = p.x + off[0]; xf.pos[1] = p.y + off[1]; xf.pos[2] = p.z + off[2];
-                pdata[0x454] = (uint8_t)mat[mi];
-                g_pendMat[g_pend.n] = (uint8_t)mat[mi];
+                g_pendMat[g_pend.n] = mi;
                 const uint64_t before = list->count;
-                if (price_shape(list, ctx, state, pdata, &xf, false)) priced++;
+                if (price_shape(list, ctx, state, g_bpItemOf[mi], &xf, false)) priced++;
                 CostEntry* e = (CostEntry*)list->data;
-                for (uint64_t q = before; q < list->count; q++) {
-                    if (logged < 3) {
-                        logged++;
-                        Buf lb; lb.str("  cost entry of ").x(mat[mi]).str(": game ");
-                        for (int b = 0; b < 0x18; b++) lb.u(e[q].b[b], 16, 2);
-                        lb.str(" template "); for (int b = 0; b < 0x14; b++) lb.u(tmpl[mi].b[b], 16, 2);
-                        log_line(lb);
-                    }
-                    memcpy(e[q].b, tmpl[mi].b, 0x14);    // the item of this material, the game's count
+                for (uint64_t q = before; q < list->count && logged < 4; q++) {
+                    logged++;
+                    Buf lb; lb.str("  cost entry of ").x(mat[mi]).str(": ");
+                    for (int b = 0; b < 0x18; b++) lb.u(e[q].b[b], 16, 2);
+                    log_line(lb);
                 }
             }
-    pdata[0x454] = savedMat;
     g_pendCost[g_pend.n] = (uint32_t)list->count;
     LOG(.str("blueprint build: turn ").i(g_bpRot).str(", priced ").i(priced).str(" of ").i(g_bp.filled)
         .str(" blocks, cost entries ").u(list->count - listBefore));
@@ -364,6 +434,11 @@ static uint8_t bp_place_click(CostList* list, void* ctx, void* state, uint8_t* p
         return r;
     }
     if (remote_session()) { flash(T(S_BP_REMOTE)); beep(MB_ICONHAND); return 0; }
+    if (g_scOp == OP_SAVE && g_sc == 1) {               // saving: the second corner is a right click too
+        LOG(.str("blueprint: left click while saving, corner 1 kept"));
+        flash(T(S_BP_CORNER)); beep(MB_ICONHAND);
+        return 0;
+    }
     Aabb box; shape_bounds(state, &target, &box);
     reset_corners();
     g_scOp = OP_BUILD;

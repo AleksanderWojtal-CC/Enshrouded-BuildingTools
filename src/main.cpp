@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.32.0-dev1"
+#define MOD_VERSION "0.32.0-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -2200,7 +2200,7 @@ static int64_t g_pendPos[kMaxPending][3];
 struct Pending { void* ctx; DWORD tid; DWORD tick; int n; bool replace; LONG style; float rot[4]; uint32_t shape; CostList* list;
                  bool bp; uint8_t* pdata; };   // bp: a blueprint, each shape with its own material (g_pendMat)
 static uint32_t g_pendCost[kMaxPending + 1];     // cost list count before shape i (n = end)
-static uint8_t g_pendMat[kMaxPending];           // blueprint build: the material byte of each queued shape
+static uint8_t g_pendMat[kMaxPending];           // blueprint build: the material (blueprint table index) of each queued shape
 static const int kVolSnaps = 40;                 // replace: old-material voxel counts after shape i
 static uint32_t g_volSnap[kVolSnaps][256];
 
@@ -2451,6 +2451,7 @@ static bool shrink_to_affordable(uint8_t* trans, CostList* list) {
     return true;
 }
 
+static void bp_before_commit(void* ctx, int i);      // blueprint.h
 static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     bool mine = g_pend.n > 0 && g_pend.ctx == ctx && g_pend.tid == GetCurrentThreadId() &&
                 GetTickCount() - g_pend.tick < 3000;
@@ -2462,17 +2463,15 @@ static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     uint32_t h0 = g_caveHits[0], h1 = g_caveHits[1];
     if (pd.replace) *g_caveMode = (uint8_t)pd.style;
     UndoSplit us; undo_begin(us, ctx, pd.list, g_pendCost, pd.n);
-    const uint8_t bpSaved = pd.bp && pd.pdata ? pd.pdata[0x454] : 0;
     for (int i = 0; i < pd.n; i++) {
         undo_before(us, i);
-        if (pd.bp && pd.pdata) pd.pdata[0x454] = g_pendMat[i];      // blueprint: this shape's material
+        if (pd.bp) bp_before_commit(ctx, i);                         // blueprint: this shape's material
         Commit pc = *c;
         for (int a = 0; a < 3; a++) pc.pos[a] = (float)g_pendPos[i][a] * kInv;
         for (int k = 0; k < 4; k++) pc.rot[k] = pd.rot[k];
         if (g_placeCommitOrig(ctx, &pc, shape)) { any = 1; placed++; }
         undo_after(us);
     }
-    if (pd.bp && pd.pdata) pd.pdata[0x454] = bpSaved;
     undo_end(us);
     *g_caveMode = 0;
     if (pd.replace && us.step0 && !us.lost && us.recorded > 0 && GetTickCount() - g_paidTick < 3000 && g_paidN > 0) {
@@ -3414,7 +3413,7 @@ static uint8_t place_hook_body(CostList* list, void* ctx, void* state, void* pda
     CursorXf aim, clientPlace = *xf; const char* how = "";
     bool haveAim = aim_lookup(xf, state, &aim, &how, &clientPlace);
     if (g_cfg.log) {
-        LOG(.str("click: mode=").str(mode == MODE_AREA ? "area" : "prefab")
+        LOG(.str("click: mode=").str(mode == MODE_AREA ? "area" : mode == MODE_BLUEPRINT ? "blueprint" : "prefab")
             .str(" replace=").i(replace).str(" shape=").x(shape).str(" corners=").i(g_sc)
             .str(" aim=").str(haveAim ? how : "none"));
         log_xf("  place ", xf);

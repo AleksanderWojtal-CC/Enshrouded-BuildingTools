@@ -15,6 +15,8 @@ changelog on Nexus Mods, so keep it short and written for players.
   Blocks are saved per cell of the shape in your hand (hold the small 0.5 m cube for full
   detail); a cell at least half full counts as a full block. Building pieces and objects are
   not saved yet, and blueprints do not work on a dedicated server yet.
+- While saving, a left click before the second corner keeps corner 1 and reminds you that
+  the second corner is a right click too.
 
 ## 0.31.2
 
