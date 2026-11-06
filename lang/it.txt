@@ -321,7 +321,7 @@ bp.nothing = Niente da costruire: nessun materiale di questo progetto è utilizz
 bp.save_title = Salva progetto
 bp.save_help = Il blocco cliccato è il riferimento. Si salvano i blocchi nel riquadro disegnato (solo blocchi da costruzione).
 bp.name = Nome: {0}
-bp.name_hint = Scrivi il nome con la tastiera (vuoto = data e ora).
+bp.name_hint = Clicca il nome per scriverlo; Invio o un altro clic termina (vuoto = data e ora).
 bp.clear_name = Cancella nome
 bp.save_button = Salva
 bp.cells = Celle di {0} m (la forma in mano): {1} x {2} x {3}

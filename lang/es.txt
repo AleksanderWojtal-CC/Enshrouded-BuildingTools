@@ -321,7 +321,7 @@ bp.nothing = Nada que construir: ningún material de este plano se puede usar
 bp.save_title = Guardar plano
 bp.save_help = El bloque pulsado es la referencia. Se guardan los bloques de la caja dibujada (solo de construcción).
 bp.name = Nombre: {0}
-bp.name_hint = Escribe el nombre con el teclado (vacío = fecha y hora).
+bp.name_hint = Haz clic en el nombre para escribirlo; Intro u otro clic termina (vacío = fecha y hora).
 bp.clear_name = Borrar nombre
 bp.save_button = Guardar
 bp.cells = Celdas de {0} m (la forma en la mano): {1} x {2} x {3}

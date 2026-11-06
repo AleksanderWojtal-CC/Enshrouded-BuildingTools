@@ -321,7 +321,7 @@ bp.nothing = 建てるものがありません：この設計図の素材はど�
 bp.save_title = 設計図を保存
 bp.save_help = クリックしたブロックが基準です。描かれた箱の中のブロックが保存されます（建築ブロックのみ）。
 bp.name = 名前：{0}
-bp.name_hint = キーボードで名前を入力（空 = 日付と時刻）。
+bp.name_hint = 名前をクリックすると入力できます。Enter かもう一度クリックで終了（空 = 日付と時刻）。
 bp.clear_name = 名前を消す
 bp.save_button = 保存
 bp.cells = {0} m のセル（手に持った形）：{1} x {2} x {3}

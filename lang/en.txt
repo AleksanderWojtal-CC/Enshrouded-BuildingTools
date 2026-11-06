@@ -324,7 +324,7 @@ bp.nothing = Nothing to build: no material of this blueprint could be used
 bp.save_title = Save blueprint
 bp.save_help = The clicked block is the reference. Blocks in the drawn box are saved (only building blocks).
 bp.name = Name: {0}
-bp.name_hint = Type the name on the keyboard (empty = date and time).
+bp.name_hint = Click the name to type it; Enter or another click ends typing (empty = date and time).
 bp.clear_name = Clear name
 bp.save_button = Save
 bp.cells = Cells of {0} m (the shape in your hand): {1} x {2} x {3}

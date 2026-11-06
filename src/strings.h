@@ -310,7 +310,7 @@
     X(S_BP_SAVE_TITLE, "bp.save_title", "Save blueprint") \
     X(S_BP_SAVE_HELP, "bp.save_help", "The clicked block is the reference. Blocks in the drawn box are saved (only building blocks).") \
     X(S_BP_NAME, "bp.name", "Name: {0}") \
-    X(S_BP_NAME_HINT, "bp.name_hint", "Type the name on the keyboard (empty = date and time).") \
+    X(S_BP_NAME_HINT, "bp.name_hint", "Click the name to type it; Enter or another click ends typing (empty = date and time).") \
     X(S_BP_CLEAR_NAME, "bp.clear_name", "Clear name") \
     X(S_BP_SAVE_BTN, "bp.save_button", "Save") \
     X(S_BP_CELLS, "bp.cells", "Cells of {0} m (the shape in your hand): {1} x {2} x {3}") \

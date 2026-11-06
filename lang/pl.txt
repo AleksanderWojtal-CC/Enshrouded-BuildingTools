@@ -321,7 +321,7 @@ bp.nothing = Nie ma czego budować: żadnego materiału tego schematu nie da si�
 bp.save_title = Zapisz schemat
 bp.save_help = Kliknięty blok jest punktem odniesienia. Zapisywane są bloki w narysowanym prostopadłościanie (tylko budowlane).
 bp.name = Nazwa: {0}
-bp.name_hint = Wpisz nazwę z klawiatury (pusta = data i godzina).
+bp.name_hint = Kliknij nazwę, aby ją wpisać; Enter lub kolejne kliknięcie kończy pisanie (pusta = data i godzina).
 bp.clear_name = Wyczyść nazwę
 bp.save_button = Zapisz
 bp.cells = Komórki {0} m (kształt w ręce): {1} x {2} x {3}

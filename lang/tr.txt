@@ -321,7 +321,7 @@ bp.nothing = İnşa edilecek bir şey yok: bu planın hiçbir malzemesi kullanı
 bp.save_title = Planı kaydet
 bp.save_help = Tıklanan blok referanstır. Çizilen kutudaki bloklar kaydedilir (yalnızca yapı blokları).
 bp.name = Ad: {0}
-bp.name_hint = Adı klavyeden yaz (boş = tarih ve saat).
+bp.name_hint = Yazmak için ada tıkla; Enter veya bir tık daha yazmayı bitirir (boş = tarih ve saat).
 bp.clear_name = Adı temizle
 bp.save_button = Kaydet
 bp.cells = {0} m hücreler (eldeki şekil): {1} x {2} x {3}

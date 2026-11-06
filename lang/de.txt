@@ -321,7 +321,7 @@ bp.nothing = Nichts zu bauen: kein Material dieses Bauplans ist verwendbar
 bp.save_title = Bauplan speichern
 bp.save_help = Der geklickte Block ist der Bezugspunkt. Gespeichert werden die Blöcke im gezeichneten Kasten (nur Bausteine).
 bp.name = Name: {0}
-bp.name_hint = Tippe den Namen auf der Tastatur (leer = Datum und Uhrzeit).
+bp.name_hint = Klicke auf den Namen, um ihn zu tippen; Enter oder ein weiterer Klick beendet das Tippen (leer = Datum und Uhrzeit).
 bp.clear_name = Name löschen
 bp.save_button = Speichern
 bp.cells = Zellen von {0} m (die Form in der Hand): {1} x {2} x {3}

@@ -321,7 +321,7 @@ bp.nothing = 没有可建造的：此蓝图的材料都无法使用
 bp.save_title = 保存蓝图
 bp.save_help = 点击的方块是参考点。保存所绘方框内的方块（仅建筑方块）。
 bp.name = 名称：{0}
-bp.name_hint = 用键盘输入名称（留空 = 日期和时间）。
+bp.name_hint = 点击名称即可输入；按回车或再点一次结束（留空 = 日期和时间）。
 bp.clear_name = 清除名称
 bp.save_button = 保存
 bp.cells = {0} 米的格子（手中的形状）：{1} x {2} x {3}

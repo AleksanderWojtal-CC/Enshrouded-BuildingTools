@@ -146,8 +146,8 @@ Blueprints (Blueprint mode: the mode on the tools wheel, Prefab -> Area -> Bluep
   Save: click a block (left button). A window opens like Exact mode's: where
   the clicked block sits in the box (middle, a corner, front or back middle),
   rows that move that point by blocks, width, depth and height (up to 65536
-  cells; MaxShapes does not limit saving), and a name you type on the keyboard (empty = date
-  and time). The box is drawn beside the window; hold the right mouse button to
+  cells; MaxShapes does not limit saving), and a name: click it, type on the keyboard, Enter or a click ends typing
+  (empty = date and time). The box is drawn beside the window; hold the right mouse button to
   look around. Save writes the blocks in the box to a file in the folder
   BuildingTools-Blueprints next to enshrouded.exe. The box is cut into cells the
   size of the shape in your hand: hold the small 0.5 m cube for full detail. A

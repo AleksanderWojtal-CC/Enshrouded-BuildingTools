@@ -49,6 +49,7 @@ static int g_bpOff[3];                           // place window: the ghost move
 static int g_bpSaveOff[3];                       // save window: the reference point moved by cells (right, away, up)
 static char g_bpTyped[64];                       // save window: the name typed so far (UTF-8)
 static volatile LONG g_bpTypedLen = 0;
+static volatile LONG g_bpNameEdit = 0;         // the name was clicked: keys type into it (until Enter or another click)
 static bool bp_tool() { return g_cfg.toolBlueprint != 0; }
 static bool remote_session();
 
@@ -307,7 +308,7 @@ static uint8_t bp_save_box(void* ctx, void* state, const CursorXf& tmpl) {
     if (!bp_write(h, cells, g_bpTyped, name, sizeof name)) { flash(T(S_BP_WRITE_FAIL)); beep(MB_ICONHAND); LOG(.str("blueprint save: write failed ").u(GetLastError())); return 0; }
     Buf b; b.fmt(T(S_BP_SAVED), name, num(filled).s, num(h.nm).s); flash(b.z()); beep(MB_ICONASTERISK);
     LOG(.str("blueprint saved: ").str(name));
-    g_bpTyped[0] = 0; g_bpTypedLen = 0;
+    g_bpTyped[0] = 0; g_bpTypedLen = 0; g_bpNameEdit = 0;
     return 0;
 }
 
@@ -519,6 +520,7 @@ static uint8_t bp_place_click(CostList* list, void* ctx, void* state, uint8_t* p
     set_sc_rot(t.rot);
     g_bpPlaced = 0; g_bpPage = 0;
     for (int a = 0; a < 3; a++) { g_bpOff[a] = 0; g_bpSaveOff[a] = 0; }
+    g_bpNameEdit = 0;
     g_bpWin = g_bpSub == BP_SAVE ? BPW_SAVE : BPW_PLACE;
     LOG(.str("blueprint: ").str(g_bpSub == BP_SAVE ? "save" : "place").str(" window, block (")
         .fix(g_scPos[0].x).c(',').fix(g_scPos[0].y).c(',').fix(g_scPos[0].z).c(')'));

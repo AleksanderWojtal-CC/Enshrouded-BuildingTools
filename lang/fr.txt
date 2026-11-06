@@ -321,7 +321,7 @@ bp.nothing = Rien à construire : aucun matériau de ce plan n'est utilisable
 bp.save_title = Enregistrer un plan
 bp.save_help = Le bloc cliqué est la référence. Les blocs dans la boîte dessinée sont enregistrés (blocs de construction seulement).
 bp.name = Nom : {0}
-bp.name_hint = Tapez le nom au clavier (vide = date et heure).
+bp.name_hint = Cliquez sur le nom pour le taper ; Entrée ou un autre clic termine la saisie (vide = date et heure).
 bp.clear_name = Effacer le nom
 bp.save_button = Enregistrer
 bp.cells = Cellules de {0} m (la forme en main) : {1} x {2} x {3}

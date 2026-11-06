@@ -35,7 +35,10 @@ static bool bp_build_confirm() {
     bp_arm();
     return true;
 }
-static bool bp_confirm() { return g_bpWin == BPW_SAVE ? bp_save_confirm() : bp_build_confirm(); }   // Enter
+static bool bp_confirm() {                       // Enter: ends typing the name, else Save / Build
+    if (g_bpNameEdit) { g_bpNameEdit = 0; return false; }
+    return g_bpWin == BPW_SAVE ? bp_save_confirm() : bp_build_confirm();
+}
 static int bp_clamp(int v) { return v > core::kExactMax ? core::kExactMax : v < -core::kExactMax ? -core::kExactMax : v; }
 
 // ---- the name, typed on the keyboard while the save window is up (input thread)
@@ -44,7 +47,8 @@ static int bp_clamp(int v) { return v > core::kExactMax ? core::kExactMax : v < 
 static void bp_type_keys(bool focus) {
     static bool prev[256]; static bool init = false;
     if (!init) { for (bool& p : prev) p = true; init = true; }
-    bool live = focus && g_bpWin == BPW_SAVE && g_exactOpen && !g_exactHidden && g_menuOpen;
+    if (g_bpNameEdit && (g_bpWin != BPW_SAVE || !g_exactOpen || g_exactHidden)) g_bpNameEdit = 0;   // the window went (or hid)
+    bool live = focus && g_bpNameEdit && g_bpWin == BPW_SAVE && g_exactOpen && !g_exactHidden && g_menuOpen;
     BYTE kb[256] = {};
     auto held = [](int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; };
     if (held(VK_SHIFT)) kb[VK_SHIFT] = 0x80;
@@ -160,7 +164,12 @@ static void bp_offset_rows(Str header, int* off) {
 // ---- Save: reference, sizes, name, Save
 static void draw_bp_save_window() {
     BpFrame f; bp_frame_begin(f, T(S_BP_SAVE_TITLE), T(S_BP_SAVE_HELP));
-    {   Buf b; b.fmt(T(S_BP_NAME), g_bpTyped).str("_"); ui_text(b.z(), STYLE_TITLE); }
+    {   // the name: a click starts typing, Enter or another click ends it
+        Buf b; b.fmt(T(S_BP_NAME), g_bpTyped); if (g_bpNameEdit) b.str("_");
+        BpRow r; bp_row_begin(r);
+        if (ui_button(b.z())) g_bpNameEdit = !g_bpNameEdit;
+        bp_row_end(r);
+    }
     ui_text(T(S_BP_NAME_HINT), STYLE_BODY);
     {   LONG v;
         if (ref_option(T(S_EXACT_REF), g_cfg.bpRef, &v)) g_cfg.bpRef = v; }

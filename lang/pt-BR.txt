@@ -321,7 +321,7 @@ bp.nothing = Nada para construir: nenhum material desta planta pode ser usado
 bp.save_title = Salvar planta
 bp.save_help = O bloco clicado é a referência. Os blocos na caixa desenhada são salvos (só de construção).
 bp.name = Nome: {0}
-bp.name_hint = Digite o nome no teclado (vazio = data e hora).
+bp.name_hint = Clique no nome para digitá-lo; Enter ou outro clique termina (vazio = data e hora).
 bp.clear_name = Limpar nome
 bp.save_button = Salvar
 bp.cells = Células de {0} m (a forma na mão): {1} x {2} x {3}

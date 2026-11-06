@@ -26,6 +26,8 @@ changelog on Nexus Mods, so keep it short and written for players.
   not saved yet, and blueprints do not work on a dedicated server yet.
 - A blueprint saved in one world builds all its materials in another world too, also
   materials not found there yet.
+- The blueprint name takes keys only after you click it (Enter or another click ends
+  typing), so walking around no longer types into it.
 - Exact mode: two more reference points, front middle and back middle.
 
 ## 0.31.2
