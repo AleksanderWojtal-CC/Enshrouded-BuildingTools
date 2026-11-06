@@ -213,12 +213,20 @@ static bool bp_probe_request(const I3* c, const float* step, void* ctx, void* st
 typedef uint8_t (*PlacePropFn)(void* ctx, uint8_t* info, uint32_t item);
 static PlacePropFn g_placePropOrig = nullptr;        // objects.h finds it
 static volatile LONG g_bpObjRecord = 0;              // obj_rec_check (objects.h): record the blueprint's objects
-// Logic objects (item flag 0x80000 at +0x5d8) make PlaceProp send a LogicEntityPlacedEvent
-// through the context's +0xe0, which only the prop system's context has (null in the blueprint
-// system's: crash at 9c3760, 0.32.0-dev10). They are left out until the mod can give that event.
-static bool bp_logic_object(void* ctx, const uint8_t* it) {
-    return (*(const uint32_t*)(it + 0x5d8) & 0x80000) && !*(void**)((uint8_t*)ctx + 0xe0);
-}
+// Logic objects (item flag 0x80000 at +0x5d8: doors, windows, wirable things) make PlaceProp send
+// a LogicEntityPlacedEvent through the context's +0xe0: the event writer of the prop system's
+// dependencies, which the blueprint system does not have (null: crash at 9c3760, 0.32.0-dev10).
+// Writing into another system's buffer is not safe (961470 appends without locks), so the mod
+// hands PlaceProp a writer of its own: +0xb8 the event type index (u16), +0x1b8 the buffer
+// {data, capacity, used}; 961470 returns null when it is full and PlaceProp writes through
+// that pointer, so the buffer is emptied before every call. The event (it links the object into
+// the base's logic network) is dropped.
+struct BpEventBuf { uint8_t* data; uint64_t cap; uint32_t used; uint32_t pad; };
+alignas(16) static uint8_t g_bpEvData[512];
+static BpEventBuf g_bpEvBuf = { g_bpEvData, sizeof g_bpEvData, 0, 0 };
+alignas(16) static uint8_t g_bpEvWriter[0x200];
+static bool bp_logic_item(const uint8_t* it) { return (*(const uint32_t*)(it + 0x5d8) & 0x80000) != 0; }
+static bool bp_logic_object(void*, const uint8_t*) { return false; }   // placed with the mod's writer (bp_place_object)
 static bool bp_place_object(void* ctx, uint32_t item, const double* posM, const float* rot) {
     if (!g_placePropOrig || !g_bpItemById || !g_bpItemReg) return false;
     uint8_t* it = g_bpItemById(item, g_bpItemReg);
@@ -228,9 +236,20 @@ static bool bp_place_object(void* ctx, uint32_t item, const double* posM, const 
     for (int a = 0; a < 3; a++) *(float*)(info + 0x10 + a * 4) = (float)posM[a];
     memcpy(info + 0x1c, rot, 16);
     for (int a = 0; a < 3; a++) { *(float*)(info + 0x2c + a * 4) = -0.25f; *(float*)(info + 0x38 + a * 4) = 0.25f; }   // local bounds (the place event's volume)
+    void** evSlot = (void**)((uint8_t*)ctx + 0xe0);
+    void* evSaved = *evSlot;
+    const bool logic = bp_logic_item(it) && !evSaved;
+    if (logic) {
+        g_bpEvBuf.data = g_bpEvData; g_bpEvBuf.cap = sizeof g_bpEvData; g_bpEvBuf.used = 0;
+        *(uint16_t*)(g_bpEvWriter + 0xb8) = 0;
+        *(BpEventBuf**)(g_bpEvWriter + 0x1b8) = &g_bpEvBuf;
+        *evSlot = g_bpEvWriter;
+    }
     g_bpObjRecord = 1;
     uint8_t r = g_placePropOrig(ctx, info, item);
     g_bpObjRecord = 0;
+    if (logic) *evSlot = evSaved;
+    if (logic) LOG(.str("  logic object ").x(item).str(r ? " placed (its logic link event dropped)" : " not placed"));
     return r != 0;
 }
 
