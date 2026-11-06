@@ -333,17 +333,17 @@ bp.rotation = Rotazione
 bp.partial = Consenti costruzione parziale
 bp.reference = Punto che guardi
 bp.following = Il fantasma segue lo sguardo: tieni premuto il tasto destro e mira, poi Piazza qui.
-bp.placed = Piazzato: spostalo con i pulsanti, poi Costruisci.
+bp.placed = Piazzato: spostalo con le righe sotto, poi Costruisci.
 bp.place_here = Piazza qui
 bp.follow = Segui la mira
-bp.move = Sposta di un blocco:
-bp.left = Sinistra
+bp.move = Sposta il fantasma (blocchi; negativo = sinistra, più vicino, giù):
 bp.right = Destra
 bp.away = Più lontano
-bp.closer = Più vicino
 bp.up = Su
-bp.down = Giù
 bp.back = Torna all'elenco
+bp.move_point = Sposta il punto cliccato (blocchi; negativo = sinistra, più vicino, giù):
+bp.size_header = Dimensioni (blocchi oltre il punto di riferimento):
+bp.not_enough_any = Materiali insufficienti anche per un solo blocco di questo progetto
 bp.costs = Materiali necessari:
 bp.material_row = Materiale {0}: servono {1}, ne hai {2}
 bp.have_unknown = ?

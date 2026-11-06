@@ -23,7 +23,7 @@
 //            builds the material picked in the game). Undo budget and partial build as Area.
 // Building pieces and objects are not saved yet; a dedicated server cannot use blueprints yet.
 
-static const int kBpMaxCells = 20000;
+static const long kBpMaxCells = 65536;          // a save may hold this many cells (MaxShapes limits building)
 static const int kBpMaxFiles = 64;
 enum { BP_SAVE = 0, BP_PLACE = 1 };              // g_bpSub
 enum { BPW_NONE = 0, BPW_SAVE = 1, BPW_PLACE = 2 };   // g_bpWin
@@ -45,6 +45,8 @@ static wchar_t g_bpFile[kBpMaxFiles][MAX_PATH];  // file names (no folder) in th
 static char g_bpName[kBpMaxFiles][96];           // the same as UTF-8, without ".btbp"
 static int g_bpFiles = 0;
 static LONG g_bpSel = 0;
+static int g_bpOff[3];                           // place window: the ghost moved by cells (right, away, up as the player faces)
+static int g_bpSaveOff[3];                       // save window: the reference point moved by cells (right, away, up)
 static char g_bpTyped[64];                       // save window: the name typed so far (UTF-8)
 static volatile LONG g_bpTypedLen = 0;
 static bool bp_tool() { return g_cfg.toolBlueprint != 0; }
@@ -82,13 +84,30 @@ static I3 bp_min_from(const I3& anchor) {
     core::exact_corners(anchor, g_cfg.bpPlaceRef, w, d, h, g_exFAxis, g_exFSign, g_exRAxis, g_exRSign, rs, c);
     return I3{ c[0].x < c[1].x ? c[0].x : c[1].x, c[0].y < c[1].y ? c[0].y : c[1].y, c[0].z < c[1].z ? c[0].z : c[1].z };
 }
+// p moved by off cells (right, away, up as the player faced at the click) of size step
+static I3 bp_shift(const I3& p, const int* off, const float* step) {
+    int64_t v[3] = { p.x, p.y, p.z };
+    v[g_exRAxis] += (int64_t)g_exRSign * off[0] * bp_fix(step[g_exRAxis]);
+    v[g_exFAxis] += (int64_t)g_exFSign * off[1] * bp_fix(step[g_exFAxis]);
+    v[1] += (int64_t)off[2] * bp_fix(step[1]);
+    return I3{ v[0], v[1], v[2] };
+}
+// The save box's corners: Exact mode's rule from the clicked block moved by the window's offsets.
+static void bp_save_corners(I3 out[2]) {
+    I3 p = bp_shift(g_scPos[0], g_bpSaveOff, g_scStep);
+    core::exact_corners(p, g_cfg.bpRef, g_cfg.bpW, g_cfg.bpD, g_cfg.bpH, g_exFAxis, g_exFSign, g_exRAxis, g_exRSign, g_scStep, out);
+}
 static bool live_centre(I3* out);                // main.cpp: the aimed shape's centre now
 // The reference cell now: fixed, or where the player aims (the click's spot until the aim moves).
-static I3 bp_anchor_now() {
+static I3 bp_aim_now() {                        // fixed, or the aimed block (the click's until the aim moves)
     if (g_bpPlaced) return g_bpAnchor;
     I3 a;
     if (!g_exactArmed && live_centre(&a)) return a;
-    return g_bpPlaced ? g_bpAnchor : g_scPos[0];
+    return g_scPos[0];
+}
+static I3 bp_anchor_now() {                      // ... moved by the window's offsets
+    int rn[3]; float rs[3]; bp_dims(g_bpRot, rn, rs);
+    return bp_shift(bp_aim_now(), g_bpOff, rs);
 }
 // the drawn box of the blueprint being placed (fixed point)
 static bool bp_box(int64_t lo[3], int64_t hi[3], float step[3]) {
@@ -224,7 +243,7 @@ static uint8_t bp_save_box(void* ctx, void* state, const CursorXf& tmpl) {
     float step[3] = { box.mx[0] - box.mn[0], box.mx[1] - box.mn[1], box.mx[2] - box.mn[2] };
     I3 c[3] = { g_exactC[0], g_exactC[1], g_exactC[1] };
     core::Plan pl = {};
-    const long cap = g_cfg.maxShapes < kBpMaxCells ? g_cfg.maxShapes : kBpMaxCells;
+    const long cap = kBpMaxCells;
     bool ok = core::plan_fill(c, 2, step, 50000000, &pl) && pl.total <= cap;
     LOG(.str("blueprint save: step=(").f(step[0]).c(',').f(step[1]).c(',').f(step[2]).str(") counts=")
         .i(pl.count[0]).c('x').i(pl.count[1]).c('x').i(pl.count[2]).str(ok ? "" : " REFUSED (too big)"));
@@ -414,6 +433,44 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
     LOG(.str("blueprint build: turn ").i(g_bpRot).str(", priced ").i(priced).str(" of ").i(g_bp.filled)
         .str(" blocks, cost entries ").u(list->count - listBefore));
     if (!priced) { g_pend.n = 0; g_pend.bp = false; list->count = listBefore; flash(T(S_BP_NOTHING)); beep(MB_ICONHAND); return 0; }
+    // Partial build: a blueprint keeps every block the inventory can pay for, material by
+    // material (bottom layer first), instead of stopping at the first block it cannot (Area
+    // mode's rule left 14 of 1185 blocks when one of 7 materials ran short).
+    if (!creative_on() && g_cfg.bpPartial && g_pend.n > 1 && stock_known(list) && !affordable(nullptr, list, (uint32_t)list->count)) {
+        struct Budget { uint32_t item; int64_t left; } bud[64]; int nb = 0;
+        CostEntry* e = (CostEntry*)list->data;
+        auto slot = [&](uint32_t item) -> Budget* {
+            for (int q = 0; q < nb; q++) if (bud[q].item == item) return &bud[q];
+            if (nb == 64) return nullptr;
+            bud[nb] = Budget{ item, stock_of(item) }; return &bud[nb++];
+        };
+        const int n0 = g_pend.n;
+        int keep = 0; uint32_t out = g_pendCost[0];
+        for (int i = 0; i < n0; i++) {
+            const uint32_t a0 = g_pendCost[i], a1 = g_pendCost[i + 1];
+            bool fits = true;
+            for (uint32_t q = a0; q < a1 && fits; q++) {
+                Budget* s = slot(*(uint32_t*)(e[q].b + 0x10));
+                if (!s) { fits = false; break; }
+                int64_t need = 0;                          // this shape's entries of the same item together
+                for (uint32_t r = a0; r < a1; r++) if (*(uint32_t*)(e[r].b + 0x10) == s->item) need += *(uint32_t*)(e[r].b + 0x14);
+                fits = s->left >= need;
+            }
+            if (!fits) continue;
+            for (uint32_t q = a0; q < a1; q++) { Budget* s = slot(*(uint32_t*)(e[q].b + 0x10)); s->left -= *(uint32_t*)(e[q].b + 0x14); }
+            memmove(&e[out], &e[a0], (size_t)(a1 - a0) * sizeof(CostEntry));
+            memcpy(g_pendPos[keep], g_pendPos[i], 24);
+            g_pendMat[keep] = g_pendMat[i];
+            g_pendCost[keep] = out;
+            out += a1 - a0; keep++;
+        }
+        g_pendCost[keep] = out;
+        list->count = out;
+        g_pend.n = keep;
+        LOG(.str("blueprint build: partial, ").i(keep).str(" of ").i(n0).str(" blocks affordable (per material)"));
+        if (!keep) { g_pend.bp = false; list->count = listBefore; flash(T(S_BP_NOT_ENOUGH_ANY)); beep(MB_ICONHAND); return 0; }
+        g_partialOf = n0;
+    }
     if (!creative_on() && !g_cfg.bpPartial && stock_known(list) && !affordable(nullptr, list, (uint32_t)list->count)) {
         LOG(.str("blueprint build: not enough materials, partial build off"));
         g_pend.n = 0; g_pend.bp = false; list->count = listBefore;
@@ -449,6 +506,7 @@ static uint8_t bp_place_click(CostList* list, void* ctx, void* state, uint8_t* p
     g_scOff[0] = g_scPos[0].x - t.pos[0]; g_scOff[1] = g_scPos[0].y - t.pos[1]; g_scOff[2] = g_scPos[0].z - t.pos[2];
     set_sc_rot(t.rot);
     g_bpPlaced = 0; g_bpPage = 0;
+    for (int a = 0; a < 3; a++) { g_bpOff[a] = 0; g_bpSaveOff[a] = 0; }
     g_bpWin = g_bpSub == BP_SAVE ? BPW_SAVE : BPW_PLACE;
     LOG(.str("blueprint: ").str(g_bpSub == BP_SAVE ? "save" : "place").str(" window, block (")
         .fix(g_scPos[0].x).c(',').fix(g_scPos[0].y).c(',').fix(g_scPos[0].z).c(')'));

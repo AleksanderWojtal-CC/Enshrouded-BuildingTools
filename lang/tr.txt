@@ -333,17 +333,17 @@ bp.rotation = Döndürme
 bp.partial = Kısmi inşaya izin ver
 bp.reference = Baktığın nokta
 bp.following = Hayalet baktığın yeri izler: sağ tuşu basılı tutup nişan al, sonra Buraya yerleştir.
-bp.placed = Yerleştirildi: düğmelerle taşı, sonra İnşa et.
+bp.placed = Yerleştirildi: aşağıdaki satırlarla taşı, sonra İnşa et.
 bp.place_here = Buraya yerleştir
 bp.follow = Nişanı izle
-bp.move = Bir blok taşı:
-bp.left = Sol
+bp.move = Hayaleti taşı (blok; eksi = sol, yakın, aşağı):
 bp.right = Sağ
 bp.away = Uzağa
-bp.closer = Yakına
 bp.up = Yukarı
-bp.down = Aşağı
 bp.back = Listeye dön
+bp.move_point = Tıklanan noktayı taşı (blok; eksi = sol, yakın, aşağı):
+bp.size_header = Boyut (referans noktasının ötesindeki bloklar):
+bp.not_enough_any = Bu planın tek bir bloğu için bile malzeme yok
 bp.costs = Gereken malzemeler:
 bp.material_row = Malzeme {0}: {1} gerekli, sende {2} var
 bp.have_unknown = ?

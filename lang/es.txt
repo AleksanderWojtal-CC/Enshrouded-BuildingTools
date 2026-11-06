@@ -333,17 +333,17 @@ bp.rotation = Rotación
 bp.partial = Permitir construcción parcial
 bp.reference = Punto al que miras
 bp.following = El fantasma sigue tu mirada: mantén el botón derecho y apunta, luego Colocar aquí.
-bp.placed = Colocado: muévelo con los botones y luego Construir.
+bp.placed = Colocado: muévelo con las filas de abajo y luego Construir.
 bp.place_here = Colocar aquí
 bp.follow = Seguir la mira
-bp.move = Mover un bloque:
-bp.left = Izquierda
+bp.move = Mover el fantasma (bloques; negativo = izquierda, más cerca, abajo):
 bp.right = Derecha
 bp.away = Más lejos
-bp.closer = Más cerca
 bp.up = Arriba
-bp.down = Abajo
 bp.back = Volver a la lista
+bp.move_point = Mover el punto pulsado (bloques; negativo = izquierda, más cerca, abajo):
+bp.size_header = Tamaño (bloques más allá del punto de referencia):
+bp.not_enough_any = No hay materiales ni para un bloque de este plano
 bp.costs = Materiales necesarios:
 bp.material_row = Material {0}: se necesitan {1}, tienes {2}
 bp.have_unknown = ?

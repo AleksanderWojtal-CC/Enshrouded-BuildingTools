@@ -333,17 +333,17 @@ bp.rotation = Rotation
 bp.partial = Autoriser la construction partielle
 bp.reference = Point que vous regardez
 bp.following = Le fantôme suit votre regard : maintenez le clic droit et visez, puis Poser ici.
-bp.placed = Posé : déplacez-le avec les boutons, puis Construire.
+bp.placed = Posé : déplacez-le avec les lignes ci-dessous, puis Construire.
 bp.place_here = Poser ici
 bp.follow = Suivre la visée
-bp.move = Déplacer d'un bloc :
-bp.left = Gauche
+bp.move = Déplacer le fantôme (blocs ; négatif = gauche, plus près, bas) :
 bp.right = Droite
 bp.away = Plus loin
-bp.closer = Plus près
 bp.up = Haut
-bp.down = Bas
 bp.back = Retour à la liste
+bp.move_point = Déplacer le point cliqué (blocs ; négatif = gauche, plus près, bas) :
+bp.size_header = Taille (blocs après le point de référence) :
+bp.not_enough_any = Pas assez de matériaux pour un seul bloc de ce plan
 bp.costs = Matériaux nécessaires :
 bp.material_row = Matériau {0} : {1} nécessaires, vous avez {2}
 bp.have_unknown = ?

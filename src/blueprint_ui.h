@@ -2,11 +2,6 @@
 // a full-height panel at the left with its own backdrop, the drawn box beside it, the right
 // button hides it. Included by main.cpp after the exact window.
 
-// The save box's corners from the clicked block and the window's sizes (Exact mode's rule).
-static void bp_save_corners(I3 out[2]) {
-    core::exact_corners(g_scPos[0], g_cfg.bpRef, g_cfg.bpW, g_cfg.bpD, g_cfg.bpH,
-                        g_exFAxis, g_exFSign, g_exRAxis, g_exRSign, g_scStep, out);
-}
 // Save / Build: arm the mod; the input thread sends the click once the window is down.
 static void bp_arm() {
     EnterCriticalSection(&g_stateLock);
@@ -21,7 +16,7 @@ static bool bp_save_confirm() {
     if (!g_exactOpen || g_exactArmed || g_bpWin != BPW_SAVE) return false;
     I3 c[2]; bp_save_corners(c);
     core::Plan pl = {}; I3 c3[3] = { c[0], c[1], c[1] };
-    const long cap = g_cfg.maxShapes < kBpMaxCells ? g_cfg.maxShapes : kBpMaxCells;
+    const long cap = kBpMaxCells;
     if (!core::plan_fill(c3, 2, g_scStep, 50000000, &pl) || pl.total > cap) {
         Buf b; b.fmt(T(S_EXACT_TOO_BIG), num(cap).s); flash(b.z()); beep(MB_ICONHAND);
         return false;
@@ -155,6 +150,13 @@ static void bp_keys(Str enterLabel) {
     ui.endBox(keys);
 }
 
+// Three rows moving something by cells: right (- left), away (- closer), up (- down).
+static void bp_offset_rows(Str header, int* off) {
+    ui_text(T(header), STYLE_BODY);
+    const Str labels[3] = { S_BP_RIGHT, S_BP_AWAY, S_BP_UP };
+    for (int k = 0; k < 3; k++) { int v; if (ui_number(T(labels[k]), off[k], &v)) off[k] = bp_clamp(v); }
+}
+
 // ---- Save: reference, sizes, name, Save
 static void draw_bp_save_window() {
     BpFrame f; bp_frame_begin(f, T(S_BP_SAVE_TITLE), T(S_BP_SAVE_HELP));
@@ -162,6 +164,8 @@ static void draw_bp_save_window() {
     ui_text(T(S_BP_NAME_HINT), STYLE_BODY);
     {   LONG v;
         if (ref_option(T(S_EXACT_REF), g_cfg.bpRef, &v)) g_cfg.bpRef = v; }
+    bp_offset_rows(S_BP_MOVE_POINT, g_bpSaveOff);
+    ui_text(T(S_BP_SIZE_HDR), STYLE_BODY);
     const Str labels[3] = { S_EXACT_WIDTH, S_EXACT_DEPTH, S_EXACT_HEIGHT };
     int* fields[3] = { &g_cfg.bpW, &g_cfg.bpD, &g_cfg.bpH };
     for (int k = 0; k < 3; k++) { int v; if (ui_number(T(labels[k]), *fields[k], &v)) *fields[k] = bp_clamp(v); }
@@ -185,12 +189,6 @@ static void draw_bp_save_window() {
 }
 
 // ---- Place: page 0 the list, page 1 the chosen blueprint
-static void bp_move(int axis, int sign) {        // one cell along a world axis
-    if (!g_bpPlaced) { g_bpAnchor = bp_anchor_now(); g_bpPlaced = 1; }
-    int rn[3]; float rs[3]; bp_dims(g_bpRot, rn, rs);
-    int64_t d = (int64_t)sign * bp_fix(rs[axis]);
-    if (axis == 0) g_bpAnchor.x += d; else if (axis == 1) g_bpAnchor.y += d; else g_bpAnchor.z += d;
-}
 static void draw_bp_place_window() {
     static DWORD s_lastDraw = 0;
     const DWORD now = GetTickCount();
@@ -223,21 +221,11 @@ static void draw_bp_place_window() {
     if (ref_option(T(S_BP_REF), g_cfg.bpPlaceRef, &v)) g_cfg.bpPlaceRef = v;
     {
         BpRow r; bp_row_begin(r);
-        if (!g_bpPlaced) { if (ui_button(T(S_BP_PLACE_BTN))) { g_bpAnchor = bp_anchor_now(); g_bpPlaced = 1; LOG(.str("blueprint: placed")); } }
+        if (!g_bpPlaced) { if (ui_button(T(S_BP_PLACE_BTN))) { g_bpAnchor = bp_aim_now(); g_bpPlaced = 1; LOG(.str("blueprint: placed")); } }
         else if (ui_button(T(S_BP_FOLLOW_BTN))) g_bpPlaced = 0;
         bp_row_end(r);
     }
-    ui_text(T(S_BP_MOVE), STYLE_BODY);
-    {
-        BpRow r; bp_row_begin(r);
-        if (ui_button(T(S_BP_LEFT)))   bp_move(g_exRAxis, -g_exRSign);
-        if (ui_button(T(S_BP_RIGHT)))  bp_move(g_exRAxis, g_exRSign);
-        if (ui_button(T(S_BP_AWAY)))   bp_move(g_exFAxis, g_exFSign);
-        if (ui_button(T(S_BP_CLOSER))) bp_move(g_exFAxis, -g_exFSign);
-        if (ui_button(T(S_BP_UP)))     bp_move(1, 1);
-        if (ui_button(T(S_BP_DOWN)))   bp_move(1, -1);
-        bp_row_end(r);
-    }
+    bp_offset_rows(S_BP_MOVE, g_bpOff);
     const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
     if (ui_option(T(S_BP_PARTIAL), offOn, 2, g_cfg.bpPartial ? 1 : 0, &v)) g_cfg.bpPartial = v != 0;
     bool fits = true;

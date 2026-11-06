@@ -333,17 +333,17 @@ bp.rotation = 回転
 bp.partial = 部分建築を許可
 bp.reference = 見ている点
 bp.following = ゴーストは視線を追います：右ボタンを押したまま狙い、「ここに配置」。
-bp.placed = 配置済み：ボタンで動かしてから「建てる」。
+bp.placed = 配置済み：下の行で動かしてから「建てる」。
 bp.place_here = ここに配置
 bp.follow = 狙いに追従
-bp.move = 1ブロック動かす：
-bp.left = 左
+bp.move = ゴーストを動かす（ブロック、マイナス = 左・手前・下）：
 bp.right = 右
 bp.away = 奥へ
-bp.closer = 手前へ
 bp.up = 上
-bp.down = 下
 bp.back = 一覧に戻る
+bp.move_point = クリックした点を動かす（ブロック、マイナス = 左・手前・下）：
+bp.size_header = サイズ（基準点より先のブロック数）：
+bp.not_enough_any = この設計図のブロックを1つも建てる素材がありません
 bp.costs = 必要な素材：
 bp.material_row = 素材 {0}：必要 {1}、所持 {2}
 bp.have_unknown = ?

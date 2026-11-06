@@ -333,17 +333,17 @@ bp.rotation = 旋轉
 bp.partial = 允許部分建造
 bp.reference = 你看著的點
 bp.following = 虛影跟隨你的視線：按住右鍵瞄準，然後點「放在這裡」。
-bp.placed = 已放置：用按鈕移動，然後建造。
+bp.placed = 已放置：用下面的列移動，然後建造。
 bp.place_here = 放在這裡
 bp.follow = 跟隨準星
-bp.move = 移動一格：
-bp.left = 左
+bp.move = 移動虛影（格；負數 = 左、近、下）：
 bp.right = 右
 bp.away = 遠離
-bp.closer = 靠近
 bp.up = 上
-bp.down = 下
 bp.back = 返回列表
+bp.move_point = 移動點擊的點（格；負數 = 左、近、下）：
+bp.size_header = 尺寸（參考點以外的格數）：
+bp.not_enough_any = 材料連此藍圖的一個方塊都不夠
 bp.costs = 所需材料：
 bp.material_row = 材料 {0}：需要 {1}，擁有 {2}
 bp.have_unknown = ?

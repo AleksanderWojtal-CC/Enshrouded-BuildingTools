@@ -336,17 +336,17 @@ bp.rotation = Rotation
 bp.partial = Allow partial build
 bp.reference = Point you look at
 bp.following = The ghost follows where you look: hold the right mouse button and aim, then Place here.
-bp.placed = Placed: move it with the buttons, then Build.
+bp.placed = Placed: move it with the rows below, then Build.
 bp.place_here = Place here
 bp.follow = Follow the aim
-bp.move = Move by one block:
-bp.left = Left
+bp.move = Move the ghost (blocks; negative = left, closer, down):
 bp.right = Right
 bp.away = Away
-bp.closer = Closer
 bp.up = Up
-bp.down = Down
 bp.back = Back to the list
+bp.move_point = Move the clicked point (blocks; negative = left, closer, down):
+bp.size_header = Size (blocks past the reference point):
+bp.not_enough_any = Not enough materials for any block of this blueprint
 bp.costs = Materials needed:
 bp.material_row = Material {0}: {1} needed, you have {2}
 bp.have_unknown = ?

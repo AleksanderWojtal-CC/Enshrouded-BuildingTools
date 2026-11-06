@@ -333,17 +333,17 @@ bp.rotation = Rotação
 bp.partial = Permitir construção parcial
 bp.reference = Ponto para onde você olha
 bp.following = O fantasma segue seu olhar: segure o botão direito e mire, depois Colocar aqui.
-bp.placed = Colocado: mova com os botões, depois Construir.
+bp.placed = Colocado: mova com as linhas abaixo, depois Construir.
 bp.place_here = Colocar aqui
 bp.follow = Seguir a mira
-bp.move = Mover um bloco:
-bp.left = Esquerda
+bp.move = Mover o fantasma (blocos; negativo = esquerda, mais perto, baixo):
 bp.right = Direita
 bp.away = Mais longe
-bp.closer = Mais perto
 bp.up = Cima
-bp.down = Baixo
 bp.back = Voltar à lista
+bp.move_point = Mover o ponto clicado (blocos; negativo = esquerda, mais perto, baixo):
+bp.size_header = Tamanho (blocos além do ponto de referência):
+bp.not_enough_any = Materiais insuficientes para qualquer bloco desta planta
 bp.costs = Materiais necessários:
 bp.material_row = Material {0}: {1} necessários, você tem {2}
 bp.have_unknown = ?

@@ -322,17 +322,17 @@
     X(S_BP_PARTIAL, "bp.partial", "Allow partial build") \
     X(S_BP_REF, "bp.reference", "Point you look at") \
     X(S_BP_FOLLOWING, "bp.following", "The ghost follows where you look: hold the right mouse button and aim, then Place here.") \
-    X(S_BP_PLACED, "bp.placed", "Placed: move it with the buttons, then Build.") \
+    X(S_BP_PLACED, "bp.placed", "Placed: move it with the rows below, then Build.") \
     X(S_BP_PLACE_BTN, "bp.place_here", "Place here") \
     X(S_BP_FOLLOW_BTN, "bp.follow", "Follow the aim") \
-    X(S_BP_MOVE, "bp.move", "Move by one block:") \
-    X(S_BP_LEFT, "bp.left", "Left") \
+    X(S_BP_MOVE, "bp.move", "Move the ghost (blocks; negative = left, closer, down):") \
     X(S_BP_RIGHT, "bp.right", "Right") \
     X(S_BP_AWAY, "bp.away", "Away") \
-    X(S_BP_CLOSER, "bp.closer", "Closer") \
     X(S_BP_UP, "bp.up", "Up") \
-    X(S_BP_DOWN, "bp.down", "Down") \
     X(S_BP_BACK, "bp.back", "Back to the list") \
+    X(S_BP_MOVE_POINT, "bp.move_point", "Move the clicked point (blocks; negative = left, closer, down):") \
+    X(S_BP_SIZE_HDR, "bp.size_header", "Size (blocks past the reference point):") \
+    X(S_BP_NOT_ENOUGH_ANY, "bp.not_enough_any", "Not enough materials for any block of this blueprint") \
     X(S_BP_COSTS, "bp.costs", "Materials needed:") \
     X(S_BP_MAT_ROW, "bp.material_row", "Material {0}: {1} needed, you have {2}") \
     X(S_BP_MAT_UNKNOWN, "bp.have_unknown", "?") \

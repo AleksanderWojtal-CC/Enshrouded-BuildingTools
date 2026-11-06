@@ -333,17 +333,17 @@ bp.rotation = 회전
 bp.partial = 부분 건설 허용
 bp.reference = 보고 있는 지점
 bp.following = 고스트가 시선을 따라갑니다: 우클릭을 누른 채 조준한 뒤 여기에 배치.
-bp.placed = 배치됨: 버튼으로 옮긴 뒤 건설.
+bp.placed = 배치됨: 아래 줄로 옮긴 뒤 건설.
 bp.place_here = 여기에 배치
 bp.follow = 조준 따라가기
-bp.move = 한 블록 이동:
-bp.left = 왼쪽
+bp.move = 고스트 이동 (블록, 음수 = 왼쪽, 가까이, 아래):
 bp.right = 오른쪽
 bp.away = 멀리
-bp.closer = 가까이
 bp.up = 위
-bp.down = 아래
 bp.back = 목록으로
+bp.move_point = 클릭한 지점 이동 (블록, 음수 = 왼쪽, 가까이, 아래):
+bp.size_header = 크기 (기준점 너머 블록 수):
+bp.not_enough_any = 이 설계도의 블록 하나도 지을 재료가 없습니다
 bp.costs = 필요한 재료:
 bp.material_row = 재료 {0}: {1}개 필요, 보유 {2}
 bp.have_unknown = ?

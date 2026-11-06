@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.32.0-dev3"
+#define MOD_VERSION "0.32.0-dev4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -3756,11 +3756,12 @@ static bool live_centre(I3* out) {
     *out = I3{ p[0] + o[0], p[1] + o[1], p[2] + o[2] };
     return true;
 }
+static void bp_save_corners(I3 out[2]);             // blueprint.h
 static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
     if (g_mode == MODE_BLUEPRINT && g_bpWin == BPW_SAVE && (g_exactOpen || g_exactArmed)) {   // the save window's box
         I3 c[3];
         if (g_exactArmed) { c[0] = g_exactC[0]; c[1] = g_exactC[1]; }
-        else core::exact_corners(g_scPos[0], g_cfg.bpRef, g_cfg.bpW, g_cfg.bpD, g_cfg.bpH, g_exFAxis, g_exFSign, g_exRAxis, g_exRSign, g_scStep, c);
+        else bp_save_corners(c);
         c[2] = c[1];
         for (int a = 0; a < 3; a++) step[a] = g_scStep[a];
         if (step[0] <= 0.f || step[1] <= 0.f || step[2] <= 0.f) return false;
@@ -3893,7 +3894,7 @@ static bool area_box_live(int64_t lo[3], int64_t hi[3]) {
     g_bpGhost = 0;
     core::Plan pl; float step[3]; bool ok = false;
     if (!g_cfg.preview || !(building_now(500) || g_exactOpen || g_exactArmed) || !area_plan_live(&pl, step, &ok) || !ok) return false;
-    if (core::fill_count(pl, live_fill()) > g_cfg.maxShapes) return false;
+    if (core::fill_count(pl, live_fill()) > (g_bpWin == BPW_SAVE ? (long)kBpMaxCells : (long)g_cfg.maxShapes)) return false;
     // the shader counts cells from the box's low corner, the plan from corner 1: a plan running
     // toward -x / -z on the slope axis turns the shed around
     const int shedFlip = pl.roofFlip ^ (pl.stepFix[pl.roofAxisX ? 0 : 2] < 0 ? 1 : 0);
@@ -5181,7 +5182,7 @@ static bool hud_row_ready();
 static void exact_hint(int key, Str label) {
     if (!hud_row_ready()) return;
     // the mouse icons are wider than the row leaves for them: a gap so the first letter shows
-    Buf b; if (key == VK_LBUTTON || key == VK_RBUTTON || key == VK_MBUTTON) b.str("\xC2\xA0\xC2\xA0\xC2\xA0"); b.str(T(label));   // no-break spaces: plain ones are trimmed
+    Buf b; if (key == VK_LBUTTON || key == VK_RBUTTON || key == VK_MBUTTON) b.str("\xC2\xA0\xC2\xA0\xC2\xA0\xC2\xA0\xC2\xA0"); b.str(T(label));   // no-break spaces: plain ones are trimmed
     hud_key_row(key, b.z(), -1);
 }
 
