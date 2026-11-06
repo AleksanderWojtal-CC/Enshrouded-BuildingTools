@@ -35,7 +35,8 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   chests, furniture, decorations... with position and rotation) to a file
   (`BuildingTools-Blueprints` next to `enshrouded.exe`; save inside a base). **Place** - pick a
   blueprint, see the materials and objects it needs by name against what you have, turn it in
-  90 degree steps or mirror it, aim its ghost (or place it and move it block by block),
+  90 degree steps or mirror it (objects that come out facing the wrong way can be turned per
+  kind), aim its ghost (or place it and move it block by block),
   allow or forbid a partial build, build or leave out the objects, and Build. Saved per cell
   of the shape in hand (the 0.5 m cube for full detail). Worlds you host only (not yet on a
   dedicated server).

@@ -169,6 +169,10 @@ Blueprints (Blueprint mode: the mode on the tools wheel, Prefab -> Area -> Bluep
   Enter) builds every block with its own material, then the objects (each costs
   one of its item); Back returns to the list, Cancel (or Esc) closes. Undo and
   big actions work as for areas.
+  Mirror builds it with left and right swapped. The game has no mirrored
+  models, so objects are turned to fit; with Mirror on the window lists every
+  kind of object with As is / Turned around for any that faces the wrong way
+  (kept in BuildingTools-Blueprints\mirror.ini).
   Doors, windows and other wirable objects are not linked into the base's logic
   network until the world is loaded again. Blueprints work only in a world you
   host, not on a dedicated server.

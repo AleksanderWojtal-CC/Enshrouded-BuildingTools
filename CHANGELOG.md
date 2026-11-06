@@ -3,31 +3,36 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
-## 0.32.0 (in development)
+## 0.32.0
 
-- **Blueprints** (issue #49). Blueprint is a new mode next to Prefab and Area (the mode on
-  the tools wheel, Options tab, keys in the Keys tab), with two actions on the tools wheel:
+- **Blueprints** (issue #49): save part of a building to a file and build it again anywhere,
+  also in another world. Blueprint is a new mode next to Prefab and Area (the mode on the
+  tools wheel; Options tab: Blueprints on / off; keys in the Keys tab), with two actions on
+  the tools wheel:
   - **Save**: click a block and a window like Exact mode's opens. Choose where the clicked
-    block sits in the box (now also front middle and back middle), move that point by blocks,
-    set width, depth and height, type a name, and Save. The box is drawn beside the window;
-    hold the right mouse button to look around. The blocks inside, every block with its own
-    material, and the objects inside (doors, windows, chests, beds, furniture, lights,
-    decorations...) with their position and rotation are saved to a file in the new
-    `BuildingTools-Blueprints` folder next to `enshrouded.exe`. Save inside a base: the
-    objects are found through the game's comfort check, which runs there.
-  - **Place**: click and pick a blueprint from the list. The next page shows the materials
-    and objects it needs (by name) and what you have, its rotation (90 degree steps),
-    Mirror (left and right swapped; thin panels such as railings get turned so they still fit),
-    Allow partial build, Objects (build / leave out), and
-    which point of it sits at the block you look at. Its ghost follows your aim (hold the
-    right mouse button) until you press Place here; arrow rows move it by blocks right, away
-    and up. Build places everything in one action: blocks first, then the objects, each
-    costing one of its item. With partial build on, every block your materials cover is
-    built, material by material; undo works as for areas.
-  Blocks are saved per cell of the shape in your hand (hold the small 0.5 m cube for full
-  detail); a cell at least half full counts as a full block. Doors, windows and other
-  wirable objects are placed without their link to the base's logic network until the world
-  is loaded again. Blueprints do not work on a dedicated server yet.
+    block sits in the box (now also front middle and back middle), move that point by
+    blocks, set width, depth and height, type a name, and Save. The box is drawn beside the
+    window; hold the right mouse button to look around. The blocks in the box are saved with
+    their own materials, and the objects in it (doors, windows, chests, beds, stations,
+    furniture, lights, decorations, railings...) with their position and rotation, to a
+    file in the new `BuildingTools-Blueprints` folder next to `enshrouded.exe`.
+  - **Place**: click and pick a blueprint. The next page shows the materials and objects it
+    needs, by name, and what you have; its rotation (90 degree steps); Mirror; Allow partial
+    build; Objects (build / leave out); and which point of it sits at the block you look at.
+    Its ghost follows your aim (hold the right mouse button) until you press Place here;
+    arrow rows move it by blocks right, away and up. Build places everything in one action:
+    blocks first, every one with its own material, then the objects, each costing one of its
+    item (creative building: free). With partial build on, every block your materials cover
+    is built, material by material. Undo works as for areas.
+  - **Mirror** builds the blueprint with left and right swapped. The game has no mirrored
+    models, so objects are turned to fit; with Mirror on, the window lists every kind of
+    object with As is / Turned around for any that comes out facing the wrong way (kept for
+    next time).
+  Good to know: blocks are saved per cell of the shape in your hand (hold the small 0.5 m
+  cube for full detail; a cell at least half full counts as a full block). Save inside a
+  base: the objects are found through the game's comfort check, which runs there. Doors,
+  windows and other wirable objects join the base's logic network after the world is loaded
+  again. Blueprints do not work on a dedicated server yet.
 - Exact mode: two more reference points, front middle and back middle.
 
 ## 0.31.2
