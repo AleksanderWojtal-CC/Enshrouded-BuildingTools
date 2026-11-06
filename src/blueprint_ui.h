@@ -41,6 +41,29 @@ static bool bp_confirm() {                       // Enter: ends typing the name,
 }
 static int bp_clamp(int v) { return v > core::kExactMax ? core::kExactMax : v < -core::kExactMax ? -core::kExactMax : v; }
 
+// A body text wrapped at about `cols` characters (the panel does not wrap: long texts ran past it).
+static void bp_text(const char* t, int cols = 78) {
+    char line[256];
+    while (*t) {
+        int n = 0, chars = 0, cut = -1;
+        while (t[n] && chars < cols && n < (int)sizeof line - 8) {
+            if (t[n] == ' ') cut = n;
+            n++;
+            while (((uint8_t)t[n] & 0xC0) == 0x80) n++;   // UTF-8 continuation bytes
+            chars++;
+        }
+        if (t[n] && cut > 0) n = cut;
+        memcpy(line, t, (size_t)n); line[n] = 0;
+        ui_text(line, STYLE_BODY);
+        t += n;
+        while (*t == ' ') t++;
+    }
+}
+// a material or object: its name in the game's language, else its item id
+static void bp_item_label(Buf& b, uint32_t item) {
+    if (const char* nm = bp_item_name(item)) b.str(nm); else b.x(item);
+}
+
 // ---- the name, typed on the keyboard while the save window is up (input thread)
 // Keys are read with GetAsyncKeyState and turned into text with the game window's keyboard
 // layout (Shift, Caps Lock and AltGr letters such as Polish ą work); Backspace deletes.
@@ -114,7 +137,7 @@ static void bp_frame_begin(BpFrame& f, const char* title, const char* help) {
     ui.setWidth(n, 1180);
     ui.setStretch(n, UiVec2{ 0, 1 });
     ui_text(title, STYLE_TITLE);
-    if (help && help[0]) ui_text(help, STYLE_BODY);
+    if (help && help[0]) bp_text(help);
     alignas(16) static uint8_t st[0x500];
     static float offset[4];
     f.st = st;
@@ -156,7 +179,7 @@ static void bp_keys(Str enterLabel) {
 
 // Three rows moving something by cells: right (- left), away (- closer), up (- down).
 static void bp_offset_rows(Str header, int* off) {
-    ui_text(T(header), STYLE_BODY);
+    bp_text(T(header));
     const Str labels[3] = { S_BP_RIGHT, S_BP_AWAY, S_BP_UP };
     for (int k = 0; k < 3; k++) { int v; if (ui_number(T(labels[k]), off[k], &v)) off[k] = bp_clamp(v); }
 }
@@ -167,14 +190,16 @@ static void draw_bp_save_window() {
     {   // the name: a click starts typing, Enter or another click ends it
         Buf b; b.fmt(T(S_BP_NAME), g_bpTyped); if (g_bpNameEdit) b.str("_");
         BpRow r; bp_row_begin(r);
-        if (ui_button(b.z())) g_bpNameEdit = !g_bpNameEdit;
+        // Space and Enter also "press" the focused button in the game's UI: typing a space must not end it
+        const bool typingKey = (GetAsyncKeyState(VK_SPACE) & 0x8000) || (GetAsyncKeyState(VK_RETURN) & 0x8000);
+        if (ui_button(b.z()) && !(g_bpNameEdit && typingKey)) g_bpNameEdit = !g_bpNameEdit;
         bp_row_end(r);
     }
-    ui_text(T(S_BP_NAME_HINT), STYLE_BODY);
+    bp_text(T(S_BP_NAME_HINT));
     {   LONG v;
         if (ref_option(T(S_EXACT_REF), g_cfg.bpRef, &v)) g_cfg.bpRef = v; }
     bp_offset_rows(S_BP_MOVE_POINT, g_bpSaveOff);
-    ui_text(T(S_BP_SIZE_HDR), STYLE_BODY);
+    bp_text(T(S_BP_SIZE_HDR));
     const Str labels[3] = { S_EXACT_WIDTH, S_EXACT_DEPTH, S_EXACT_HEIGHT };
     int* fields[3] = { &g_cfg.bpW, &g_cfg.bpD, &g_cfg.bpH };
     for (int k = 0; k < 3; k++) { int v; if (ui_number(T(labels[k]), *fields[k], &v)) *fields[k] = bp_clamp(v); }
@@ -184,9 +209,9 @@ static void draw_bp_save_window() {
         Buf b;
         if (core::plan_fill(c3, 2, g_scStep, 50000000, &pl))
             b.fmt(T(S_BP_CELLS), tenths((int)(g_scStep[0] * 10.f + 0.5f)).s, num(pl.count[g_exRAxis]).s, num(pl.count[g_exFAxis]).s, num(pl.count[1]).s);
-        ui_text(b.z(), STYLE_BODY);
+        bp_text(b.z());
     }
-    ui_text(T(S_BP_OBJECTS_LATER), STYLE_BODY);
+    bp_text(T(S_BP_OBJECTS_LATER));
     bp_frame_rows_end(f);
     BpRow r; bp_row_begin(r);
     if (ui_button(T(S_BP_SAVE_BTN))) bp_save_confirm();
@@ -205,7 +230,7 @@ static void draw_bp_place_window() {
     s_lastDraw = now;
     if (g_bpPage == 0) {
         BpFrame f; bp_frame_begin(f, T(S_BP_LIST_TITLE), "");
-        if (!g_bpFiles) ui_text(T(S_BP_NONE), STYLE_BODY);
+        if (!g_bpFiles) bp_text(T(S_BP_NONE));
         for (int q = 0; q < g_bpFiles; q++)
             if (ui_button(g_bpName[q])) {
                 g_bpSel = q;
@@ -223,10 +248,12 @@ static void draw_bp_place_window() {
     bp_ghost_bits();
     BpFrame f; bp_frame_begin(f, g_bpSel < g_bpFiles ? g_bpName[g_bpSel] : T(S_BP_LIST_TITLE), T(g_bpPlaced ? S_BP_PLACED : S_BP_FOLLOWING));
     int rn[3]; float rs[3]; bp_dims(g_bpRot, rn, rs);
-    {   Buf b; b.fmt(T(S_BP_SIZE), num(rn[g_exRAxis]).s, num(rn[g_exFAxis]).s, num(rn[1]).s, num(g_bp.filled).s); ui_text(b.z(), STYLE_BODY); }
+    {   Buf b; b.fmt(T(S_BP_SIZE), num(rn[g_exRAxis]).s, num(rn[g_exFAxis]).s, num(rn[1]).s, num(g_bp.filled).s); bp_text(b.z()); }
     LONG v;
     static const char* const turns[4] = { "0\xC2\xB0", "90\xC2\xB0", "180\xC2\xB0", "270\xC2\xB0" };
     if (ui_option(T(S_BP_ROTATION), turns, 4, g_bpRot & 3, &v)) { g_bpRot = v; LOG(.str("blueprint: turn ").i(v)); }
+    {   const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
+        if (ui_option(T(S_BP_MIRROR), offOn, 2, g_bpMirror ? 1 : 0, &v)) { g_bpMirror = v != 0; LOG(.str("blueprint: mirror ").i(v)); } }
     if (ref_option(T(S_BP_REF), g_cfg.bpPlaceRef, &v)) g_cfg.bpPlaceRef = v;
     {
         BpRow r; bp_row_begin(r);
@@ -246,18 +273,18 @@ static void draw_bp_place_window() {
     for (int a = 0; a < 3; a++) if (g_scStep[a] - rs[a] > 0.05f || rs[a] - g_scStep[a] > 0.05f) fits = false;
     if (!fits) {
         Buf w; w.fmt(T(S_BP_SHAPE), tenths((int)(rs[0] * 10.f + 0.5f)).s, tenths((int)(rs[1] * 10.f + 0.5f)).s, tenths((int)(rs[2] * 10.f + 0.5f)).s);
-        ui_text(w.z(), STYLE_BODY);
+        bp_text(w.z());
     }
-    ui_text(T(S_BP_COSTS), STYLE_BODY);
+    bp_text(T(S_BP_COSTS));
     int shortN = 0; bool unknown = false;
     for (int q = 0; q < g_bp.h.nm; q++) {
         const core::BpMat& m = g_bp.h.m[q];
         int64_t have = creative_on() ? -2 : stock_of(m.item);
-        Buf label; label.i(q + 1).str(" (").x(m.item).c(')');
+        Buf label; bp_item_label(label, m.item);
         Buf hv; if (have == -2) hv.str("-"); else if (have < 0) { hv.str(T(S_BP_MAT_UNKNOWN)); unknown = true; } else hv.i(have);
         if (have >= 0 && have < (int64_t)m.items) shortN++;
         Buf row; row.fmt(T(S_BP_MAT_ROW), label.z(), num(m.items).s, hv.z());
-        ui_text(row.z(), STYLE_BODY);
+        bp_text(row.z());
     }
     if (g_cfg.bpObjects)                                 // the objects: one of each item per object
         for (int q = 0; q < g_bp.h.objects; q++) {
@@ -268,14 +295,14 @@ static void draw_bp_place_window() {
             int need = 0;
             for (int p = q; p < g_bp.h.objects; p++) need += g_bp.h.obj[p].item == item;
             int64_t have = creative_on() ? -2 : stock_of(item);
-            Buf label; label.x(item);
+            Buf label; bp_item_label(label, item);
             Buf hv; if (have == -2) hv.str("-"); else if (have <= 0) { hv.str(T(S_BP_MAT_UNKNOWN)); unknown = true; } else hv.i(have);
             Buf row; row.fmt(T(S_BP_OBJ_ROW), label.z(), num(need).s, hv.z());
-            ui_text(row.z(), STYLE_BODY);
+            bp_text(row.z());
         }
-    if (unknown) ui_text(T(S_BP_STOCK_HINT), STYLE_BODY);
-    if (shortN) { Buf sh; sh.fmt(T(S_BP_SHORT), num(shortN).s); ui_text(sh.z(), STYLE_BODY); }
-    ui_text(T(S_BP_OBJECTS_LATER), STYLE_BODY);
+    if (unknown) bp_text(T(S_BP_STOCK_HINT));
+    if (shortN) { Buf sh; sh.fmt(T(S_BP_SHORT), num(shortN).s); bp_text(sh.z()); }
+    bp_text(T(S_BP_OBJECTS_LATER));
     bp_frame_rows_end(f);
     BpRow r; bp_row_begin(r);
     if (ui_button(T(S_EXACT_BUILD), g_bp.ok)) bp_build_confirm();

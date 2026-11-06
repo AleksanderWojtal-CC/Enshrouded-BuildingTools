@@ -34,6 +34,7 @@ struct Blueprint {
 static Blueprint g_bp;                           // the one picked in the window (UI thread; the server reads it once armed)
 static volatile LONG g_bpSub = BP_SAVE;          // what a click in Blueprint mode does
 static volatile LONG g_bpRot = 0;                // quarter turns about the vertical axis
+static volatile LONG g_bpMirror = 0;             // built mirrored: left and right swapped (before the turn)
 static volatile LONG g_bpGhost = 0;              // the drawn box is the blueprint (vkdraw: its cells from g_bpBits)
 static volatile LONG g_bpPage = 0;               // place window: 0 = the list, 1 = the chosen blueprint
 static volatile LONG g_bpPlaced = 0;             // the ghost stays at g_bpAnchor (else it follows the aim)
@@ -127,9 +128,10 @@ static bool bp_box(int64_t lo[3], int64_t hi[3], float step[3]) {
 static void bp_ghost_bits() {
     static LONG key = -1; static uint32_t keyFile = 0;
     uint32_t f = 0; for (int q = 0; g_bp.path[q]; q++) f = f * 31 + g_bp.path[q];
-    if (key == g_bpRot && keyFile == f && g_bpBitsOk) return;
+    const LONG want = g_bpRot | (g_bpMirror << 2);
+    if (key == want && keyFile == f && g_bpBitsOk) return;
     g_bpBitsOk = 0;
-    key = g_bpRot; keyFile = f;
+    key = want; keyFile = f;
     if (!g_bp.ok) return;
     int rn[3]; float rs[3]; bp_dims(g_bpRot, rn, rs);
     if ((long)rn[0] * rn[1] * rn[2] > 40000) return;       // too many cells for the bits: the box alone
@@ -138,7 +140,8 @@ static void bp_ghost_bits() {
     for (int j = 0; j < n[1]; j++)
         for (int k = 0; k < n[2]; k++)
             for (int i = 0; i < n[0]; i++) {
-                if (g_bp.cell[core::bp_index(n, i, j, k)] == core::BP_EMPTY) continue;
+                const int si = g_bpMirror ? n[0] - 1 - i : i;   // mirrored: the cell comes from the other side
+                if (g_bp.cell[core::bp_index(n, si, j, k)] == core::BP_EMPTY) continue;
                 int ri, rk; core::bp_turn(g_bpRot, i, k, n[0], n[2], &ri, &rk);
                 int id = ri + rn[0] * (j + rn[1] * rk);
                 g_bpBits[id >> 5] |= 1u << (id & 31);
@@ -478,6 +481,7 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
         for (int rk = 0; rk < rn[2]; rk++)
             for (int ri = 0; ri < rn[0]; ri++) {
                 int i, k; core::bp_unturn(g_bpRot, ri, rk, n[0], n[2], &i, &k);
+                if (g_bpMirror) i = n[0] - 1 - i;
                 const uint8_t mi = g_bp.cell[core::bp_index(n, i, j, k)];
                 if (mi == core::BP_EMPTY || mi >= g_bp.h.nm || mat[mi] < 0) continue;
                 if (g_pend.n >= kMaxPending) continue;
@@ -589,8 +593,10 @@ static bool bp_commit_object(void* ctx, int i) {
     int rn[3]; float rs[3]; bp_dims(g_bpRot, rn, rs);
     const float dx = (float)g_bp.h.n[0] * g_bp.h.step[0], dz = (float)g_bp.h.n[2] * g_bp.h.step[2];
     float tp[3], tr[4];
-    core::bp_turn_point(g_bpRot, o.pos, dx, dz, tp);
-    core::bp_turn_rot(g_bpRot, o.rot, tr);
+    float mp[3] = { o.pos[0], o.pos[1], o.pos[2] }, mr[4] = { o.rot[0], o.rot[1], o.rot[2], o.rot[3] };
+    if (g_bpMirror) { mp[0] = dx - mp[0]; mr[1] = -mr[1]; mr[2] = -mr[2]; }   // mirrored in x: x -> -x, the rotation reflected
+    core::bp_turn_point(g_bpRot, mp, dx, dz, tp);
+    core::bp_turn_rot(g_bpRot, mr, tr);
     const int64_t lowc[3] = { g_bpMinArm.x, g_bpMinArm.y, g_bpMinArm.z };
     double w[3];
     for (int a = 0; a < 3; a++) w[a] = (double)lowc[a] / core::kFix - rs[a] * 0.5 + tp[a];
@@ -626,6 +632,7 @@ static uint8_t bp_place_click(CostList* list, void* ctx, void* state, uint8_t* p
     for (int a = 0; a < 3; a++) { g_bpOff[a] = 0; g_bpSaveOff[a] = 0; }
     g_bpNameEdit = 0;
     g_bpWin = g_bpSub == BP_SAVE ? BPW_SAVE : BPW_PLACE;
+    if (!g_bpItemReg) bp_item_registry(ctx, state);    // the window's item names
     LOG(.str("blueprint: ").str(g_bpSub == BP_SAVE ? "save" : "place").str(" window, block (")
         .fix(g_scPos[0].x).c(',').fix(g_scPos[0].y).c(',').fix(g_scPos[0].z).c(')'));
     exact_begin(OP_BUILD);

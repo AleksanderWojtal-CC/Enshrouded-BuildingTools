@@ -22,6 +22,7 @@ static const char* SIG_BP_COMFORT_READ = "4C 8B 45 90 48 8D 95 A0 00 00 00 49 8B
 static const char* SIG_BP_QUERY_CREATE = "48 8B CB 48 89 7C 24 20 E8 ?? ?? ?? ?? 48 8B 4D B8 8B 9D 90 03 00 00 48 85 C9";   // call at +8 (9600c0)
 static const char* SIG_BP_ENTITY_GET   = "42 8B 1C 2B 8B D3 E8 ?? ?? ?? ?? 48 8B F0 48 85 C0 0F 84 ?? ?? ?? ?? 48 8B 55 48"; // call at +6 (9b25f0)
 static const char* SIG_BP_QUERY_FREE   = "44 8B C3 48 8B CF 8B 10 E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 4D B8";        // call at +8 (960390)
+static const char* SIG_BP_LOCA_TEXT    = "48 8D 48 48 E8 ?? ?? ?? ?? 8B D0 48 8D 4C 24 38 E8 ?? ?? ?? ?? 0F 10 44 24 38";   // call at +0x10 (aff9f0)
 static const char* SIG_BP_ITEM_BY_ID   = "8B 7F 38 8B CF E8 ?? ?? ?? ?? 0F 57 C0 4C 89 65 58 0F 57 C9 66 0F 7F 45 60";        // call at +5 (e94470, dismantle)
 
 struct BpQResult { uint8_t* entries; uint64_t count; };     // 16-byte entries, entity id first
@@ -333,7 +334,36 @@ static bool bp_place_object(void* ctx, uint32_t item, const double* posM, const 
     return r != 0;
 }
 
+// ---- item names (the window's material and object rows; UI thread)
+// ItemInfo +0x48 is the name's loca reference (16 bytes); its LocaTagId is FNV-1a 32 over those
+// bytes (42ea30), and aff9f0(out, id) gives the text in the game's language as {chars, length,
+// hash}, the way the game's own item rows get it. Copied at once, cached per item.
+struct BpText { const char* p; uint64_t n; uint64_t hash; };
+typedef BpText* (*BpLocaTextFn)(BpText* out, uint32_t id);
+static BpLocaTextFn g_bpLocaText = nullptr;
+struct BpName { uint32_t item; char s[64]; };
+static BpName g_bpNameCache[128]; static int g_bpNameCacheN = 0;
+static const char* bp_item_name(uint32_t item) {
+    for (int q = 0; q < g_bpNameCacheN; q++) if (g_bpNameCache[q].item == item) return g_bpNameCache[q].s[0] ? g_bpNameCache[q].s : nullptr;
+    if (!g_bpLocaText || !g_bpItemById || !g_bpItemReg || !item) return nullptr;
+    uint8_t* it = g_bpItemById(item, g_bpItemReg);
+    if (!it || !readable(it + 0x48, 16)) return nullptr;
+    uint32_t id = 0x811c9dc5u;
+    for (int k = 0; k < 16; k++) { id ^= it[0x48 + k]; id *= 0x01000193u; }
+    BpText t = {};
+    g_bpLocaText(&t, id);
+    BpName& e = g_bpNameCacheN < 128 ? g_bpNameCache[g_bpNameCacheN++] : g_bpNameCache[127];
+    e.item = item; e.s[0] = 0;
+    if (t.p && t.n && t.n < 200 && readable(t.p, (size_t)t.n)) {
+        size_t n = t.n < sizeof e.s - 1 ? (size_t)t.n : sizeof e.s - 1;
+        while (n > 0 && n < t.n && ((uint8_t)t.p[n] & 0xC0) == 0x80) n--;      // whole UTF-8 characters
+        memcpy(e.s, t.p, n); e.s[n] = 0;
+    }
+    return e.s[0] ? e.s : nullptr;
+}
+
 static void bp_objects_install() {
+    if (uint8_t* lt = find_unique("BpLocaText", SIG_BP_LOCA_TEXT)) g_bpLocaText = (BpLocaTextFn)(lt + 0x15 + *(int32_t*)(lt + 0x11));
     uint8_t* rd = find_unique("BpComfortRead", SIG_BP_COMFORT_READ);
     uint8_t* cr = find_unique("BpQueryCreate", SIG_BP_QUERY_CREATE);
     uint8_t* eg = find_unique("BpEntityGet", SIG_BP_ENTITY_GET);

@@ -356,6 +356,7 @@ bp.obj_leave = Leave out
 bp.object_row = Object {0}: {1} needed, you have {2}
 bp.obj_missing = Objects the game does not know: {0} (left out)
 bp.obj_logic = Logic objects (wirable: switches, lamps...) are left out for now: {0}
+bp.mirror = Mirror (left ↔ right)
 bp.costs = Materials needed:
 bp.material_row = Material {0}: {1} needed, you have {2}
 bp.have_unknown = ?
