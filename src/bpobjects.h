@@ -132,14 +132,67 @@ static void bp_probe_collect(uint8_t* sys, uint8_t* frame, int q, const BpQResul
     }
     LOG(.str("blueprint objects: ").str(kBpProbeTypes[q] + 10).str(" -> ").u(r.count).str(" entities, ").i(added).str(" new objects"));
 }
-// the comfort system's results call: the game's own read, then the mod's queries
+// All entities of the world, from the table 9b25f0 looks ids up in: [[sys]+0x30] + 0x148 is an
+// open-addressing map (+0x08 occupancy bits, +0x10 slots, +0x28 u32 keys, +0x54 count), its
+// values (entity record pointers) at +0x188 by slot. Every entity in the box whose 4-byte item
+// component names a placeable object is kept: the range queries above only reach entities with
+// a queried component (usable, comfort, ladders), this reaches windows, fences and decorations too.
+static void bp_scan_entities(uint8_t* sys, uint8_t* frame) {
+    uint16_t* trH = frame && readable(frame + 0x60, 8) ? *(uint16_t**)(frame + 0x60) : nullptr;
+    const uint32_t trIdx = trH && readable(trH, 2) ? *trH : 0xffff;
+    uint8_t* w = *(uint8_t**)sys;
+    uint8_t* base = readable(w + 0x30, 8) ? *(uint8_t**)(w + 0x30) : nullptr;
+    if (!base || trIdx >= 640 || !readable(base + 0x148, 0x48)) { LOG(.str("blueprint objects: entity table not readable")); return; }
+    uint8_t* map = base + 0x148;
+    uint64_t* bits = *(uint64_t**)(map + 8);
+    const uint64_t slots = *(uint64_t*)(map + 0x10);
+    uint8_t** vals = *(uint8_t***)(base + 0x188);
+    if (!bits || !vals || !slots || slots > (1u << 24) || !readable(bits, (size_t)((slots + 63) / 64) * 8) || !readable(vals, (size_t)slots * 8)) {
+        LOG(.str("blueprint objects: entity table looks wrong (").u(slots).str(" slots)")); return;
+    }
+    const DWORD t0 = GetTickCount();
+    uint32_t seen = 0, inBox = 0;
+    for (uint64_t s = 0; s < slots && g_bpFoundN < core::BP_MAX_OBJS; s++) {
+        if (!((bits[s >> 6] >> (s & 63)) & 1)) continue;
+        uint8_t* e = vals[s];
+        if (!e) continue;
+        seen++;
+        uint32_t sz = 0;
+        uint8_t* t = bp_comp(e, trIdx, &sz);
+        if (!t || sz < 0x28) continue;
+        const int64_t* pos = (const int64_t*)t;
+        bool inside = true;
+        for (int a = 0; a < 3 && inside; a++) {
+            float v = (float)((double)pos[a] / core::kFix);
+            if (v < g_bpProbeBox[a] - 0.01f || v > g_bpProbeBox[4 + a] + 0.01f) inside = false;
+        }
+        if (!inside) continue;
+        inBox++;
+        uint32_t item = bp_entity_item(e);
+        if (!item) continue;
+        BpFound& f = g_bpFound[g_bpFoundN++];
+        f.entity = 0; f.item = item;
+        memcpy(f.pos, pos, 24); memcpy(f.rot, t + 0x18, 16);
+        LOG(.str("  object ").x(item).str(" at (").fix(pos[0]).c(',').fix(pos[1]).c(',').fix(pos[2]).str(") rot (")
+            .f(f.rot[0]).c(',').f(f.rot[1]).c(',').f(f.rot[2]).c(',').f(f.rot[3]).c(')'));
+    }
+    LOG(.str("blueprint objects: ").u(seen).str(" entities scanned in ").u(GetTickCount() - t0).str(" ms, ").u(inBox)
+        .str(" in the box, ").i(g_bpFoundN).str(" objects"));
+}
+// the comfort system's results call: the game's own read, then the mod's scan
 static uint8_t bt_comfort_read_body(uint8_t* sys, BpQResult* out, uint32_t id, uint8_t* frame) {
     uint8_t r = g_bpQResults(sys, out, id);
     g_bpProbeSeen = GetTickCount();
     if (!InterlockedExchange(&g_bpProbeHits, 1)) LOG(.str("blueprint objects: comfort system seen"));
     if (!sys || !readable(sys, 0x10) || !readable(*(uint8_t**)sys, 0x838)) return r;
+    if (InterlockedExchange(&g_bpProbeReq, 0)) {           // a save asked: every entity in its box, now
+        g_bpFoundN = 0;
+        bp_scan_entities(sys, frame);
+        bp_probe_finished(true);
+        return r;
+    }
     void* writer = *(void**)(*(uint8_t**)sys + 8);
-    if (InterlockedExchange(&g_bpProbeReq, 0) && writer) {
+    if (false && writer) {                                  // the range queries (kept for reference: they only reach some objects)
         if (g_bpProbeLive) for (int q = 0; q < kBpProbeN; q++) if (g_bpProbeIds[q]) g_bpQFree(writer, g_bpProbeOwner, g_bpProbeIds[q]);
         g_bpProbeOwner = bp_sys_entity(sys);
         g_bpFoundN = 0;
