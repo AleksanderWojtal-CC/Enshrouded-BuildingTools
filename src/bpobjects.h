@@ -354,7 +354,9 @@ static bool bp_mirror_default(uint32_t item) {
     if (!bp_item_bounds(it, mn, mx)) return false;
     const float sx = mx[0] - mn[0], sz = mx[2] - mn[2];
     const bool comfort = readable(it + 0x790, 4) && *(uint32_t*)(it + 0x790) > 0;
-    return sx > 0.05f && sz < 0.6f * sx && !(comfort && sz < 0.2f * sx);
+    // paper-thin wall pieces (a painting: 3.5 m wide, 0.16 m deep) have a front, railings and
+    // windows (depth 1/8 to 1/5 of the width) do not
+    return sx > 0.05f && sz < 0.6f * sx && !(comfort && sz < 0.2f * sx) && !(sz < 0.08f * sx);
 }
 static bool bp_mirror_half_turn(uint32_t item) {
     const int c = bp_mirror_choice(item);
