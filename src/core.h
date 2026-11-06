@@ -958,13 +958,16 @@ inline bool obj_column_top(uint64_t taken, int bits, int v0, double yRef, double
 // count, then per material {u32 item id, u8 material byte, u8 0, u16 0, u32 cells,
 // u32 items}; u32 run count, then runs {u16 length, u8 material index (0xff = empty),
 // u8 0} over the cells in order x + nx * (z + nz * y) (bottom layer first); u32 object
-// count (0 in version 1; later {u32 item, float pos[3], float rot[4]}).
+// count, then objects {u32 item, float pos[3] (metres from the box's low corner), float rot[4]
+// (quaternion x, y, z, w)}.
 // The material table names items by their item id (a hash that stays the same across
 // game patches); the material byte is only a hint, checked against the item at build time.
 static const uint8_t BP_EMPTY = 0xff;
 static const int BP_MAX_MATS = 64;
 struct BpMat { uint32_t item; uint8_t mat; uint32_t cells; uint32_t items; };
-struct BpHeader { float step[3]; int n[3]; uint32_t shape; int nm; BpMat m[BP_MAX_MATS]; int objects; };
+static const int BP_MAX_OBJS = 512;
+struct BpObject { uint32_t item; float pos[3]; float rot[4]; };
+struct BpHeader { float step[3]; int n[3]; uint32_t shape; int nm; BpMat m[BP_MAX_MATS]; int objects; BpObject obj[BP_MAX_OBJS]; };
 inline int bp_index(const int* n, int i, int j, int k) { return i + n[0] * (k + n[2] * j); }
 
 struct BpWriter {
@@ -996,7 +999,13 @@ inline int bp_encode(const BpHeader& h, const uint8_t* cells, uint8_t* out, int 
         runs++; q += len;
     }
     if (w.ok) for (int b = 0; b < 4; b++) out[runsAt + b] = (uint8_t)(runs >> (8 * b));
-    w.u32(0);                                          // objects
+    const int no = h.objects < 0 ? 0 : h.objects > BP_MAX_OBJS ? BP_MAX_OBJS : h.objects;
+    w.u32((uint32_t)no);
+    for (int k = 0; k < no; k++) {
+        w.u32(h.obj[k].item);
+        for (int a = 0; a < 3; a++) w.f32(h.obj[k].pos[a]);
+        for (int a = 0; a < 4; a++) w.f32(h.obj[k].rot[a]);
+    }
     return w.ok ? w.n : 0;
 }
 // Reads a blueprint. cells gets nx * ny * nz entries (at most maxCells). False = not a
@@ -1031,7 +1040,16 @@ inline bool bp_decode(const uint8_t* d, int size, BpHeader* h, uint8_t* cells, l
     }
     if (q != total) return false;
     h->objects = 0;
-    if (need(4)) { uint32_t no; rd(&no, 4); h->objects = (int)no; }
+    if (need(4)) {
+        uint32_t no; rd(&no, 4);
+        if (no > (uint32_t)BP_MAX_OBJS || !need((int)no * 32)) return false;
+        for (uint32_t k = 0; k < no; k++) {
+            rd(&h->obj[k].item, 4);
+            for (int a = 0; a < 3; a++) rd(&h->obj[k].pos[a], 4);
+            for (int a = 0; a < 4; a++) rd(&h->obj[k].rot[a], 4);
+        }
+        h->objects = (int)no;
+    }
     return true;
 }
 // Turn r (0..3, quarter turns about the vertical axis) of cell column (i, k) of an nx x nz
@@ -1043,6 +1061,27 @@ inline void bp_turn(int r, int i, int k, int nx, int nz, int* ri, int* rk) {
     case 2: *ri = nx - 1 - i; *rk = nz - 1 - k; break;
     default: *ri = k; *rk = nx - 1 - i; break;
     }
+}
+// A point of the saved box (metres from its low corner; dx, dz = the box's size) after r quarter
+// turns, as bp_turn turns the cells: (x, z) -> (dz - z, x) per turn, and the yaw quaternion that
+// turns an object's rotation the same way (a turn of -90 degrees about y per step).
+inline void bp_turn_point(int r, const float* p, float dx, float dz, float* out) {
+    float x = p[0], z = p[2];
+    switch (r & 3) {
+    case 0: out[0] = x; out[2] = z; break;
+    case 1: out[0] = dz - z; out[2] = x; break;
+    case 2: out[0] = dx - x; out[2] = dz - z; break;
+    default: out[0] = z; out[2] = dx - x; break;
+    }
+    out[1] = p[1];
+}
+inline void bp_turn_rot(int r, const float* q, float* out) {
+    static const float s[4] = { 0.f, -0.70710678f, -1.f, -0.70710678f }, c[4] = { 1.f, 0.70710678f, 0.f, -0.70710678f };
+    const float ys = s[r & 3], yw = c[r & 3];               // (0, ys, 0, yw) * q
+    out[0] = yw * q[0] + ys * q[2];
+    out[1] = yw * q[1] + ys * q[3];
+    out[2] = yw * q[2] - ys * q[0];
+    out[3] = yw * q[3] - ys * q[1];
 }
 // The inverse: column (ri, rk) of the turned plan comes from (i, k) of the saved one.
 inline void bp_unturn(int r, int ri, int rk, int nx, int nz, int* i, int* k) {

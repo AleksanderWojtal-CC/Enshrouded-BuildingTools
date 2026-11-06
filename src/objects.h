@@ -272,8 +272,7 @@ static void obj_ghost(const uint8_t* out, const uint8_t* q) {
 }
 
 // ---- server: the clicks (single player)
-typedef uint8_t (*PlacePropFn)(void* ctx, uint8_t* info, uint32_t item);
-static PlacePropFn g_placePropOrig = nullptr;
+// PlacePropFn / g_placePropOrig: bpobjects.h (blueprints place objects too)
 static CostList* volatile g_objStepList = nullptr;
 static volatile LONG g_objStage = 0;            // 0 = vanilla, -1 = this click marks a point, N = place N
 static volatile DWORD g_objStageTid = 0;
@@ -588,7 +587,8 @@ static void obj_undo_flag() {
     if (on && !g_objUndoFlag && prop_now()) obj_undo_arm();
     if (g_objUndoFlag) *g_objUndoFlag = on;
 }
-static uint8_t obj_rec_check() { return g_objUndoFlag && obj_tool_on() ? 0 : 1; }   // 0: add the record
+static uint8_t obj_rec_check() { return g_bpObjRecord || (g_objUndoFlag && obj_tool_on()) ? 0 : 1; }   // 0: add the record (blueprint objects too)
+static bool obj_rec_available() { return g_objUndoParts >= 1; }
 typedef uint8_t (*CanUndoFn)(void* player, uint8_t* item, uint8_t nearZone);
 typedef uint8_t (*StateTestFn)(void* player, uint64_t mask);
 static CanUndoFn g_canUndoOrig = nullptr;

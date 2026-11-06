@@ -344,9 +344,17 @@ bp.back = Wróć do listy
 bp.move_point = Przesuń kliknięty punkt (bloki; ujemne = w lewo, bliżej, w dół):
 bp.size_header = Rozmiar (bloki poza punktem odniesienia):
 bp.not_enough_any = Za mało materiałów na choćby jeden blok tego schematu
+bp.saved_obj = Zapisano schemat: {0} (bloki: {1}, materiały: {2}, obiekty: {3})
+bp.saving = Zapisywanie schematu: szukam obiektów...
+bp.obj_none_here = Obiekty nie zostały zapisane: zapisz w bazie (gra znajduje je przez sprawdzanie komfortu)
+bp.obj_count = Obiekty ({0})
+bp.obj_build = Buduj
+bp.obj_leave = Pomiń
+bp.object_row = Obiekt {0}: potrzeba {1}, masz {2}
+bp.obj_missing = Obiekty, których gra nie zna: {0} (pominięte)
 bp.costs = Potrzebne materiały:
 bp.material_row = Materiał {0}: potrzeba {1}, masz {2}
 bp.have_unknown = ?
 bp.stock_hint = ? = jeszcze nieznane: otwórz raz wybór materiału
 bp.short = Brakuje materiałów ({0}): da się zbudować tylko część
-bp.objects_later = Elementy budowli i przedmioty nie są jeszcze zapisywane (tylko bloki).
+bp.objects_later = Zapisywane są też obiekty: to, czego można używać (drzwi, skrzynie, łóżka, stanowiska), co daje komfort (meble, światła) i drabiny.

@@ -237,6 +237,48 @@ static bool bp_write(const core::BpHeader& h, const uint8_t* cells, const char* 
 }
 
 // ---- save (server, the Save click; g_stateLock held)
+// The blocks are read at the click; the objects come from the scene query a frame or more
+// later (bpobjects.h), so the file is written when that answers (bp_probe_finished), or after
+// 6 s without objects (bp_save_watchdog, input thread).
+static core::BpHeader g_bpSaveH;
+static uint8_t g_bpSaveCells[kBpMaxCells];
+static int g_bpSaveFilled = 0;
+static double g_bpSaveLo[3];                     // the box's low corner (metres): object positions are kept from it
+static char g_bpSaveName[64];
+static volatile LONG g_bpSavePending = 0;
+static volatile DWORD g_bpSaveTick = 0;
+static void bp_save_write(bool looked) {
+    core::BpHeader& h = g_bpSaveH;
+    h.objects = 0;
+    for (int k = 0; k < g_bpFoundN && h.objects < core::BP_MAX_OBJS; k++) {
+        const BpFound& f = g_bpFound[k];
+        core::BpObject& o = h.obj[h.objects++];
+        o.item = f.item;
+        for (int a = 0; a < 3; a++) o.pos[a] = (float)((double)f.pos[a] / core::kFix - g_bpSaveLo[a]);
+        memcpy(o.rot, f.rot, 16);
+    }
+    g_bpFoundN = 0;
+    if (!g_bpSaveFilled && !h.objects) { flash(T(S_BP_EMPTY)); beep(MB_ICONHAND); return; }
+    char name[96];
+    if (!bp_write(h, g_bpSaveCells, g_bpSaveName, name, sizeof name)) { flash(T(S_BP_WRITE_FAIL)); beep(MB_ICONHAND); LOG(.str("blueprint save: write failed ").u(GetLastError())); return; }
+    Buf b;
+    b.fmt(T(S_BP_SAVED_OBJ), name, num(g_bpSaveFilled).s, num(h.nm).s, num(h.objects).s);
+    if (!looked) b.str("  |  ").str(T(S_BP_OBJ_NONE_HERE));
+    flash(b.z()); beep(MB_ICONASTERISK);
+    LOG(.str("blueprint saved: ").str(name).str(", ").i(h.objects).str(" objects").str(looked ? "" : " (objects not looked for)"));
+}
+static void bp_probe_finished(bool answered) {             // comfort system thread
+    if (!InterlockedExchange(&g_bpSavePending, 0)) return;
+    LOG(.str("blueprint objects: query ").str(answered ? "answered" : "timed out").str(", ").i(g_bpFoundN).str(" objects"));
+    bp_save_write(true);
+}
+static void bp_save_watchdog() {                            // input thread
+    if (g_bpSavePending && GetTickCount() - g_bpSaveTick > 6000 && InterlockedExchange(&g_bpSavePending, 0)) {
+        LOG(.str("blueprint objects: no answer in 6 s, saved without objects"));
+        g_bpFoundN = 0;
+        bp_save_write(false);
+    }
+}
 // The box: corners fixed at Save (g_exactC). Each cell is probed with a removal dry run in
 // the placement context (as Replace measures what it may repaint).
 static uint8_t bp_save_box(void* ctx, void* state, const CursorXf& tmpl) {
@@ -249,9 +291,9 @@ static uint8_t bp_save_box(void* ctx, void* state, const CursorXf& tmpl) {
     LOG(.str("blueprint save: step=(").f(step[0]).c(',').f(step[1]).c(',').f(step[2]).str(") counts=")
         .i(pl.count[0]).c('x').i(pl.count[1]).c('x').i(pl.count[2]).str(ok ? "" : " REFUSED (too big)"));
     if (!ok) { Buf b; b.fmt(T(S_TOO_BIG), num(pl.total).s, num(cap).s); flash(b.z()); beep(MB_ICONHAND); return 0; }
-    bp_probe_request(g_exactC, step, ctx, state);                  // stage 2 diagnostic: the props in the box go to the log
-    static core::BpHeader h; memset(&h, 0, sizeof h);
-    static uint8_t cells[kBpMaxCells];
+    if (InterlockedExchange(&g_bpSavePending, 0)) LOG(.str("blueprint save: the previous save's objects were still on their way; it is dropped"));
+    core::BpHeader& h = g_bpSaveH; memset(&h, 0, sizeof h);
+    uint8_t* cells = g_bpSaveCells;
     for (int a = 0; a < 3; a++) { h.n[a] = pl.count[a]; h.step[a] = step[a]; }
     h.shape = state ? *(uint32_t*)state : 0;
     const long total = (long)h.n[0] * h.n[1] * h.n[2];
@@ -304,12 +346,20 @@ static uint8_t bp_save_box(void* ctx, void* state, const CursorXf& tmpl) {
     }
     LOG(.str("blueprint save: ").i(filled).str(" blocks, ").i(partial).str(" cells less than half full left out, ")
         .i(h.nm).str(" materials, probed in ").u(GetTickCount() - t0).str(" ms"));
-    if (!filled) { flash(T(S_BP_EMPTY)); beep(MB_ICONHAND); return 0; }
-    char name[96];
-    if (!bp_write(h, cells, g_bpTyped, name, sizeof name)) { flash(T(S_BP_WRITE_FAIL)); beep(MB_ICONHAND); LOG(.str("blueprint save: write failed ").u(GetLastError())); return 0; }
-    Buf b; b.fmt(T(S_BP_SAVED), name, num(filled).s, num(h.nm).s); flash(b.z()); beep(MB_ICONASTERISK);
-    LOG(.str("blueprint saved: ").str(name));
+    g_bpSaveFilled = filled;
+    copy_text(g_bpSaveName, g_bpTyped, sizeof g_bpSaveName);
     g_bpTyped[0] = 0; g_bpTypedLen = 0; g_bpNameEdit = 0;
+    for (int a = 0; a < 3; a++) {
+        const int64_t v0 = a == 0 ? g_exactC[0].x : a == 1 ? g_exactC[0].y : g_exactC[0].z, v1 = a == 0 ? g_exactC[1].x : a == 1 ? g_exactC[1].y : g_exactC[1].z;
+        g_bpSaveLo[a] = (double)(v0 < v1 ? v0 : v1) / core::kFix - step[a] * 0.5;
+    }
+    g_bpFoundN = 0;
+    if (bp_probe_request(g_exactC, step, ctx, state)) {     // the objects: the file is written when they come
+        g_bpSaveTick = GetTickCount(); g_bpSavePending = 1;
+        flash(T(S_BP_SAVING));
+        return 0;
+    }
+    bp_save_write(false);
     return 0;
 }
 
@@ -433,6 +483,7 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
                 I3 p = bp_cell_pos(mn, rs, ri, j, rk);
                 xf.pos[0] = p.x + off[0]; xf.pos[1] = p.y + off[1]; xf.pos[2] = p.z + off[2];
                 g_pendMat[g_pend.n] = mi;
+                g_pendObj[g_pend.n] = 0;
                 const uint64_t before = list->count;
                 if (price_shape(list, ctx, state, item[mi], &xf, false)) priced++;
                 CostEntry* e = (CostEntry*)list->data;
@@ -443,6 +494,27 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
                     log_line(lb);
                 }
             }
+    // the objects, each charged one of its item (Objects: build); the mod knows only the stock of
+    // building materials (the picker's counts), so the checks below look at the blocks' entries and
+    // the game's own charge decides about the objects
+    const uint32_t blockCost = (uint32_t)list->count;
+    int objN = 0, objMissing = 0;
+    if (g_cfg.bpObjects && g_bp.h.objects > 0 && g_placePropOrig && bp_item_registry(ctx, state))
+        for (int k = 0; k < g_bp.h.objects && g_pend.n < kMaxPending; k++) {
+            const uint32_t item = g_bp.h.obj[k].item;
+            uint8_t* it = g_bpItemById(item, g_bpItemReg);
+            if (!it || !prop_item(it)) { objMissing++; continue; }
+            const uint32_t before = (uint32_t)list->count;
+            CostEntry* e = list_push(list);
+            if (!e) break;
+            const uint32_t one = 1;
+            memcpy(e->b, it + 4, 16); memcpy(e->b + 0x10, &item, 4); memcpy(e->b + 0x14, &one, 4);
+            g_pendCost[g_pend.n] = before; g_pendMat[g_pend.n] = 0xff; g_pendObj[g_pend.n] = (uint16_t)(k + 1);
+            memset(g_pendPos[g_pend.n], 0, 24);
+            g_pend.n++; objN++;
+        }
+    if (objMissing) { Buf b; b.fmt(T(S_BP_OBJ_MISSING), num(objMissing).s); flash(b.z()); }
+    if (objN) { priced += objN; LOG(.str("blueprint build: ").i(objN).str(" objects queued").str(objMissing ? ", some unknown" : "")); }
     g_pendCost[g_pend.n] = (uint32_t)list->count;
     LOG(.str("blueprint build: turn ").i(g_bpRot).str(", priced ").i(priced).str(" of ").i(g_bp.filled)
         .str(" blocks, cost entries ").u(list->count - listBefore));
@@ -450,7 +522,8 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
     // Partial build: a blueprint keeps every block the inventory can pay for, material by
     // material (bottom layer first), instead of stopping at the first block it cannot (Area
     // mode's rule left 14 of 1185 blocks when one of 7 materials ran short).
-    if (!creative_on() && g_cfg.bpPartial && g_pend.n > 1 && stock_known(list) && !affordable(nullptr, list, (uint32_t)list->count)) {
+    CostList blocks = *list; blocks.count = blockCost;
+    if (!creative_on() && g_cfg.bpPartial && g_pend.n > 1 && stock_known(&blocks) && !affordable(nullptr, list, blockCost)) {
         struct Budget { uint32_t item; int64_t left; } bud[64]; int nb = 0;
         CostEntry* e = (CostEntry*)list->data;
         auto slot = [&](uint32_t item) -> Budget* {
@@ -463,6 +536,7 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
         for (int i = 0; i < n0; i++) {
             const uint32_t a0 = g_pendCost[i], a1 = g_pendCost[i + 1];
             bool fits = true;
+            if (g_pendObj[i]) goto keepIt;                 // objects: the game's charge decides
             for (uint32_t q = a0; q < a1 && fits; q++) {
                 Budget* s = slot(*(uint32_t*)(e[q].b + 0x10));
                 if (!s) { fits = false; break; }
@@ -472,9 +546,11 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
             }
             if (!fits) continue;
             for (uint32_t q = a0; q < a1; q++) { Budget* s = slot(*(uint32_t*)(e[q].b + 0x10)); s->left -= *(uint32_t*)(e[q].b + 0x14); }
+        keepIt:
             memmove(&e[out], &e[a0], (size_t)(a1 - a0) * sizeof(CostEntry));
             memcpy(g_pendPos[keep], g_pendPos[i], 24);
             g_pendMat[keep] = g_pendMat[i];
+            g_pendObj[keep] = g_pendObj[i];
             g_pendCost[keep] = out;
             out += a1 - a0; keep++;
         }
@@ -485,7 +561,7 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
         if (!keep) { g_pend.bp = false; list->count = listBefore; flash(T(S_BP_NOT_ENOUGH_ANY)); beep(MB_ICONHAND); return 0; }
         g_partialOf = n0;
     }
-    if (!creative_on() && !g_cfg.bpPartial && stock_known(list) && !affordable(nullptr, list, (uint32_t)list->count)) {
+    if (!creative_on() && !g_cfg.bpPartial && stock_known(&blocks) && !affordable(nullptr, list, blockCost)) {
         LOG(.str("blueprint build: not enough materials, partial build off"));
         g_pend.n = 0; g_pend.bp = false; list->count = listBefore;
         flash(T(S_BP_NOT_ENOUGH)); beep(MB_ICONHAND);
@@ -494,6 +570,24 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
     g_pend.tick = GetTickCount();
     g_actList = list; g_actShapes = g_pend.n;
     return 1;
+}
+
+// One queued object of the build (commit hook): its spot in the turned blueprint, its turned rotation.
+static bool bp_commit_object(void* ctx, int i) {
+    const int k = (int)g_pendObj[i] - 1;
+    if (k < 0 || k >= g_bp.h.objects) return false;
+    const core::BpObject& o = g_bp.h.obj[k];
+    int rn[3]; float rs[3]; bp_dims(g_bpRot, rn, rs);
+    const float dx = (float)g_bp.h.n[0] * g_bp.h.step[0], dz = (float)g_bp.h.n[2] * g_bp.h.step[2];
+    float tp[3], tr[4];
+    core::bp_turn_point(g_bpRot, o.pos, dx, dz, tp);
+    core::bp_turn_rot(g_bpRot, o.rot, tr);
+    const int64_t lowc[3] = { g_bpMinArm.x, g_bpMinArm.y, g_bpMinArm.z };
+    double w[3];
+    for (int a = 0; a < 3; a++) w[a] = (double)lowc[a] / core::kFix - rs[a] * 0.5 + tp[a];
+    bool ok = bp_place_object(ctx, o.item, w, tr);
+    LOG(.str("  object ").x(o.item).str(ok ? " placed at (" : " NOT placed at (").f(w[0]).c(',').f(w[1]).c(',').f(w[2]).c(')'));
+    return ok;
 }
 
 // A left click in Blueprint mode (server world, g_stateLock held): the first one notes the

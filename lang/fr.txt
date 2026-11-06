@@ -344,9 +344,17 @@ bp.back = Retour à la liste
 bp.move_point = Déplacer le point cliqué (blocs ; négatif = gauche, plus près, bas) :
 bp.size_header = Taille (blocs après le point de référence) :
 bp.not_enough_any = Pas assez de matériaux pour un seul bloc de ce plan
+bp.saved_obj = Plan enregistré : {0} ({1} blocs, {2} matériaux, {3} objets)
+bp.saving = Enregistrement du plan : recherche des objets...
+bp.obj_none_here = Objets non enregistrés : enregistrez dans une base (le jeu les trouve via son calcul de confort)
+bp.obj_count = Objets ({0})
+bp.obj_build = Construire
+bp.obj_leave = Omettre
+bp.object_row = Objet {0} : {1} nécessaires, vous avez {2}
+bp.obj_missing = Objets inconnus du jeu : {0} (omis)
 bp.costs = Matériaux nécessaires :
 bp.material_row = Matériau {0} : {1} nécessaires, vous avez {2}
 bp.have_unknown = ?
 bp.stock_hint = ? = pas encore connu : ouvrez une fois le choix du matériau
 bp.short = Pas assez de {0} matériaux : seule une partie peut être construite
-bp.objects_later = Les pièces de construction et les objets ne sont pas encore enregistrés (seulement les blocs).
+bp.objects_later = Les objets sont aussi enregistrés : ce qui s'utilise (portes, coffres, lits, établis), ce qui donne du confort (meubles, lumières) et les échelles.

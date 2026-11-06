@@ -799,6 +799,25 @@ int main(int argc, char** argv) {
             }
         int ri, rk; bp_turn(1, 0, 0, 3, 4, &ri, &rk);
         CHECK(turns && ri == 3 && rk == 0, "blueprint: quarter turns stay in the plan and undo");
+        // objects in the file
+        static BpHeader ho; ho = h; ho.objects = 2;
+        ho.obj[0] = BpObject{ 0x2a7992b7u, { 1.25f, 0.5f, 2.f }, { 0.f, 0.7071f, 0.f, 0.7071f } };
+        ho.obj[1] = BpObject{ 0xcc076a8u, { 0.f, 1.f, 0.5f }, { 0.f, 0.f, 0.f, 1.f } };
+        static uint8_t ob[1024]; int osz = bp_encode(ho, cells, ob, sizeof ob);
+        static BpHeader go; uint8_t gc[24];
+        CHECK(osz > 0 && bp_decode(ob, osz, &go, gc, 24) && go.objects == 2 && go.obj[0].item == 0x2a7992b7u &&
+              go.obj[1].pos[2] == 0.5f && go.obj[0].rot[1] == 0.7071f, "blueprint: objects round trip");
+        // points and rotations turn like the cells: a point near cell (0, 0) of a 3 x 4 cell box (1.5 x 2 m) at turn 1
+        float pt[3] = { 0.25f, 0.f, 0.25f }, tp[3];
+        bp_turn_point(1, pt, 1.5f, 2.f, tp);
+        int cri, crk; bp_turn(1, 0, 0, 3, 4, &cri, &crk);
+        CHECK(fabs(tp[0] - (cri * 0.5 + 0.25)) < 1e-6 && fabs(tp[2] - (crk * 0.5 + 0.25)) < 1e-6, "blueprint: object points turn with the cells");
+        // four turns of an object's rotation give it back (up to sign), one turn is -90 degrees about y
+        float q0[4] = { 0.f, 0.f, 0.f, 1.f }, q1[4], q2[4];
+        bp_turn_rot(1, q0, q1);
+        CHECK(fabs(q1[1] + 0.70710678f) < 1e-5 && fabs(q1[3] - 0.70710678f) < 1e-5, "blueprint: object yaw per turn");
+        bp_turn_rot(2, q0, q2);
+        CHECK(fabs(fabs(q2[1]) - 1.f) < 1e-5, "blueprint: half turn");
     }
 
     printf(fails ? "\n%d FAILED\n" : "\nall tests passed\n", fails);

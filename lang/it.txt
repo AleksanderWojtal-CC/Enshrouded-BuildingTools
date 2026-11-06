@@ -344,9 +344,17 @@ bp.back = Torna all'elenco
 bp.move_point = Sposta il punto cliccato (blocchi; negativo = sinistra, più vicino, giù):
 bp.size_header = Dimensioni (blocchi oltre il punto di riferimento):
 bp.not_enough_any = Materiali insufficienti anche per un solo blocco di questo progetto
+bp.saved_obj = Progetto salvato: {0} ({1} blocchi, {2} materiali, {3} oggetti)
+bp.saving = Salvataggio del progetto: cerco gli oggetti...
+bp.obj_none_here = Oggetti non salvati: salva dentro una base (il gioco li trova col controllo del comfort)
+bp.obj_count = Oggetti ({0})
+bp.obj_build = Costruisci
+bp.obj_leave = Ometti
+bp.object_row = Oggetto {0}: servono {1}, ne hai {2}
+bp.obj_missing = Oggetti che il gioco non conosce: {0} (saltati)
 bp.costs = Materiali necessari:
 bp.material_row = Materiale {0}: servono {1}, ne hai {2}
 bp.have_unknown = ?
 bp.stock_hint = ? = non ancora noto: apri una volta la scelta del materiale
 bp.short = Non abbastanza di {0} materiali: si può costruire solo una parte
-bp.objects_later = Elementi da costruzione e oggetti non vengono ancora salvati (solo blocchi).
+bp.objects_later = Si salvano anche gli oggetti: ciò che si usa (porte, bauli, letti, banchi), ciò che dà comfort (mobili, luci) e le scale.

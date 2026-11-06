@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.32.0-dev9"
+#define MOD_VERSION "0.32.0-dev10"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -209,6 +209,7 @@ struct Config {
     int bpRef = 1, bpW = 3, bpD = 3, bpH = 2;    // save window: reference and sizes (as Exact mode)
     int bpPlaceRef = 5;                          // place window: the blueprint's point at the aimed block (core::EXACT_*; 5 = front middle)
     int keyBpSub = 0;                            // Blueprint mode: save <-> place
+    int bpObjects = 1;                           // build the blueprint's objects (else blocks only)
     int objMode = 0, objCount = 10, objSpacing = 0, objRot = 0, objElev = 0, objRef = 0, objTurn = 1, objSeed = 1;
     char language[16] = "auto";  // text language: auto (as the game), or a file code (pl, de, ...)
 };
@@ -320,6 +321,7 @@ static void write_full_ini(const Config& c) {
      .t("; Save window, last entered: reference and sizes (as ExactReference / ExactWidth ... above)\r\n")
      .t("SaveReference=").i(c.bpRef).t("\r\nSaveWidth=").i(c.bpW).t("\r\nSaveDepth=").i(c.bpD).t("\r\nSaveHeight=").i(c.bpH).t("\r\n")
      .t("; Place window: the blueprint's point that sits at the block you look at (same numbers)\r\nPlaceReference=").i(c.bpPlaceRef).t("\r\n")
+     .t("; 1 = build the blueprint's objects (doors, chests, furniture...), 0 = leave them out\r\nObjects=").i(c.bpObjects).t("\r\n")
      .t("\r\n[Limits]\r\n")
      .t("; Most shapes one area action may build, replace or remove (max 20000)\r\nMaxShapes=").i(c.maxShapes).t("\r\n")
      .t("; Most shapes one connected replace (fill bucket) repaints (max = MaxShapes)\r\nFillLimit=").i(c.fillLimit).t("\r\n")
@@ -409,6 +411,7 @@ static void load_config() {
     g_cfg.keyBlueprint = ini_int(L"Keys", L"BlueprintMode", 0);
     g_cfg.bpPartial    = ini_int(L"Blueprints", L"AllowPartial", 1) != 0;
     g_cfg.keyBpSub     = ini_int(L"Keys", L"BlueprintAction", 0);
+    g_cfg.bpObjects    = ini_int(L"Blueprints", L"Objects", 1) != 0;
     {   auto clampv = [](int v, int lo, int hi, int def) { return v < lo || v > hi ? def : v; };
         g_cfg.bpRef = clampv(ini_int(L"Blueprints", L"SaveReference", 1), 0, core::EXACT_REF_COUNT - 1, 1);
         g_cfg.bpW = clampv(ini_int(L"Blueprints", L"SaveWidth", 3), -core::kExactMax, core::kExactMax, 3);
@@ -449,7 +452,7 @@ static void load_config() {
         ini_int(L"Keys", L"RadialMenu", -1) == -1 || ini_int(L"Keys", L"HoldReplace", -1) == -1 ||
         ini_int(L"Area", L"DrawBoxBlocks", -1) == -1 || ini_int(L"Area", L"ExactWidth", -9999) == -9999 ||
         ini_int(L"Tools", L"AreaShapes", -1) == -1 || ini_int(L"Objects", L"Count", -1) == -1 ||
-        ini_int(L"Debug", L"Profile", -1) == -1 || ini_int(L"Blueprints", L"PlaceReference", -1) == -1)
+        ini_int(L"Debug", L"Profile", -1) == -1 || ini_int(L"Blueprints", L"Objects", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -2217,6 +2220,7 @@ struct Pending { void* ctx; DWORD tid; DWORD tick; int n; bool replace; LONG sty
                  bool bp; uint8_t* pdata; };   // bp: a blueprint, each shape with its own material (g_pendMat)
 static uint32_t g_pendCost[kMaxPending + 1];     // cost list count before shape i (n = end)
 static uint8_t g_pendMat[kMaxPending];           // blueprint build: the material (blueprint table index) of each queued shape
+static uint16_t g_pendObj[kMaxPending];          // blueprint build: 1 + the object (blueprint table) a queued entry places, 0 = a shape
 static const int kVolSnaps = 40;                 // replace: old-material voxel counts after shape i
 static uint32_t g_volSnap[kVolSnaps][256];
 
@@ -2442,7 +2446,7 @@ static bool stock_known(const CostList* list) {
 // when the list was changed. With nothing affordable (or a Replace whose refunds cannot be
 // split) the list is left as is and the charge fails as usual.
 static bool shrink_to_affordable(uint8_t* trans, CostList* list) {
-    if (g_pend.bp && !g_cfg.bpPartial) return false;    // a blueprint with partial build off: all or nothing
+    if (g_pend.bp) return false;                         // blueprints cut themselves (per material; objects stay: blueprint.h)
     int n = g_pend.n;
     if (!list->data || n < 2 || g_pend.list != list || list->count != g_pendCost[n]) return false;
     if (!stock_known(list)) { LOG(.str("partial action: material count not known (open the material picker once)")); return false; }
@@ -2468,6 +2472,8 @@ static bool shrink_to_affordable(uint8_t* trans, CostList* list) {
 }
 
 static uint8_t bp_commit_material(int i);            // blueprint.h
+static bool bp_commit_object(void* ctx, int i);      // blueprint.h
+static bool obj_rec_available();                     // objects.h: PlaceProp can record undo
 static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     bool mine = g_pend.n > 0 && g_pend.ctx == ctx && g_pend.tid == GetCurrentThreadId() &&
                 GetTickCount() - g_pend.tick < 3000;
@@ -2480,6 +2486,14 @@ static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     if (pd.replace) *g_caveMode = (uint8_t)pd.style;
     UndoSplit us; undo_begin(us, ctx, pd.list, g_pendCost, pd.n);
     for (int i = 0; i < pd.n; i++) {
+        if (pd.bp && g_pendObj[i]) {                 // a blueprint's object (after its blocks)
+            if (!obj_rec_available()) us.stop = true;  // without a record its undo would give it back without taking it
+            undo_before(us, i);
+            if (g_caveForce) *g_caveForce = 0;
+            if (bp_commit_object(ctx, i)) { any = 1; placed++; }
+            undo_after(us);
+            continue;
+        }
         undo_before(us, i);
         if (pd.bp && g_caveForce) *g_caveForce = bp_commit_material(i);   // blueprint: this shape's material
         Commit pc = *c;
@@ -5913,6 +5927,7 @@ static DWORD WINAPI input_thread(void*) {
         if (!g_active) continue;
         bool focus = game_focused();
         bp_type_keys(focus);                     // the blueprint save window's name (only while it is up)
+        bp_save_watchdog();                      // a blueprint save whose objects never came
         if (g_radialOpen && (g_modOff || !focus)) radial_close(false);
         {   // whole mod off / on
             bool down = focus && key_down(g_cfg.keyOff);

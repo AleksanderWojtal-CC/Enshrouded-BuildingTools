@@ -333,12 +333,20 @@
     X(S_BP_MOVE_POINT, "bp.move_point", "Move the clicked point (blocks; negative = left, closer, down):") \
     X(S_BP_SIZE_HDR, "bp.size_header", "Size (blocks past the reference point):") \
     X(S_BP_NOT_ENOUGH_ANY, "bp.not_enough_any", "Not enough materials for any block of this blueprint") \
+    X(S_BP_SAVED_OBJ, "bp.saved_obj", "Blueprint saved: {0} ({1} blocks, {2} materials, {3} objects)") \
+    X(S_BP_SAVING, "bp.saving", "Saving the blueprint: looking for objects...") \
+    X(S_BP_OBJ_NONE_HERE, "bp.obj_none_here", "Objects not saved: save inside a base (the game finds them through its comfort check)") \
+    X(S_BP_OBJ_COUNT, "bp.obj_count", "Objects ({0})") \
+    X(S_BP_OBJ_BUILD, "bp.obj_build", "Build") \
+    X(S_BP_OBJ_LEAVE, "bp.obj_leave", "Leave out") \
+    X(S_BP_OBJ_ROW, "bp.object_row", "Object {0}: {1} needed, you have {2}") \
+    X(S_BP_OBJ_MISSING, "bp.obj_missing", "Objects the game does not know: {0} (left out)") \
     X(S_BP_COSTS, "bp.costs", "Materials needed:") \
     X(S_BP_MAT_ROW, "bp.material_row", "Material {0}: {1} needed, you have {2}") \
     X(S_BP_MAT_UNKNOWN, "bp.have_unknown", "?") \
     X(S_BP_STOCK_HINT, "bp.stock_hint", "? = not known yet: open the material picker once") \
     X(S_BP_SHORT, "bp.short", "Not enough of {0} materials: only part can be built") \
-    X(S_BP_OBJECTS_LATER, "bp.objects_later", "Building pieces and objects are not saved yet (only blocks).")
+    X(S_BP_OBJECTS_LATER, "bp.objects_later", "Objects are saved too: what you can use (doors, chests, beds, stations), what gives comfort (furniture, lights) and ladders.")
 
 enum Str {
 #define BT_STR_ID(id, key, en) id,

@@ -344,9 +344,17 @@ bp.back = Listeye dön
 bp.move_point = Tıklanan noktayı taşı (blok; eksi = sol, yakın, aşağı):
 bp.size_header = Boyut (referans noktasının ötesindeki bloklar):
 bp.not_enough_any = Bu planın tek bir bloğu için bile malzeme yok
+bp.saved_obj = Plan kaydedildi: {0} ({1} blok, {2} malzeme, {3} nesne)
+bp.saving = Plan kaydediliyor: nesneler aranıyor...
+bp.obj_none_here = Nesneler kaydedilmedi: bir üssün içinde kaydet (oyun onları konfor kontrolüyle bulur)
+bp.obj_count = Nesneler ({0})
+bp.obj_build = İnşa et
+bp.obj_leave = Dışarıda bırak
+bp.object_row = Nesne {0}: {1} gerekli, sende {2} var
+bp.obj_missing = Oyunun tanımadığı nesneler: {0} (atlandı)
 bp.costs = Gereken malzemeler:
 bp.material_row = Malzeme {0}: {1} gerekli, sende {2} var
 bp.have_unknown = ?
 bp.stock_hint = ? = henüz bilinmiyor: malzeme seçiciyi bir kez aç
 bp.short = {0} malzeme yetersiz: yalnızca bir kısmı inşa edilebilir
-bp.objects_later = Yapı parçaları ve nesneler henüz kaydedilmiyor (yalnızca bloklar).
+bp.objects_later = Nesneler de kaydedilir: kullanılabilenler (kapılar, sandıklar, yataklar, tezgahlar), konfor verenler (mobilya, ışıklar) ve merdivenler.

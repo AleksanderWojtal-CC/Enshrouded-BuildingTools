@@ -344,9 +344,17 @@ bp.back = Zurück zur Liste
 bp.move_point = Geklickten Punkt verschieben (Blöcke; negativ = links, näher, runter):
 bp.size_header = Größe (Blöcke über den Bezugspunkt hinaus):
 bp.not_enough_any = Nicht genug Material für auch nur einen Block dieses Bauplans
+bp.saved_obj = Bauplan gespeichert: {0} ({1} Blöcke, {2} Materialien, {3} Objekte)
+bp.saving = Bauplan wird gespeichert: suche Objekte...
+bp.obj_none_here = Objekte nicht gespeichert: speichere in einer Basis (das Spiel findet sie über seine Komfortprüfung)
+bp.obj_count = Objekte ({0})
+bp.obj_build = Bauen
+bp.obj_leave = Weglassen
+bp.object_row = Objekt {0}: {1} benötigt, du hast {2}
+bp.obj_missing = Objekte, die das Spiel nicht kennt: {0} (ausgelassen)
 bp.costs = Benötigte Materialien:
 bp.material_row = Material {0}: {1} benötigt, du hast {2}
 bp.have_unknown = ?
 bp.stock_hint = ? = noch unbekannt: öffne einmal die Materialauswahl
 bp.short = Zu wenig von {0} Materialien: nur ein Teil kann gebaut werden
-bp.objects_later = Bauteile und Gegenstände werden noch nicht gespeichert (nur Blöcke).
+bp.objects_later = Auch Objekte werden gespeichert: Benutzbares (Türen, Truhen, Betten, Stationen), was Komfort gibt (Möbel, Lichter) und Leitern.

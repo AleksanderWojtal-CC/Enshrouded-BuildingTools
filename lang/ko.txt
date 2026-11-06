@@ -344,9 +344,17 @@ bp.back = 목록으로
 bp.move_point = 클릭한 지점 이동 (블록, 음수 = 왼쪽, 가까이, 아래):
 bp.size_header = 크기 (기준점 너머 블록 수):
 bp.not_enough_any = 이 설계도의 블록 하나도 지을 재료가 없습니다
+bp.saved_obj = 설계도 저장됨: {0} (블록 {1}, 재료 {2}, 물건 {3})
+bp.saving = 설계도 저장 중: 물건을 찾는 중...
+bp.obj_none_here = 물건이 저장되지 않았습니다: 기지 안에서 저장하세요 (게임의 안락함 확인으로 찾습니다)
+bp.obj_count = 물건 ({0})
+bp.obj_build = 건설
+bp.obj_leave = 제외
+bp.object_row = 물건 {0}: {1}개 필요, 보유 {2}
+bp.obj_missing = 게임이 모르는 물건: {0} (제외됨)
 bp.costs = 필요한 재료:
 bp.material_row = 재료 {0}: {1}개 필요, 보유 {2}
 bp.have_unknown = ?
 bp.stock_hint = ? = 아직 모름: 재료 선택을 한 번 여세요
 bp.short = 재료 {0}종 부족: 일부만 지을 수 있습니다
-bp.objects_later = 건축 부품과 물건은 아직 저장되지 않습니다 (블록만).
+bp.objects_later = 물건도 저장됩니다: 사용할 수 있는 것(문, 상자, 침대, 작업대), 안락함을 주는 것(가구, 조명), 사다리.

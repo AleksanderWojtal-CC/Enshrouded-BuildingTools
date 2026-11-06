@@ -344,9 +344,17 @@ bp.back = Voltar à lista
 bp.move_point = Mover o ponto clicado (blocos; negativo = esquerda, mais perto, baixo):
 bp.size_header = Tamanho (blocos além do ponto de referência):
 bp.not_enough_any = Materiais insuficientes para qualquer bloco desta planta
+bp.saved_obj = Planta salva: {0} ({1} blocos, {2} materiais, {3} objetos)
+bp.saving = Salvando a planta: procurando objetos...
+bp.obj_none_here = Objetos não salvos: salve dentro de uma base (o jogo os encontra pela verificação de conforto)
+bp.obj_count = Objetos ({0})
+bp.obj_build = Construir
+bp.obj_leave = Deixar de fora
+bp.object_row = Objeto {0}: {1} necessários, você tem {2}
+bp.obj_missing = Objetos que o jogo não conhece: {0} (deixados de fora)
 bp.costs = Materiais necessários:
 bp.material_row = Material {0}: {1} necessários, você tem {2}
 bp.have_unknown = ?
 bp.stock_hint = ? = ainda desconhecido: abra uma vez a escolha de material
 bp.short = Faltam {0} materiais: só uma parte pode ser construída
-bp.objects_later = Peças de construção e objetos ainda não são salvos (só blocos).
+bp.objects_later = Objetos também são salvos: o que se usa (portas, baús, camas, estações), o que dá conforto (móveis, luzes) e escadas.

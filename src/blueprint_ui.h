@@ -237,6 +237,11 @@ static void draw_bp_place_window() {
     bp_offset_rows(S_BP_MOVE, g_bpOff);
     const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
     if (ui_option(T(S_BP_PARTIAL), offOn, 2, g_cfg.bpPartial ? 1 : 0, &v)) g_cfg.bpPartial = v != 0;
+    if (g_bp.h.objects > 0) {
+        const char* const objOpt[] = { T(S_BP_OBJ_LEAVE), T(S_BP_OBJ_BUILD) };
+        Buf ol; ol.fmt(T(S_BP_OBJ_COUNT), num(g_bp.h.objects).s);
+        if (ui_option(ol.z(), objOpt, 2, g_cfg.bpObjects ? 1 : 0, &v)) g_cfg.bpObjects = v != 0;
+    }
     bool fits = true;
     for (int a = 0; a < 3; a++) if (g_scStep[a] - rs[a] > 0.05f || rs[a] - g_scStep[a] > 0.05f) fits = false;
     if (!fits) {
@@ -254,6 +259,20 @@ static void draw_bp_place_window() {
         Buf row; row.fmt(T(S_BP_MAT_ROW), label.z(), num(m.items).s, hv.z());
         ui_text(row.z(), STYLE_BODY);
     }
+    if (g_cfg.bpObjects)                                 // the objects: one of each item per object
+        for (int q = 0; q < g_bp.h.objects; q++) {
+            const uint32_t item = g_bp.h.obj[q].item;
+            bool first = true;
+            for (int p = 0; p < q && first; p++) first = g_bp.h.obj[p].item != item;
+            if (!first) continue;
+            int need = 0;
+            for (int p = q; p < g_bp.h.objects; p++) need += g_bp.h.obj[p].item == item;
+            int64_t have = creative_on() ? -2 : stock_of(item);
+            Buf label; label.x(item);
+            Buf hv; if (have == -2) hv.str("-"); else if (have <= 0) { hv.str(T(S_BP_MAT_UNKNOWN)); unknown = true; } else hv.i(have);
+            Buf row; row.fmt(T(S_BP_OBJ_ROW), label.z(), num(need).s, hv.z());
+            ui_text(row.z(), STYLE_BODY);
+        }
     if (unknown) ui_text(T(S_BP_STOCK_HINT), STYLE_BODY);
     if (shortN) { Buf sh; sh.fmt(T(S_BP_SHORT), num(shortN).s); ui_text(sh.z(), STYLE_BODY); }
     ui_text(T(S_BP_OBJECTS_LATER), STYLE_BODY);

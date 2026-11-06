@@ -344,9 +344,17 @@ bp.back = 返回列表
 bp.move_point = 移動點擊的點（格；負數 = 左、近、下）：
 bp.size_header = 尺寸（參考點以外的格數）：
 bp.not_enough_any = 材料連此藍圖的一個方塊都不夠
+bp.saved_obj = 藍圖已儲存：{0}（方塊 {1}，材料 {2}，物品 {3}）
+bp.saving = 正在儲存藍圖：正在尋找物品...
+bp.obj_none_here = 物品未儲存：請在基地內儲存（遊戲透過舒適度檢查找到它們）
+bp.obj_count = 物品（{0}）
+bp.obj_build = 建造
+bp.obj_leave = 不建造
+bp.object_row = 物品 {0}：需要 {1}，擁有 {2}
+bp.obj_missing = 遊戲不認識的物品：{0}（已略過）
 bp.costs = 所需材料：
 bp.material_row = 材料 {0}：需要 {1}，擁有 {2}
 bp.have_unknown = ?
 bp.stock_hint = ? = 尚不清楚：請開啟一次材料選擇
 bp.short = {0} 種材料不足：只能建造一部分
-bp.objects_later = 建築構件和物品暫不儲存（僅方塊）。
+bp.objects_later = 物品也會儲存：可使用的（門、箱子、床、工作台）、提供舒適度的（家具、燈）和梯子。

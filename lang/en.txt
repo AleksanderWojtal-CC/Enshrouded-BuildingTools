@@ -347,9 +347,17 @@ bp.back = Back to the list
 bp.move_point = Move the clicked point (blocks; negative = left, closer, down):
 bp.size_header = Size (blocks past the reference point):
 bp.not_enough_any = Not enough materials for any block of this blueprint
+bp.saved_obj = Blueprint saved: {0} ({1} blocks, {2} materials, {3} objects)
+bp.saving = Saving the blueprint: looking for objects...
+bp.obj_none_here = Objects not saved: save inside a base (the game finds them through its comfort check)
+bp.obj_count = Objects ({0})
+bp.obj_build = Build
+bp.obj_leave = Leave out
+bp.object_row = Object {0}: {1} needed, you have {2}
+bp.obj_missing = Objects the game does not know: {0} (left out)
 bp.costs = Materials needed:
 bp.material_row = Material {0}: {1} needed, you have {2}
 bp.have_unknown = ?
 bp.stock_hint = ? = not known yet: open the material picker once
 bp.short = Not enough of {0} materials: only part can be built
-bp.objects_later = Building pieces and objects are not saved yet (only blocks).
+bp.objects_later = Objects are saved too: what you can use (doors, chests, beds, stations), what gives comfort (furniture, lights) and ladders.

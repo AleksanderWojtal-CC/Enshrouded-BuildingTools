@@ -344,9 +344,17 @@ bp.back = Volver a la lista
 bp.move_point = Mover el punto pulsado (bloques; negativo = izquierda, más cerca, abajo):
 bp.size_header = Tamaño (bloques más allá del punto de referencia):
 bp.not_enough_any = No hay materiales ni para un bloque de este plano
+bp.saved_obj = Plano guardado: {0} ({1} bloques, {2} materiales, {3} objetos)
+bp.saving = Guardando el plano: buscando objetos...
+bp.obj_none_here = Objetos no guardados: guarda dentro de una base (el juego los encuentra con su cálculo de confort)
+bp.obj_count = Objetos ({0})
+bp.obj_build = Construir
+bp.obj_leave = Omitir
+bp.object_row = Objeto {0}: se necesitan {1}, tienes {2}
+bp.obj_missing = Objetos que el juego no conoce: {0} (omitidos)
 bp.costs = Materiales necesarios:
 bp.material_row = Material {0}: se necesitan {1}, tienes {2}
 bp.have_unknown = ?
 bp.stock_hint = ? = aún desconocido: abre una vez el selector de material
 bp.short = Faltan {0} materiales: solo se puede construir una parte
-bp.objects_later = Las piezas de construcción y los objetos aún no se guardan (solo bloques).
+bp.objects_later = También se guardan objetos: lo que se usa (puertas, cofres, camas, mesas de trabajo), lo que da confort (muebles, luces) y escaleras.
