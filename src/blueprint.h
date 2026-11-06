@@ -249,6 +249,7 @@ static uint8_t bp_save_box(void* ctx, void* state, const CursorXf& tmpl) {
     LOG(.str("blueprint save: step=(").f(step[0]).c(',').f(step[1]).c(',').f(step[2]).str(") counts=")
         .i(pl.count[0]).c('x').i(pl.count[1]).c('x').i(pl.count[2]).str(ok ? "" : " REFUSED (too big)"));
     if (!ok) { Buf b; b.fmt(T(S_TOO_BIG), num(pl.total).s, num(cap).s); flash(b.z()); beep(MB_ICONHAND); return 0; }
+    bp_probe_request(g_exactC, step);                  // stage 2 diagnostic: the props in the box go to the log
     static core::BpHeader h; memset(&h, 0, sizeof h);
     static uint8_t cells[kBpMaxCells];
     for (int a = 0; a < 3; a++) { h.n[a] = pl.count[a]; h.step[a] = step[a]; }

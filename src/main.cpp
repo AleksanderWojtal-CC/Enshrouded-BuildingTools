@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.32.0-dev6"
+#define MOD_VERSION "0.32.0-dev7"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -3225,6 +3225,7 @@ static uint8_t connected_remove(CostList* list, void* ctx, void* state, Aabb* bx
     return any;
 }
 
+#include "bpobjects.h"
 #include "blueprint.h"
 
 static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, void* xfp, void* filter, uint8_t check);
@@ -6302,6 +6303,7 @@ static DWORD WINAPI init_thread(void*) {
         if (hook_calls(target, (void*)piece_check_thunk, &site, 1) != 1) g_pieceCheckOrig = nullptr;
     }
     LOG(.str("building pieces as blocks: ").str(g_pieceCheckOrig ? "available" : "not available"));
+    if (!g_dedicated) bp_objects_install();          // blueprint objects (diagnostic probe, bpobjects.h)
     uint8_t* hfx = find_hookable("HoverFx", SIG_HOVER_FX, 5);
     if (hfx) {
         // the hover function's own calls: game time (+0x4fd), stop (+0x51d), start (+0x607),
