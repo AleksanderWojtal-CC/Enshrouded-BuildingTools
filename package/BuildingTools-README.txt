@@ -145,7 +145,8 @@ Blueprints (Blueprint mode: the mode on the tools wheel, Prefab -> Area -> Bluep
   The tools wheel switches Blueprint between Save and Place.
   Save: click a block (left button). A window opens like Exact mode's: where
   the clicked block sits in the box (middle, a corner, front or back middle),
-  width, depth and height, and a name you type on the keyboard (empty = date
+  rows that move that point by blocks, width, depth and height (up to 65536
+  cells; MaxShapes does not limit saving), and a name you type on the keyboard (empty = date
   and time). The box is drawn beside the window; hold the right mouse button to
   look around. Save writes the blocks in the box to a file in the folder
   BuildingTools-Blueprints next to enshrouded.exe. The box is cut into cells the
@@ -157,8 +158,8 @@ Blueprints (Blueprint mode: the mode on the tools wheel, Prefab -> Area -> Bluep
   90, 180, 270 degrees), the point of the blueprint that sits at the block you
   look at, and Allow partial build (on: builds what your materials cover; off:
   nothing unless all are there). The ghost follows your aim while you hold the
-  right mouse button; Place here fixes it, then Left / Right / Away / Closer /
-  Up / Down move it by one block. Build (or Enter) builds every block with its
+  right mouse button; Place here fixes it. The Right / Away / Up rows move it
+  by blocks (negative: left, closer, down). Build (or Enter) builds every block with its
   own material; Back returns to the list, Cancel (or Esc) closes. Undo and big
   actions work as for areas.
   Not yet: building pieces (foundations, stairs...) and objects are not saved;

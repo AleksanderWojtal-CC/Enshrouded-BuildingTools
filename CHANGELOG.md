@@ -9,16 +9,18 @@ changelog on Nexus Mods, so keep it short and written for players.
   Area (the mode on the tools wheel, Options tab, keys in the Keys tab), with two actions on
   the tools wheel:
   - **Save**: click a block and a window like Exact mode's opens. Choose where the clicked
-    block sits in the box (now also front middle and back middle) and its width, depth and
-    height, type a name, and Save. The box is drawn beside the window; hold the right mouse
+    block sits in the box (now also front middle and back middle), move that point by
+    blocks, set width, depth and height, type a name, and Save (up to 65536 cells, whatever
+    MaxShapes says). The box is drawn beside the window; hold the right mouse
     button to look around. The blocks inside are saved to a file in the new
     `BuildingTools-Blueprints` folder next to `enshrouded.exe`.
   - **Place**: click and pick a blueprint from the list. The next page shows the materials
     it needs and what you have, its rotation (90 degree steps), Allow partial build, and
     which point of it sits at the block you look at. Its ghost follows your aim (hold the
-    right mouse button) until you press Place here; then buttons move it by one block left,
-    right, away, closer, up and down. Build places every block with its own material in one
-    action (undo and partial build as for areas).
+    right mouse button) until you press Place here; arrow rows move it by blocks right, away
+    and up (negative: left, closer, down). Build places every block with its own material in
+    one action. With partial build on, every block your materials cover is built, material
+    by material; undo works as for areas.
   Blocks are saved per cell of the shape in your hand (hold the small 0.5 m cube for full
   detail); a cell at least half full counts as a full block. Building pieces and objects are
   not saved yet, and blueprints do not work on a dedicated server yet.
