@@ -915,3 +915,34 @@ the same as on Hotfix #4, so FbUiBundle and every struct the mod reads are uncha
 
 Server: the same 31 signatures match as on Hotfix #4, at the same RVAs except BlitCheck
 a38bb7 -> a38ba7 and MaterialItem 9333c0 -> 9333b0.
+
+## Blueprints stage 2 research (1.0.1.2 client, 2026-11-06)
+
+Analysed offline on this PC (tools/re with capstone 5.0.7 against the Hotfix #5 exe on disk;
+all tested mod signatures match the file, so the disk image is plain).
+
+- **Aimed object.** The dismantle system (2d8ee4..2da2cf) reads the server cursor's aim state
+  at [rbp+0x1d8]: item id at +0x38 (looked up with e94470, the item-by-id function), the aimed
+  object at +0x78 as a `GameObjectId` {u64 value, u8 type at +0x80: 0 Entity, 1 SnappingBox}.
+  Props (chairs, torches...) are ECS **entities**; building pieces (foundations, stairs...) are
+  **snapping boxes** (that is the "+0x80 == 1" flag Area remove clears).
+- **Prop pick-up.** RemoveProp is 490a30 (called at 2da0bb: rcx = rbp+0x50 ctx, rdx = {u32
+  entity, u8 method}, r8d = item id); the refund list is built by 492830 and paid by 495f20.
+- **Building piece removal.** 48fab0(ctx, info, item): 9b8f10(out, [ctx+0x120], [ctx+0x148],
+  [info+0x18] id) finds the box. The container at ctx+0x120 holds one 0x148-byte layer per
+  kind (byte arg - 1): +0x08 chunk array, +0x30 chunk count, +0x34 chunk stride, +0x68 / +0x70
+  occupancy bits and size of a hash table keyed by the id's upper bits (hash
+  x ^= x >> 16; x *= 0x45d9f3b, twice), +0x88 keys, +0xa0 u16 chunk index + 1, +0xb4 count.
+  A chunk has its coordinates at +8 (two u32, times 128 voxels) and a box list found by
+  9b9160(layer, chunk +0x1c, id). 9b8f10's output: +0 id, +8 / +0xc two u32 from the box record
+  (+4 / +8; +0xc goes to e89bf0([ctx+0x100]) in the removal), +0x10..+0x24 the box's voxel
+  min / max, +0x28..+0x3c an inner box (bytes +0x14..+0x16 of the record), +0x40 a byte (+0x13,
+  probably the orientation). Iterating the chunk array and each chunk's boxes should list every
+  building piece with its voxel bounds: the way to save pieces in an area.
+- **Placed entities.** Candidate components holding the item of a placed prop:
+  `CollisionFeedbackMaterialComponent` (0x2c: +0x10 itemId, +0x14 itemRef), `StaticUsedItem`
+  (0x10: item reference). `WorldTransform` (0x38: int64 position, quaternion +0x18, scale +0x28)
+  is looked up per entity by 9b3cb0 (see 0.23.0). Still open: a way to list the entities in a box
+  (leads: the comfort range query `ComfortQuery.queryId: RangeQueryId`, `crafting_props_in_range`,
+  `logic_entities_in_range`, and the collider query systems process_query_commands /
+  collect_query_results).
