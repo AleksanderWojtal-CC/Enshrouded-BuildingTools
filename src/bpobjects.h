@@ -319,16 +319,22 @@ static bool bp_item_bounds(uint8_t* it, float* mn, float* mx) {
     for (int a = 0; a < 3; a++) { mn[a] = b[a]; mx[a] = b[4 + a]; }
     return mx[0] >= mn[0] && mx[1] >= mn[1] && mx[2] >= mn[2];
 }
-// Mirroring an object = turning it and flipping one of its own axes; the mod flips its local x
-// (right for models symmetric left to right: chairs, beds, lamps). A model that reaches out to
-// one side of its pivot (a railing from its post) would then point the wrong way: it gets a
-// half turn about its up axis, which flips its local z instead.
+// Mirroring an object: the game has no mirrored models, so the copy is turned and one of the
+// object's own horizontal axes comes out reversed against a true mirror image. That should be the
+// axis along which the model is the same at both ends. The turn r' = M r M reverses its local x:
+// right for things the same on their left and right (chairs, beds, lamps). Thin panels (railings,
+// fences, windows: much less deep than wide) are the same front and back but not along their
+// length (a stair railing slopes), so they get half a turn about their up axis on top, which
+// reverses their local z instead (r' = M r M * (0, 1, 0, 0)).
 static bool bp_mirror_half_turn(uint32_t item) {
     if (!g_bpItemById || !g_bpItemReg) return false;
     float mn[3], mx[3];
     if (!bp_item_bounds(g_bpItemById(item, g_bpItemReg), mn, mx)) return false;
-    const float sx = mx[0] - mn[0], cx = (mn[0] + mx[0]) * 0.5f;
-    return sx > 0.05f && (cx > 0.25f * sx || cx < -0.25f * sx);
+    const float sx = mx[0] - mn[0], sz = mx[2] - mn[2];
+    const bool half = sx > 0.05f && sz < 0.6f * sx;
+    LOG(.str("  mirror: object ").x(item).str(" size ").f(sx).c('x').f(mx[1] - mn[1]).c('x').f(sz)
+        .str(" centre (").f((mn[0] + mx[0]) * 0.5f).c(',').f((mn[2] + mx[2]) * 0.5f).str(half ? ") -> half turn (thin panel)" : ") -> as is"));
+    return half;
 }
 static bool bp_place_object(void* ctx, uint32_t item, const double* posM, const float* rot) {
     if (!g_placePropOrig || !g_bpItemById || !g_bpItemReg) return false;

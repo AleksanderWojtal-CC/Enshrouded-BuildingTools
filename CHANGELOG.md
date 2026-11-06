@@ -17,7 +17,8 @@ changelog on Nexus Mods, so keep it short and written for players.
     objects are found through the game's comfort check, which runs there.
   - **Place**: click and pick a blueprint from the list. The next page shows the materials
     and objects it needs (by name) and what you have, its rotation (90 degree steps),
-    Mirror (left and right swapped), Allow partial build, Objects (build / leave out), and
+    Mirror (left and right swapped; thin panels such as railings get turned so they still fit),
+    Allow partial build, Objects (build / leave out), and
     which point of it sits at the block you look at. Its ghost follows your aim (hold the
     right mouse button) until you press Place here; arrow rows move it by blocks right, away
     and up. Build places everything in one action: blocks first, then the objects, each
