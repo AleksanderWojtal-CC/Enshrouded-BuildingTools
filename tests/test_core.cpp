@@ -772,6 +772,35 @@ int main(int argc, char** argv) {
         CHECK(fabs(t[1] - sin(kPi / 4)) < 1e-6 && fabs(t[3] - cos(kPi / 4)) < 1e-6, "objects: turn about up");
     }
 
+    // ---------------------------------------------------------------- blueprints
+    {
+        using namespace core;
+        BpHeader h = {};
+        h.step[0] = h.step[1] = h.step[2] = 0.5f; h.n[0] = 3; h.n[1] = 2; h.n[2] = 4; h.shape = 0x1234; h.nm = 2;
+        h.m[0] = BpMat{ 0xaabbccdd, 0x81, 5, 10 }; h.m[1] = BpMat{ 0x11223344, 0x90, 2, 4 };
+        uint8_t cells[24]; for (int q = 0; q < 24; q++) cells[q] = BP_EMPTY;
+        cells[bp_index(h.n, 0, 0, 0)] = 0; cells[bp_index(h.n, 1, 0, 0)] = 0; cells[bp_index(h.n, 2, 1, 3)] = 1;
+        uint8_t buf[512]; int sz = bp_encode(h, cells, buf, sizeof buf);
+        BpHeader g = {}; uint8_t back[24];
+        bool ok = sz > 0 && bp_decode(buf, sz, &g, back, 24);
+        CHECK(ok && g.n[0] == 3 && g.n[1] == 2 && g.n[2] == 4 && g.nm == 2 && g.m[1].item == 0x11223344 && g.m[0].mat == 0x81 &&
+              memcmp(back, cells, 24) == 0 && g.shape == 0x1234 && g.step[1] == 0.5f, "blueprint: file round trip");
+        CHECK(!bp_decode(buf, sz, &g, back, 23), "blueprint: too many cells refused");
+        CHECK(!bp_decode(buf, sz - 6, &g, back, 24), "blueprint: cut-off file refused");
+        CHECK(bp_encode(h, cells, buf, 20) == 0, "blueprint: small buffer -> 0");
+        sz = bp_encode(h, cells, buf, sizeof buf);
+        buf[4] = 2; CHECK(!bp_decode(buf, sz, &g, back, 24), "blueprint: newer version refused");
+        bool turns = true;
+        for (int r = 0; r < 4; r++)
+            for (int i = 0; i < 3; i++) for (int k = 0; k < 4; k++) {
+                int ri, rk, i2, k2; bp_turn(r, i, k, 3, 4, &ri, &rk); bp_unturn(r, ri, rk, 3, 4, &i2, &k2);
+                int rnx = r & 1 ? 4 : 3, rnz = r & 1 ? 3 : 4;
+                if (i2 != i || k2 != k || ri < 0 || rk < 0 || ri >= rnx || rk >= rnz) turns = false;
+            }
+        int ri, rk; bp_turn(1, 0, 0, 3, 4, &ri, &rk);
+        CHECK(turns && ri == 3 && rk == 0, "blueprint: quarter turns stay in the plan and undo");
+    }
+
     printf(fails ? "\n%d FAILED\n" : "\nall tests passed\n", fails);
     return fails ? 1 : 0;
 }

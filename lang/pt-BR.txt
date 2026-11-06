@@ -294,3 +294,37 @@ obj.key_mode = Colocação de objetos: próximo modo (único, linha, curva, cír
 obj.key_menu = Colocação de objetos: janela de ajustes
 obj.key_undo = Colocação de objetos: desfazer (objeto na mão)
 obj.tool = Linhas de objetos
+
+# Blueprints
+bp.tool = Plantas
+bp.key = Modo planta liga / desliga
+bp.mode = Planta
+bp.mode_on = Modo planta: clique direito em dois cantos para salvar, clique esquerdo para colocar uma planta
+bp.hud = Modo planta
+bp.hud_save = Direito: cantos para salvar
+bp.hud_place = Esquerdo: colocar planta
+bp.corner = Área da planta: canto 1 marcado, clique direito no canto oposto para salvar
+bp.saved = Planta salva: {0} ({1} blocos, {2} materiais)
+bp.empty = Nada para salvar aqui: só blocos de construção são salvos
+bp.write_fail = Não foi possível gravar o arquivo da planta
+bp.piece = Mire em um bloco, não em uma peça de construção
+bp.remote = Plantas só funcionam em um mundo que você hospeda (ainda não em servidores dedicados)
+bp.cancelled = Planta cancelada
+bp.shape = Segure um bloco do tamanho da planta ({0} x {1} x {2} m) para construí-la
+bp.not_enough = Materiais insuficientes para a planta inteira (construção parcial desligada)
+bp.no_material = Materiais da planta que o jogo não conhece: {0} (os blocos deles ficam de fora)
+bp.nothing = Nada para construir: nenhum material desta planta pode ser usado
+bp.title = Planta
+bp.help = Construída com o bloco na mão no ponto clicado (centro de baixo), um bloco por célula salva.
+bp.none = Ainda não há plantas. No modo planta, clique direito em dois cantos para salvar uma.
+bp.pick = Planta
+bp.rotation = Rotação
+bp.partial = Permitir construção parcial
+bp.size = Tamanho {0} x {1} x {2} células, {3} blocos
+bp.bad_file = Este arquivo não é uma planta que esta versão consiga ler
+bp.costs = Materiais necessários:
+bp.material_row = Material {0}: {1} necessários, você tem {2}
+bp.have_unknown = ?
+bp.stock_hint = ? = ainda desconhecido: abra uma vez a escolha de material
+bp.short = Faltam {0} materiais: só uma parte pode ser construída
+bp.objects_later = Peças de construção e objetos ainda não são salvos (só blocos).

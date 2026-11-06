@@ -294,3 +294,37 @@ obj.key_mode = Nesne yerleştirme: sonraki mod (tekli, çizgi, eğri, daire, kem
 obj.key_menu = Nesne yerleştirme: ayarlar penceresi
 obj.key_undo = Nesne yerleştirme: geri al (nesne elde)
 obj.tool = Nesne çizgileri
+
+# Blueprints
+bp.tool = Planlar
+bp.key = Plan modu açık / kapalı
+bp.mode = Plan
+bp.mode_on = Plan modu: iki köşeye sağ tık kaydeder, sol tık bir plan yerleştirir
+bp.hud = Plan modu
+bp.hud_save = Sağ: kaydedilecek köşeler
+bp.hud_place = Sol: plan yerleştir
+bp.corner = Plan alanı: köşe 1 ayarlandı, kaydetmek için karşı köşeye sağ tıkla
+bp.saved = Plan kaydedildi: {0} ({1} blok, {2} malzeme)
+bp.empty = Burada kaydedilecek bir şey yok: yalnızca yapı blokları kaydedilir
+bp.write_fail = Plan dosyası yazılamadı
+bp.piece = Bir yapı parçasına değil, bir bloğa nişan al
+bp.remote = Planlar yalnızca senin barındırdığın bir dünyada çalışır (henüz özel sunucuda değil)
+bp.cancelled = Plan iptal edildi
+bp.shape = Planı inşa etmek için plan boyutunda bir blok tut ({0} x {1} x {2} m)
+bp.not_enough = Planın tamamı için yeterli malzeme yok (kısmi inşa kapalı)
+bp.no_material = Oyunun tanımadığı plan malzemeleri: {0} (blokları atlanır)
+bp.nothing = İnşa edilecek bir şey yok: bu planın hiçbir malzemesi kullanılamıyor
+bp.title = Plan
+bp.help = Elindeki blokla tıklanan yerde (alt orta) inşa edilir, kaydedilen her hücre için bir blok.
+bp.none = Henüz plan yok. Plan modunda bir tane kaydetmek için iki köşeye sağ tıkla.
+bp.pick = Plan
+bp.rotation = Döndürme
+bp.partial = Kısmi inşaya izin ver
+bp.size = Boyut {0} x {1} x {2} hücre, {3} blok
+bp.bad_file = Bu dosya bu sürümün okuyabileceği bir plan değil
+bp.costs = Gereken malzemeler:
+bp.material_row = Malzeme {0}: {1} gerekli, sende {2} var
+bp.have_unknown = ?
+bp.stock_hint = ? = henüz bilinmiyor: malzeme seçiciyi bir kez aç
+bp.short = {0} malzeme yetersiz: yalnızca bir kısmı inşa edilebilir
+bp.objects_later = Yapı parçaları ve nesneler henüz kaydedilmiyor (yalnızca bloklar).

@@ -294,3 +294,37 @@ obj.key_mode = Colocación de objetos: siguiente modo (único, línea, curva, c�
 obj.key_menu = Colocación de objetos: ventana de ajustes
 obj.key_undo = Colocación de objetos: deshacer (objeto en la mano)
 obj.tool = Líneas de objetos
+
+# Blueprints
+bp.tool = Planos
+bp.key = Modo plano sí / no
+bp.mode = Plano
+bp.mode_on = Modo plano: clic derecho en dos esquinas para guardar, clic izquierdo para colocar un plano
+bp.hud = Modo plano
+bp.hud_save = Derecho: esquinas para guardar
+bp.hud_place = Izquierdo: colocar un plano
+bp.corner = Zona del plano: esquina 1 marcada, clic derecho en la esquina opuesta para guardar
+bp.saved = Plano guardado: {0} ({1} bloques, {2} materiales)
+bp.empty = Nada que guardar aquí: solo se guardan bloques de construcción
+bp.write_fail = No se pudo escribir el archivo del plano
+bp.piece = Apunta a un bloque, no a una pieza de construcción
+bp.remote = Los planos solo funcionan en un mundo que alojas (aún no en servidores dedicados)
+bp.cancelled = Plano cancelado
+bp.shape = Lleva en la mano un bloque del tamaño del plano ({0} x {1} x {2} m) para construirlo
+bp.not_enough = No hay materiales para todo el plano (construcción parcial desactivada)
+bp.no_material = Materiales del plano que el juego no conoce: {0} (sus bloques se omiten)
+bp.nothing = Nada que construir: ningún material de este plano se puede usar
+bp.title = Plano
+bp.help = Se construye con el bloque en la mano en el punto pulsado (centro inferior), un bloque por celda guardada.
+bp.none = Aún no hay planos. En modo plano, clic derecho en dos esquinas para guardar uno.
+bp.pick = Plano
+bp.rotation = Rotación
+bp.partial = Permitir construcción parcial
+bp.size = Tamaño {0} x {1} x {2} celdas, {3} bloques
+bp.bad_file = Este archivo no es un plano que esta versión pueda leer
+bp.costs = Materiales necesarios:
+bp.material_row = Material {0}: se necesitan {1}, tienes {2}
+bp.have_unknown = ?
+bp.stock_hint = ? = aún desconocido: abre una vez el selector de material
+bp.short = Faltan {0} materiales: solo se puede construir una parte
+bp.objects_later = Las piezas de construcción y los objetos aún no se guardan (solo bloques).

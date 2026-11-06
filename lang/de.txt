@@ -294,3 +294,37 @@ obj.key_mode = Objekte platzieren: nächster Modus (einzeln, Linie, Kurve, Kreis
 obj.key_menu = Objekte platzieren: Einstellungsfenster
 obj.key_undo = Objekte platzieren: Rückgängig (Objekt in der Hand)
 obj.tool = Objektlinien
+
+# Blueprints
+bp.tool = Baupläne
+bp.key = Bauplan-Modus an / aus
+bp.mode = Bauplan
+bp.mode_on = Bauplan-Modus: Rechtsklick auf zwei Ecken speichert, Linksklick setzt einen Bauplan
+bp.hud = Bauplan-Modus
+bp.hud_save = Rechts: Ecken zum Speichern
+bp.hud_place = Links: Bauplan setzen
+bp.corner = Bauplan-Bereich: Ecke 1 gesetzt, Rechtsklick auf die gegenüberliegende Ecke speichert
+bp.saved = Bauplan gespeichert: {0} ({1} Blöcke, {2} Materialien)
+bp.empty = Hier gibt es nichts zu speichern: nur Bausteine werden gespeichert
+bp.write_fail = Die Bauplan-Datei konnte nicht geschrieben werden
+bp.piece = Ziele auf einen Block, nicht auf ein Bauteil
+bp.remote = Baupläne funktionieren nur in einer Welt, die du hostest (noch nicht auf dedizierten Servern)
+bp.cancelled = Bauplan abgebrochen
+bp.shape = Halte einen Block in der Größe des Bauplans ({0} x {1} x {2} m), um ihn zu bauen
+bp.not_enough = Nicht genug Material für den ganzen Bauplan (Teilbau ist aus)
+bp.no_material = Materialien des Bauplans, die das Spiel nicht kennt: {0} (ihre Blöcke werden ausgelassen)
+bp.nothing = Nichts zu bauen: kein Material dieses Bauplans ist verwendbar
+bp.title = Bauplan
+bp.help = Gebaut mit dem Block in der Hand an der geklickten Stelle (unten Mitte), ein Block pro gespeicherter Zelle.
+bp.none = Noch keine Baupläne. Im Bauplan-Modus zwei Ecken rechtsklicken, um einen zu speichern.
+bp.pick = Bauplan
+bp.rotation = Drehung
+bp.partial = Teilbau erlauben
+bp.size = Größe {0} x {1} x {2} Zellen, {3} Blöcke
+bp.bad_file = Diese Datei ist kein Bauplan, den diese Version lesen kann
+bp.costs = Benötigte Materialien:
+bp.material_row = Material {0}: {1} benötigt, du hast {2}
+bp.have_unknown = ?
+bp.stock_hint = ? = noch unbekannt: öffne einmal die Materialauswahl
+bp.short = Zu wenig von {0} Materialien: nur ein Teil kann gebaut werden
+bp.objects_later = Bauteile und Gegenstände werden noch nicht gespeichert (nur Blöcke).

@@ -694,7 +694,7 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
     if (dimg) g_vd.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, s.layout, 0, 1, &s.set[i], 0, nullptr);
     // the blocks the action will touch (fill mode cells), drawn after the box
     uint32_t cellN = 0;
-    if (haveBox && g_cfg.drawBoxCells && g_cellStep[0] > 0.f && (dimg ? s.cellsDepth : s.cells)) {
+    if (haveBox && g_cfg.drawBoxCells && g_cellStep[0] > 0.f && (dimg ? s.cellsDepth : s.cells) && (g_mode != MODE_BLUEPRINT || g_bpGhost)) {
         uint64_t nn = 1;
         for (int a = 0; a < 3; a++) {
             float c = push.size[a] / g_cellStep[a];
@@ -709,7 +709,14 @@ static bool vk_draw(VkQueue q, uint32_t i, const VkPresentInfoKHR* pi) {
         bool onlyFull = op == 2 || (op == 1 && g_replaceStyle != STYLE_FULL);
         const bool isRound = g_fill == core::FILL_ROUND && (boxFill & (1 << 20)), isDiag = g_fill == core::FILL_DIAG && (boxFill & (1 << 21));
         const bool isRoundRoof = g_fill == core::FILL_ROOF && (boxFill & (1 << 22));
-        if (cellN && (isRound || isDiag || isRoundRoof) && s.occMap) {
+        if (cellN && g_bpGhost) {                     // a blueprint being placed: its saved cells (blueprint.h)
+            if (s.occMap && g_bpBitsOk) {
+                memcpy(s.occMap, g_bpBits, sizeof g_bpBits);
+                push.cells[3] = 16.f;                 // build colour, solid, bits decide
+                g_vd.vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, s.layout, 1, 1, &s.occSet, 0, nullptr);
+            } else cellN = 0;
+            onlyFull = false;
+        } else if (cellN && (isRound || isDiag || isRoundRoof) && s.occMap) {
             // round, diagonal and cone / dome fills: the cells come from the same code that builds (core::round_keep, diag_keep, roof_column),
             // as bits (with the existing blocks when only those count); the shader draws them as solid
             int n[3];

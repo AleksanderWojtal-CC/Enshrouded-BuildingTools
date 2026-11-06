@@ -294,3 +294,37 @@ obj.key_mode = Stawianie obiektów: następny tryb (pojedynczo, linia, krzywa, o
 obj.key_menu = Stawianie obiektów: okno ustawień
 obj.key_undo = Stawianie obiektów: cofnij (obiekt w ręce)
 obj.tool = Linie obiektów
+
+# Blueprints
+bp.tool = Schematy
+bp.key = Tryb schematów wł. / wył.
+bp.mode = Schemat
+bp.mode_on = Tryb schematów: prawym przyciskiem dwa narożniki zapisują, lewym stawiasz schemat
+bp.hud = Tryb schematów
+bp.hud_save = Prawy: narożniki do zapisu
+bp.hud_place = Lewy: postaw schemat
+bp.corner = Obszar schematu: narożnik 1 ustawiony, kliknij prawym przeciwległy narożnik, aby zapisać
+bp.saved = Zapisano schemat: {0} (bloki: {1}, materiały: {2})
+bp.empty = Nie ma tu czego zapisać: zapisywane są tylko bloki budowlane
+bp.write_fail = Nie udało się zapisać pliku schematu
+bp.piece = Celuj w blok, nie w element budowli
+bp.remote = Schematy działają tylko w świecie, który hostujesz (jeszcze nie na serwerze dedykowanym)
+bp.cancelled = Schemat anulowany
+bp.shape = Weź do ręki blok o rozmiarze schematu ({0} x {1} x {2} m), aby go zbudować
+bp.not_enough = Za mało materiałów na cały schemat (budowa częściowa jest wyłączona)
+bp.no_material = Materiały schematu, których gra nie zna: {0} (ich bloki zostaną pominięte)
+bp.nothing = Nie ma czego budować: żadnego materiału tego schematu nie da się użyć
+bp.title = Schemat
+bp.help = Budowany blokiem z ręki w klikniętym miejscu (środek dołu), jeden blok na każdą zapisaną komórkę.
+bp.none = Nie ma jeszcze schematów. W trybie schematów kliknij prawym dwa narożniki, aby zapisać pierwszy.
+bp.pick = Schemat
+bp.rotation = Obrót
+bp.partial = Pozwól na budowę częściową
+bp.size = Rozmiar {0} x {1} x {2} komórek, bloki: {3}
+bp.bad_file = Ta wersja nie potrafi odczytać tego pliku schematu
+bp.costs = Potrzebne materiały:
+bp.material_row = Materiał {0}: potrzeba {1}, masz {2}
+bp.have_unknown = ?
+bp.stock_hint = ? = jeszcze nieznane: otwórz raz wybór materiału
+bp.short = Brakuje materiałów ({0}): da się zbudować tylko część
+bp.objects_later = Elementy budowli i przedmioty nie są jeszcze zapisywane (tylko bloki).

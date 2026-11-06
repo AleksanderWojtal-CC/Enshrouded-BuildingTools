@@ -294,3 +294,37 @@ obj.key_mode = 오브젝트 배치: 다음 모드 (단일, 직선, 곡선, 원, 
 obj.key_menu = 오브젝트 배치: 설정 창
 obj.key_undo = 오브젝트 배치: 실행 취소 (오브젝트를 손에 들고)
 obj.tool = 오브젝트 라인
+
+# Blueprints
+bp.tool = 설계도
+bp.key = 설계도 모드 켜기 / 끄기
+bp.mode = 설계도
+bp.mode_on = 설계도 모드: 두 모서리를 우클릭하면 저장, 좌클릭하면 설계도 배치
+bp.hud = 설계도 모드
+bp.hud_save = 우클릭: 저장할 모서리
+bp.hud_place = 좌클릭: 설계도 배치
+bp.corner = 설계도 영역: 모서리 1 설정됨, 반대쪽 모서리를 우클릭하면 저장
+bp.saved = 설계도 저장됨: {0} (블록 {1}, 재료 {2})
+bp.empty = 여기에는 저장할 것이 없습니다: 건축 블록만 저장됩니다
+bp.write_fail = 설계도 파일을 쓸 수 없습니다
+bp.piece = 건축 부품이 아니라 블록을 조준하세요
+bp.remote = 설계도는 직접 호스트하는 월드에서만 작동합니다 (전용 서버는 아직 지원 안 함)
+bp.cancelled = 설계도 취소됨
+bp.shape = 건설하려면 설계도 크기의 블록({0} x {1} x {2} m)을 들고 있어야 합니다
+bp.not_enough = 설계도 전체에 필요한 재료가 부족합니다 (부분 건설 꺼짐)
+bp.no_material = 게임이 모르는 설계도 재료: {0} (해당 블록은 건너뜀)
+bp.nothing = 지을 것이 없습니다: 이 설계도의 재료를 하나도 쓸 수 없습니다
+bp.title = 설계도
+bp.help = 손에 든 블록으로 클릭한 곳(아래 가운데)에 짓습니다. 저장된 칸마다 블록 하나.
+bp.none = 아직 설계도가 없습니다. 설계도 모드에서 두 모서리를 우클릭해 저장하세요.
+bp.pick = 설계도
+bp.rotation = 회전
+bp.partial = 부분 건설 허용
+bp.size = 크기 {0} x {1} x {2} 칸, 블록 {3}
+bp.bad_file = 이 파일은 이 버전이 읽을 수 있는 설계도가 아닙니다
+bp.costs = 필요한 재료:
+bp.material_row = 재료 {0}: {1}개 필요, 보유 {2}
+bp.have_unknown = ?
+bp.stock_hint = ? = 아직 모름: 재료 선택을 한 번 여세요
+bp.short = 재료 {0}종 부족: 일부만 지을 수 있습니다
+bp.objects_later = 건축 부품과 물건은 아직 저장되지 않습니다 (블록만).

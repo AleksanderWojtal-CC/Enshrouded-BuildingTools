@@ -294,3 +294,37 @@ obj.key_mode = Placement d'objets : mode suivant (unique, ligne, courbe, cercle,
 obj.key_menu = Placement d'objets : fenêtre des réglages
 obj.key_undo = Placement d'objets : annuler (objet en main)
 obj.tool = Lignes d'objets
+
+# Blueprints
+bp.tool = Plans
+bp.key = Mode plan activé / désactivé
+bp.mode = Plan
+bp.mode_on = Mode plan : clic droit sur deux coins pour enregistrer, clic gauche pour poser un plan
+bp.hud = Mode plan
+bp.hud_save = Droit : coins à enregistrer
+bp.hud_place = Gauche : poser un plan
+bp.corner = Zone du plan : coin 1 placé, clic droit sur le coin opposé pour enregistrer
+bp.saved = Plan enregistré : {0} ({1} blocs, {2} matériaux)
+bp.empty = Rien à enregistrer ici : seuls les blocs de construction sont enregistrés
+bp.write_fail = Impossible d'écrire le fichier du plan
+bp.piece = Visez un bloc, pas une pièce de construction
+bp.remote = Les plans ne fonctionnent que dans un monde que vous hébergez (pas encore sur un serveur dédié)
+bp.cancelled = Plan annulé
+bp.shape = Tenez un bloc de la taille du plan ({0} x {1} x {2} m) pour le construire
+bp.not_enough = Pas assez de matériaux pour tout le plan (construction partielle désactivée)
+bp.no_material = Matériaux du plan inconnus du jeu : {0} (leurs blocs sont omis)
+bp.nothing = Rien à construire : aucun matériau de ce plan n'est utilisable
+bp.title = Plan
+bp.help = Construit avec le bloc en main à l'endroit cliqué (centre du bas), un bloc par cellule enregistrée.
+bp.none = Aucun plan pour le moment. En mode plan, clic droit sur deux coins pour en enregistrer un.
+bp.pick = Plan
+bp.rotation = Rotation
+bp.partial = Autoriser la construction partielle
+bp.size = Taille {0} x {1} x {2} cellules, {3} blocs
+bp.bad_file = Ce fichier n'est pas un plan lisible par cette version
+bp.costs = Matériaux nécessaires :
+bp.material_row = Matériau {0} : {1} nécessaires, vous avez {2}
+bp.have_unknown = ?
+bp.stock_hint = ? = pas encore connu : ouvrez une fois le choix du matériau
+bp.short = Pas assez de {0} matériaux : seule une partie peut être construite
+bp.objects_later = Les pièces de construction et les objets ne sont pas encore enregistrés (seulement les blocs).

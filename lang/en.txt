@@ -297,3 +297,37 @@ obj.key_mode = Object placement: next mode (single, line, curve, circle, arch, s
 obj.key_menu = Object placement: settings window
 obj.key_undo = Object placement: undo (object in hand)
 obj.tool = Object lines
+
+# Blueprints
+bp.tool = Blueprints
+bp.key = Blueprint mode on / off
+bp.mode = Blueprint
+bp.mode_on = Blueprint mode: right click two corners to save, left click to place a blueprint
+bp.hud = Blueprint mode
+bp.hud_save = Right click: save corners
+bp.hud_place = Left click: place a blueprint
+bp.corner = Blueprint area: corner 1 set, right click the opposite corner to save
+bp.saved = Blueprint saved: {0} ({1} blocks, {2} materials)
+bp.empty = Nothing to save there: only building blocks are saved
+bp.write_fail = Could not write the blueprint file
+bp.piece = Aim at a block, not at a building piece
+bp.remote = Blueprints work only in a world you host (not yet on a dedicated server)
+bp.cancelled = Blueprint cancelled
+bp.shape = Hold a block of the blueprint's size ({0} x {1} x {2} m) to build it
+bp.not_enough = Not enough materials for the whole blueprint (Allow partial build is off)
+bp.no_material = Materials of this blueprint the game does not know: {0} (their blocks are left out)
+bp.nothing = Nothing to build: no material of this blueprint could be used
+bp.title = Blueprint
+bp.help = Built with the block in your hand at the clicked spot (bottom centre), one block per saved cell.
+bp.none = No blueprints yet. In Blueprint mode, right click two corners to save one.
+bp.pick = Blueprint
+bp.rotation = Rotation
+bp.partial = Allow partial build
+bp.size = Size {0} x {1} x {2} cells, {3} blocks
+bp.bad_file = This file is not a blueprint this version can read
+bp.costs = Materials needed:
+bp.material_row = Material {0}: {1} needed, you have {2}
+bp.have_unknown = ?
+bp.stock_hint = ? = not known yet: open the material picker once
+bp.short = Not enough of {0} materials: only part can be built
+bp.objects_later = Building pieces and objects are not saved yet (only blocks).

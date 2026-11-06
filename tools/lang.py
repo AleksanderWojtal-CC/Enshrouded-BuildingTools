@@ -18,7 +18,7 @@ SECTIONS = {'num': 'Numbers', 'msg': 'Messages (shown for a few seconds)',
             'float': 'Floating text under the crosshair', 'key': 'Key names',
             'menu': 'Building Tools menu', 'option': 'Options tab',
             'wheel': 'Tools wheel (hold its key)', 'exact': 'Exact mode window',
-            'obj': 'Object placement (an object in hand)'}
+            'obj': 'Object placement (an object in hand)', 'bp': 'Blueprints'}
 
 
 NOTES = {

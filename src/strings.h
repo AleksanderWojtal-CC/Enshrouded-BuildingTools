@@ -283,7 +283,40 @@
     X(S_ACT_OBJ_MODE, "obj.key_mode", "Object placement: next mode (single, line, curve, circle, arch, standing circle)") \
     X(S_ACT_OBJ_MENU, "obj.key_menu", "Object placement: settings window") \
     X(S_ACT_OBJ_UNDO, "obj.key_undo", "Object placement: undo (object in hand)") \
-    X(S_OPT_TOOL_OBJECTS, "obj.tool", "Object lines")
+    X(S_OPT_TOOL_OBJECTS, "obj.tool", "Object lines") \
+    /* blueprints */ \
+    X(S_OPT_TOOL_BP, "bp.tool", "Blueprints") \
+    X(S_ACT_BP, "bp.key", "Blueprint mode on / off") \
+    X(S_OPT_MODE_BP, "bp.mode", "Blueprint") \
+    X(S_MODE_BP, "bp.mode_on", "Blueprint mode: right click two corners to save, left click to place a blueprint") \
+    X(S_HUD_BP, "bp.hud", "Blueprint mode") \
+    X(S_HUD_BP_SAVE, "bp.hud_save", "Right click: save corners") \
+    X(S_HUD_BP_PLACE, "bp.hud_place", "Left click: place a blueprint") \
+    X(S_BP_CORNER, "bp.corner", "Blueprint area: corner 1 set, right click the opposite corner to save") \
+    X(S_BP_SAVED, "bp.saved", "Blueprint saved: {0} ({1} blocks, {2} materials)") \
+    X(S_BP_EMPTY, "bp.empty", "Nothing to save there: only building blocks are saved") \
+    X(S_BP_WRITE_FAIL, "bp.write_fail", "Could not write the blueprint file") \
+    X(S_BP_PIECE, "bp.piece", "Aim at a block, not at a building piece") \
+    X(S_BP_REMOTE, "bp.remote", "Blueprints work only in a world you host (not yet on a dedicated server)") \
+    X(S_BP_CANCELLED, "bp.cancelled", "Blueprint cancelled") \
+    X(S_BP_SHAPE, "bp.shape", "Hold a block of the blueprint's size ({0} x {1} x {2} m) to build it") \
+    X(S_BP_NOT_ENOUGH, "bp.not_enough", "Not enough materials for the whole blueprint (Allow partial build is off)") \
+    X(S_BP_NO_MATERIAL, "bp.no_material", "Materials of this blueprint the game does not know: {0} (their blocks are left out)") \
+    X(S_BP_NOTHING, "bp.nothing", "Nothing to build: no material of this blueprint could be used") \
+    X(S_BP_TITLE, "bp.title", "Blueprint") \
+    X(S_BP_HELP, "bp.help", "Built with the block in your hand at the clicked spot (bottom centre), one block per saved cell.") \
+    X(S_BP_NONE, "bp.none", "No blueprints yet. In Blueprint mode, right click two corners to save one.") \
+    X(S_BP_PICK, "bp.pick", "Blueprint") \
+    X(S_BP_ROTATION, "bp.rotation", "Rotation") \
+    X(S_BP_PARTIAL, "bp.partial", "Allow partial build") \
+    X(S_BP_SIZE, "bp.size", "Size {0} x {1} x {2} cells, {3} blocks") \
+    X(S_BP_BAD_FILE, "bp.bad_file", "This file is not a blueprint this version can read") \
+    X(S_BP_COSTS, "bp.costs", "Materials needed:") \
+    X(S_BP_MAT_ROW, "bp.material_row", "Material {0}: {1} needed, you have {2}") \
+    X(S_BP_MAT_UNKNOWN, "bp.have_unknown", "?") \
+    X(S_BP_STOCK_HINT, "bp.stock_hint", "? = not known yet: open the material picker once") \
+    X(S_BP_SHORT, "bp.short", "Not enough of {0} materials: only part can be built") \
+    X(S_BP_OBJECTS_LATER, "bp.objects_later", "Building pieces and objects are not saved yet (only blocks).")
 
 enum Str {
 #define BT_STR_ID(id, key, en) id,

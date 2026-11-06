@@ -950,4 +950,106 @@ inline bool obj_column_top(uint64_t taken, int bits, int v0, double yRef, double
     return found;
 }
 
+// ---- blueprints (saved building areas, BuildingTools-Blueprints\*.btbp)
+// File (little endian): "BTBP", u16 version (1), u16 flags (0); float cell size[3] (metres);
+// u16 cells per axis[3] (x, y, z); u32 the held shape's item when saved; u16 material
+// count, then per material {u32 item id, u8 material byte, u8 0, u16 0, u32 cells,
+// u32 items}; u32 run count, then runs {u16 length, u8 material index (0xff = empty),
+// u8 0} over the cells in order x + nx * (z + nz * y) (bottom layer first); u32 object
+// count (0 in version 1; later {u32 item, float pos[3], float rot[4]}).
+// The material table names items by their item id (a hash that stays the same across
+// game patches); the material byte is only a hint, checked against the item at build time.
+static const uint8_t BP_EMPTY = 0xff;
+static const int BP_MAX_MATS = 64;
+struct BpMat { uint32_t item; uint8_t mat; uint32_t cells; uint32_t items; };
+struct BpHeader { float step[3]; int n[3]; uint32_t shape; int nm; BpMat m[BP_MAX_MATS]; int objects; };
+inline int bp_index(const int* n, int i, int j, int k) { return i + n[0] * (k + n[2] * j); }
+
+struct BpWriter {
+    uint8_t* p; int n, cap; bool ok = true;
+    void put(const void* d, int len) { if (n + len > cap) { ok = false; return; } const uint8_t* s = (const uint8_t*)d; for (int q = 0; q < len; q++) p[n + q] = s[q]; n += len; }
+    void u8(uint8_t v) { put(&v, 1); }
+    void u16(uint16_t v) { put(&v, 2); }
+    void u32(uint32_t v) { put(&v, 4); }
+    void f32(float v) { put(&v, 4); }
+};
+// Writes the blueprint into out (cap bytes). Returns the size, 0 = did not fit / invalid.
+inline int bp_encode(const BpHeader& h, const uint8_t* cells, uint8_t* out, int cap) {
+    BpWriter w{ out, 0, cap };
+    if (h.nm < 0 || h.nm > BP_MAX_MATS) return 0;
+    for (int a = 0; a < 3; a++) if (h.n[a] < 1 || h.n[a] > 0xffff) return 0;
+    w.put("BTBP", 4); w.u16(1); w.u16(0);
+    for (int a = 0; a < 3; a++) w.f32(h.step[a]);
+    for (int a = 0; a < 3; a++) w.u16((uint16_t)h.n[a]);
+    w.u32(h.shape);
+    w.u16((uint16_t)h.nm);
+    for (int k = 0; k < h.nm; k++) { w.u32(h.m[k].item); w.u8(h.m[k].mat); w.u8(0); w.u16(0); w.u32(h.m[k].cells); w.u32(h.m[k].items); }
+    const long total = (long)h.n[0] * h.n[1] * h.n[2];
+    int runsAt = w.n; w.u32(0);
+    uint32_t runs = 0;
+    for (long q = 0; q < total;) {
+        uint8_t m = cells[q]; long len = 1;
+        while (q + len < total && cells[q + len] == m && len < 0xffff) len++;
+        w.u16((uint16_t)len); w.u8(m); w.u8(0);
+        runs++; q += len;
+    }
+    if (w.ok) for (int b = 0; b < 4; b++) out[runsAt + b] = (uint8_t)(runs >> (8 * b));
+    w.u32(0);                                          // objects
+    return w.ok ? w.n : 0;
+}
+// Reads a blueprint. cells gets nx * ny * nz entries (at most maxCells). False = not a
+// blueprint, a newer version, damaged or too big.
+inline bool bp_decode(const uint8_t* d, int size, BpHeader* h, uint8_t* cells, long maxCells) {
+    int at = 0;
+    auto need = [&](int len) { return at + len <= size; };
+    auto rd = [&](void* out, int len) { uint8_t* o = (uint8_t*)out; for (int q = 0; q < len; q++) o[q] = d[at + q]; at += len; };
+    if (!need(8) || d[0] != 'B' || d[1] != 'T' || d[2] != 'B' || d[3] != 'P') return false;
+    at = 4; uint16_t ver, flags; rd(&ver, 2); rd(&flags, 2);
+    if (ver != 1) return false;
+    if (!need(12 + 6 + 4 + 2)) return false;
+    for (int a = 0; a < 3; a++) rd(&h->step[a], 4);
+    for (int a = 0; a < 3; a++) { uint16_t v; rd(&v, 2); h->n[a] = v; }
+    rd(&h->shape, 4);
+    uint16_t nm; rd(&nm, 2);
+    if (nm > BP_MAX_MATS || !need(nm * 16)) return false;
+    h->nm = nm;
+    for (int k = 0; k < nm; k++) { uint8_t pad[3]; rd(&h->m[k].item, 4); rd(&h->m[k].mat, 1); rd(pad, 3); rd(&h->m[k].cells, 4); rd(&h->m[k].items, 4); }
+    for (int a = 0; a < 3; a++) if (h->n[a] < 1 || !(h->step[a] > 0.05f && h->step[a] < 100.f)) return false;
+    const long total = (long)h->n[0] * h->n[1] * h->n[2];
+    if (total > maxCells) return false;
+    if (!need(4)) return false;
+    uint32_t runs; rd(&runs, 4);
+    long q = 0;
+    for (uint32_t r = 0; r < runs; r++) {
+        if (!need(4)) return false;
+        uint16_t len; uint8_t m, pad; rd(&len, 2); rd(&m, 1); rd(&pad, 1);
+        if (m != BP_EMPTY && m >= nm) return false;
+        if (q + len > total) return false;
+        for (int z = 0; z < len; z++) cells[q++] = m;
+    }
+    if (q != total) return false;
+    h->objects = 0;
+    if (need(4)) { uint32_t no; rd(&no, 4); h->objects = (int)no; }
+    return true;
+}
+// Turn r (0..3, quarter turns about the vertical axis) of cell column (i, k) of an nx x nz
+// plan: the column in the turned plan (dims swap for odd turns).
+inline void bp_turn(int r, int i, int k, int nx, int nz, int* ri, int* rk) {
+    switch (r & 3) {
+    case 0: *ri = i; *rk = k; break;
+    case 1: *ri = nz - 1 - k; *rk = i; break;
+    case 2: *ri = nx - 1 - i; *rk = nz - 1 - k; break;
+    default: *ri = k; *rk = nx - 1 - i; break;
+    }
+}
+// The inverse: column (ri, rk) of the turned plan comes from (i, k) of the saved one.
+inline void bp_unturn(int r, int ri, int rk, int nx, int nz, int* i, int* k) {
+    switch (r & 3) {
+    case 0: *i = ri; *k = rk; break;
+    case 1: *i = rk; *k = nz - 1 - ri; break;
+    case 2: *i = nx - 1 - ri; *k = nz - 1 - rk; break;
+    default: *i = nx - 1 - rk; *k = ri; break;
+    }
+}
+
 } // namespace core

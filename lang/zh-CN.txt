@@ -294,3 +294,37 @@ obj.key_mode = 物体放置：下一模式（单个、直线、曲线、圆、�
 obj.key_menu = 物体放置：设置窗口
 obj.key_undo = 物体放置：撤销（手持物体）
 obj.tool = 物体线
+
+# Blueprints
+bp.tool = 蓝图
+bp.key = 蓝图模式 开 / 关
+bp.mode = 蓝图
+bp.mode_on = 蓝图模式：右键点击两个角保存，左键放置蓝图
+bp.hud = 蓝图模式
+bp.hud_save = 右键：保存的角
+bp.hud_place = 左键：放置蓝图
+bp.corner = 蓝图区域：已设角 1，右键点击对角即可保存
+bp.saved = 蓝图已保存：{0}（方块 {1}，材料 {2}）
+bp.empty = 这里没有可保存的内容：只保存建筑方块
+bp.write_fail = 无法写入蓝图文件
+bp.piece = 请瞄准方块，而不是建筑构件
+bp.remote = 蓝图只能在你主持的世界中使用（暂不支持专用服务器）
+bp.cancelled = 蓝图已取消
+bp.shape = 请手持与蓝图同尺寸的方块（{0} x {1} x {2} 米）来建造
+bp.not_enough = 材料不足以建造整个蓝图（部分建造已关闭）
+bp.no_material = 游戏不认识的蓝图材料：{0}（这些方块会被跳过）
+bp.nothing = 没有可建造的：此蓝图的材料都无法使用
+bp.title = 蓝图
+bp.help = 用手中的方块在点击处（底部中心）建造，每个保存的格子一个方块。
+bp.none = 还没有蓝图。在蓝图模式下右键点击两个角来保存一个。
+bp.pick = 蓝图
+bp.rotation = 旋转
+bp.partial = 允许部分建造
+bp.size = 尺寸 {0} x {1} x {2} 格，方块 {3}
+bp.bad_file = 此文件不是本版本能读取的蓝图
+bp.costs = 所需材料：
+bp.material_row = 材料 {0}：需要 {1}，拥有 {2}
+bp.have_unknown = ?
+bp.stock_hint = ? = 尚不清楚：请打开一次材料选择
+bp.short = {0} 种材料不足：只能建造一部分
+bp.objects_later = 建筑构件和物品暂不保存（仅方块）。
