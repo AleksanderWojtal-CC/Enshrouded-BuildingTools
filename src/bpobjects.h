@@ -46,6 +46,7 @@ static const int kBpProbeN = sizeof kBpProbeTypes / sizeof kBpProbeTypes[0];
 alignas(16) static float g_bpProbeBox[8];            // min xyz, 0, max xyz, 0 (metres)
 alignas(16) static const uint8_t kBpProbeFilter[0x18] = { 1 };   // as the comfort system's (0x14 bytes used)
 static volatile LONG g_bpProbeReq = 0;
+static volatile LONG g_bpScanning = 0;               // the entity table scan runs (the save watchdog waits)
 static uint32_t g_bpProbeIds[kBpProbeN]; static int g_bpProbeLive = 0;
 static uint32_t g_bpProbeOwner = 0; static DWORD g_bpProbeTick = 0;
 static volatile LONG g_bpProbeHits = 0;              // the comfort system was seen (its read call ran)
@@ -79,6 +80,28 @@ static uint8_t* bp_comp(uint8_t* e, uint32_t k, uint32_t* size) {
     if (!data) return nullptr;
     uint8_t* p = data + off + (size_t)row * stride;
     return readable(p, stride ? stride : 8) ? p : nullptr;
+}
+// The same without a memory check per call, for the scan of the whole entity table: checking
+// every record with VirtualQuery took 36 s for 27671 entities (0.32.0-dev13). The records come
+// from the game's own table; each archetype (a few hundred) is checked once.
+static uint8_t* g_bpArchOk[512]; static int g_bpArchN = 0;
+static bool bp_ptr(const void* p) { uintptr_t v = (uintptr_t)p; return v > 0x10000 && v < 0x7fffffff0000ull && !(v & 7); }
+static uint8_t* bp_comp_fast(uint8_t* e, uint32_t k, uint32_t* size) {
+    if (!bp_ptr(e) || k >= 640) return nullptr;
+    uint8_t* arch = *(uint8_t**)(e + 0x18);
+    if (!bp_ptr(arch)) return nullptr;
+    bool known = false;
+    for (int q = 0; q < g_bpArchN && !known; q++) known = g_bpArchOk[q] == arch;
+    if (!known) {
+        if (!readable(arch, 0xa84 + 640 * 2)) return nullptr;
+        if (g_bpArchN < 512) g_bpArchOk[g_bpArchN++] = arch;
+    }
+    if (!((*(uint64_t*)(arch + (k >> 6) * 8) >> (k & 63)) & 1)) return nullptr;
+    uint32_t stride = *(uint16_t*)(arch + 0xa84 + k * 2), off = *(uint16_t*)(arch + 0x84 + k * 2);
+    uint8_t* data = *(uint8_t**)(e + 0x20);
+    if (!bp_ptr(data)) return nullptr;
+    if (size) *size = stride;
+    return data + off + (size_t)*(uint32_t*)(e + 0x30) * stride;
 }
 // The item a placed prop came from: the 4-byte component holding an item id the lookup knows.
 static uint32_t bp_entity_item(uint8_t* e) {
@@ -151,6 +174,7 @@ static void bp_scan_entities(uint8_t* sys, uint8_t* frame) {
         LOG(.str("blueprint objects: entity table looks wrong (").u(slots).str(" slots)")); return;
     }
     const DWORD t0 = GetTickCount();
+    g_bpArchN = 0;
     uint32_t seen = 0, inBox = 0;
     for (uint64_t s = 0; s < slots && g_bpFoundN < core::BP_MAX_OBJS; s++) {
         if (!((bits[s >> 6] >> (s & 63)) & 1)) continue;
@@ -158,7 +182,7 @@ static void bp_scan_entities(uint8_t* sys, uint8_t* frame) {
         if (!e) continue;
         seen++;
         uint32_t sz = 0;
-        uint8_t* t = bp_comp(e, trIdx, &sz);
+        uint8_t* t = bp_comp_fast(e, trIdx, &sz);
         if (!t || sz < 0x28) continue;
         const int64_t* pos = (const int64_t*)t;
         bool inside = true;
@@ -168,6 +192,7 @@ static void bp_scan_entities(uint8_t* sys, uint8_t* frame) {
         }
         if (!inside) continue;
         inBox++;
+        if (!readable(e, 0x38)) continue;                   // the few in the box get the full checks
         uint32_t item = bp_entity_item(e);
         if (!item) continue;
         BpFound& f = g_bpFound[g_bpFoundN++];
@@ -187,7 +212,9 @@ static uint8_t bt_comfort_read_body(uint8_t* sys, BpQResult* out, uint32_t id, u
     if (!sys || !readable(sys, 0x10) || !readable(*(uint8_t**)sys, 0x838)) return r;
     if (InterlockedExchange(&g_bpProbeReq, 0)) {           // a save asked: every entity in its box, now
         g_bpFoundN = 0;
+        g_bpScanning = 1;
         bp_scan_entities(sys, frame);
+        g_bpScanning = 0;
         bp_probe_finished(true);
         return r;
     }

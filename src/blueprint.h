@@ -273,6 +273,7 @@ static void bp_probe_finished(bool answered) {             // comfort system thr
     bp_save_write(true);
 }
 static void bp_save_watchdog() {                            // input thread
+    if (g_bpScanning) { g_bpSaveTick = GetTickCount(); return; }
     if (g_bpSavePending && GetTickCount() - g_bpSaveTick > 6000 && InterlockedExchange(&g_bpSavePending, 0)) {
         LOG(.str("blueprint objects: no answer in 6 s, saved without objects"));
         g_bpFoundN = 0;
