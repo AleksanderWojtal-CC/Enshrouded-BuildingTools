@@ -946,3 +946,20 @@ all tested mod signatures match the file, so the disk image is plain).
   (leads: the comfort range query `ComfortQuery.queryId: RangeQueryId`, `crafting_props_in_range`,
   `logic_entities_in_range`, and the collider query systems process_query_commands /
   collect_query_results).
+- **Entities in an area: the scene's range queries.** The engine's scene keeps a 2D grid of
+  cells listing entities (`SceneCellEntity` 0x1c: entity id, float3 position, template index).
+  Systems find entities near a point with asynchronous range queries, e.g.
+  `comfort_energy_gathering` (system fn 2539a0; deps Comfort, ComfortQuery, ComfortProvider,
+  CurrentTransform, PlayerBasesSystemServer...):
+  - create: 9600c0(writer, &queryId, entity, &aabb{float4 min, float4 max}, &filter[0x14],
+    componentType u32, u8) appends a 0x60-byte command (type 9) for the `ecs::QuerySystem`
+    (process_query_commands a1dc40 -> 9da6c0). The writer comes from 9bd3e0(sys), the
+    component type from a global (the comfort system passes ComfortProvider's).
+  - results (a later frame): 9b83d0(sys, &out{u32* ids, u64 count}, queryId): record =
+    [[sys]+0x20]+0x1e8 + index * 0x470 (index from the hash at +0x1a8), ids at +0x58, count byte
+    at +0x458 (at most 256 per query).
+  - each id -> entity with 9b25f0(sys, id); components then as usual.
+  Plan for props: run such queries for the saved box (split so each holds under 256) from a
+  system the mod already sees, filtered by a component every placed prop has, then read each
+  entity's WorldTransform and item. Needs in-game diagnostic builds (which component type id,
+  which system context accepts the mod's queries).
