@@ -3,6 +3,19 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.32.0 (in development)
+
+- **Blueprints** (issue #49, stage 1: blocks). A new Blueprint mode (tools wheel, Options tab,
+  a key in the Keys tab). Right click two corners and the blocks of that box are saved to a
+  file in the new `BuildingTools-Blueprints` folder next to `enshrouded.exe` (named by date
+  and time). Left click somewhere else and the blueprint window opens: pick a blueprint, turn
+  it 0 / 90 / 180 / 270 degrees, see the materials it needs and what you have, and choose
+  whether a partial build is allowed. The whole structure is drawn as a ghost; Build places
+  every block with its own material in one action (undo and partial build as for areas).
+  Blocks are saved per cell of the shape in your hand (hold the small 0.5 m cube for full
+  detail); a cell at least half full counts as a full block. Building pieces and objects are
+  not saved yet, and blueprints do not work on a dedicated server yet.
+
 ## 0.31.2
 
 - **Works with GreeneyeDS mods** (Find - Base Storage Search, The Worst Map Mod). They hook

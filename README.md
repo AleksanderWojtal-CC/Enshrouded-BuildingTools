@@ -29,6 +29,13 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   and height as shapes past it (negative grows the other way), with the fill, its options
   and the material picker in the window. The 3D preview follows as you type; hold the right
   mouse button to hide the window and look around. Build or Cancel.
+- **Blueprints** (Blueprint mode): right click two corners to save the blocks of a box to
+  a file (`BuildingTools-Blueprints` next to `enshrouded.exe`), left click elsewhere to open
+  the blueprint window: pick one, turn it in 90 degree steps, see the materials it needs
+  against what you have, allow or forbid a partial build, and Build. A ghost of the whole
+  structure shows where it goes. Each block keeps its own material. Saved per cell of the
+  shape in hand (the 0.5 m cube for full detail). Building pieces and objects are not saved
+  yet; worlds you host only (not yet on a dedicated server).
 - **Free placement**: the block ghost hovers in front of you, snapped to the 0.5 m
   building grid, instead of sticking to surfaces. Hold Q and turn the mouse wheel to set
   the distance.
@@ -52,7 +59,7 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   point the mouse at an option and let go. It shows only what applies right now
   (Replace style while Replace is on, fill and corners in Area mode).
 - **Pick your tools**: the menu's Options tab switches whole tools on or off (Replace, Area
-  mode, Area shapes, Free placement, Object lines, Creative building, Magic chests of all bases). A tool
+  mode, Area shapes, Free placement, Object lines, Blueprints, Creative building, Magic chests of all bases). A tool
   that is off gives its keys back to the game and leaves the hints and the wheel.
 - **Menu in the game's own UI** (Home): change keys (also Shift / Ctrl / Alt combinations)
   and options in a full-screen menu with the game's tabs. While you build, the mod's keys

@@ -141,6 +141,24 @@ Exact mode (Area corners: exact)
   goes back. Works while flying. The last sizes are kept.
   MaxShapes in the ini limits the size (default 2000 shapes).
 
+Blueprints (Blueprint mode: tools wheel, or a key in the Keys tab)
+  Save: right click two opposite corners (as an area remove; nothing is
+  removed). The blocks in that box are saved to a file in the folder
+  BuildingTools-Blueprints next to enshrouded.exe, named by date and time
+  (rename the files as you like). The box is cut into cells the size of the
+  shape in your hand: hold the small 0.5 m cube for full detail. A cell at
+  least half full of one material is saved as a full block of it.
+  Build: hold a block of the same size and left click where the blueprint's
+  bottom centre goes. A window opens beside the drawn ghost: pick the
+  blueprint, its rotation (0, 90, 180, 270 degrees) and Allow partial build
+  (on: builds what your materials cover; off: nothing unless all are there).
+  It lists the materials needed and how many you have ("?" until the game's
+  material picker was open once). Build (or Enter) builds every block with its
+  own material, Cancel (or Esc) goes back, the right mouse button hides the
+  window while held. Undo and big actions work as for areas.
+  Not yet: building pieces (foundations, stairs...) and objects are not saved;
+  blueprints work only in a world you host, not on a dedicated server.
+
 Undo after Replace
   Undo puts the old blocks back, returns the new material and takes back the
   old material Replace gave you. If you no longer have that old material, the
@@ -200,7 +218,7 @@ Menu (Home)
   creative building on / off). They have no key until you set one.
   Options tab: which tools you use. Building Tools (the whole mod), Replace,
   Area mode, Area shapes (roof, round and diagonal fills), Free placement,
-  Object lines,
+  Object lines, Blueprints,
   Creative building (single player; on a server its ini decides), Magic
   chests of all bases, and the language. A tool that is off does nothing:
   its keys are the game's again and it leaves the building box hints and the
