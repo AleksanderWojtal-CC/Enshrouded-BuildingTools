@@ -16,6 +16,10 @@ static const char* SIG_BP_COMFORT_READ = "4C 8B 45 90 48 8D 95 A0 00 00 00 49 8B
 static const char* SIG_BP_QUERY_CREATE = "48 8B CB 48 89 7C 24 20 E8 ?? ?? ?? ?? 48 8B 4D B8 8B 9D 90 03 00 00 48 85 C9";   // call at +8 (9600c0)
 static const char* SIG_BP_ENTITY_GET   = "42 8B 1C 2B 8B D3 E8 ?? ?? ?? ?? 48 8B F0 48 85 C0 0F 84 ?? ?? ?? ?? 48 8B 55 48"; // call at +6 (9b25f0)
 static const char* SIG_BP_QUERY_FREE   = "44 8B C3 48 8B CF 8B 10 E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 4D B8";        // call at +8 (960390)
+static const char* SIG_BP_ITEM_BY_ID   = "8B 7F 38 8B CF E8 ?? ?? ?? ?? 0F 57 C0 4C 89 65 58 0F 57 C9 66 0F 7F 45 60";        // call at +5 (e94470, dismantle)
+typedef uint8_t* (*BpItemByIdFn)(uint32_t id, void* registry);
+static BpItemByIdFn g_bpItemById = nullptr;
+static void* volatile g_bpItemReg = nullptr;          // item registry (placement context +0x28), checked at the save
 
 struct BpQResult { uint8_t* entries; uint64_t count; };     // 16-byte entries, entity id first
 typedef uint8_t  (*BpQResultsFn)(void* sys, BpQResult* out, uint32_t id);
@@ -86,6 +90,17 @@ static void bp_probe_dump(uint8_t* sys, uint8_t* frame, int q, const BpQResult& 
         for (uint32_t k = 0; k < 640; k++) {
             uint8_t* c = bp_comp(e, k, &sz);
             if (!c) continue;
+            // which u32 of the component is an item id (the game's item lookup knows it)
+            if (g_bpItemById && g_bpItemReg && sz >= 4 && sz <= 0x80)
+                for (uint32_t o = 0; o + 4 <= sz; o += 4) {
+                    uint32_t v = *(uint32_t*)(c + o);
+                    if (v < 0x10000) continue;
+                    uint8_t* it = g_bpItemById(v, g_bpItemReg);
+                    if (!it || !readable(it, 0x4b8)) continue;
+                    Buf ib; ib.str("    ITEM in comp ").u(k).str(" +").x(o).str(": ").x(v).str(" kind ").i(item_kind(it)).str(" template ");
+                    for (int i = 0; i < 16; i++) ib.u(it[0x3c0 + i], 16, 2);
+                    log_line(ib);
+                }
             Buf cb; cb.str("    comp ").u(k).str(" size ").u(sz).str(k == trIdx ? " (CurrentTransform)" : "").str(": ");
             for (uint32_t i = 0; i < sz && i < 0x30; i++) cb.u(c[i], 16, 2);
             log_line(cb);
@@ -144,8 +159,15 @@ asm(".text\n"
     "    ret\n");
 
 // the save box asks for a probe (server thread, bp_save_box)
-static void bp_probe_request(const I3* c, const float* step) {
+static void bp_probe_request(const I3* c, const float* step, void* ctx, void* state) {
     if (!g_bpQResults) { LOG(.str("objects probe: not available (signatures)")); return; }
+    // the item registry: placement context +0x28 (as the piece removal 48fab0 uses it), checked
+    // with the item in hand, whose definition the dry runs get as their shape state
+    void* reg = ctx && readable((uint8_t*)ctx + 0x28, 8) ? *(void**)((uint8_t*)ctx + 0x28) : nullptr;
+    uint8_t* self = g_bpItemById && reg && state ? g_bpItemById(*(uint32_t*)state, reg) : nullptr;
+    g_bpItemReg = self == (uint8_t*)state ? reg : nullptr;
+    LOG(.str("objects probe: item registry ").str(g_bpItemReg ? "ok" : "NOT confirmed").str(" (lookup of the held item gave ").x((uint64_t)self)
+        .str(", state ").x((uint64_t)state).c(')'));
     for (int a = 0; a < 3; a++) {
         const int64_t v0 = a == 0 ? c[0].x : a == 1 ? c[0].y : c[0].z, v1 = a == 0 ? c[1].x : a == 1 ? c[1].y : c[1].z;
         double lo = (double)(v0 < v1 ? v0 : v1) / core::kFix - step[a] * 0.5, hi = (double)(v0 < v1 ? v1 : v0) / core::kFix + step[a] * 0.5;
@@ -161,6 +183,7 @@ static void bp_objects_install() {
     uint8_t* cr = find_unique("BpQueryCreate", SIG_BP_QUERY_CREATE);
     uint8_t* eg = find_unique("BpEntityGet", SIG_BP_ENTITY_GET);
     uint8_t* fr = find_unique("BpQueryFree", SIG_BP_QUERY_FREE);
+    if (uint8_t* ib = find_unique("BpItemById", SIG_BP_ITEM_BY_ID)) g_bpItemById = (BpItemByIdFn)(ib + 10 + *(int32_t*)(ib + 6));
     if (!rd || !cr || !eg || !fr) { LOG(.str("blueprint objects probe: not available")); return; }
     auto tgt = [](uint8_t* call) { return call + 5 + *(int32_t*)(call + 1); };
     uint8_t* site = rd + 0x11;
