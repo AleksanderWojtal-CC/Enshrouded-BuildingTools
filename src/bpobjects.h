@@ -320,20 +320,46 @@ static bool bp_item_bounds(uint8_t* it, float* mn, float* mx) {
     return mx[0] >= mn[0] && mx[1] >= mn[1] && mx[2] >= mn[2];
 }
 // Mirroring an object: the game has no mirrored models, so the copy is turned and one of the
-// object's own horizontal axes comes out reversed against a true mirror image. That should be the
-// axis along which the model is the same at both ends. The turn r' = M r M reverses its local x:
-// right for things the same on their left and right (chairs, beds, lamps). Thin panels (railings,
-// fences, windows: much less deep than wide) are the same front and back but not along their
-// length (a stair railing slopes), so they get half a turn about their up axis on top, which
-// reverses their local z instead (r' = M r M * (0, 1, 0, 0)).
-static bool bp_mirror_half_turn(uint32_t item) {
+// object's own horizontal axes comes out reversed against a true mirror image. That must be the
+// axis along which the model is the same at both ends, whichever way it stands. r' = M r M
+// reverses its local x: right for things the same on their left and right (chairs, lamps,
+// paintings). Half a turn about the up axis on top (r' = M r M * (0, 1, 0, 0)) reverses its
+// local z instead: right for things the same front and back but not along their length
+// (railings, fences, windows, beds). The default comes from the model's bounds (much less deep
+// than wide), except very thin comfort items (paintings, banners: they have a front); the
+// window lets the player turn any kind of object the other way (BuildingTools-Blueprints\mirror.ini).
+static int8_t g_bpMirrorPick[256]; static uint32_t g_bpMirrorPickItem[256]; static int g_bpMirrorPickN = 0;   // -1 = not read yet
+static int bp_mirror_choice(uint32_t item) {          // 1 = half turn, 0 = as is, -1 = default
+    for (int q = 0; q < g_bpMirrorPickN; q++) if (g_bpMirrorPickItem[q] == item) return g_bpMirrorPick[q];
+    wchar_t key[16]; { Buf b; b.u(item, 16, 8); for (int k = 0; k <= b.n; k++) key[k] = (wchar_t)(uint8_t)b.z()[k]; }
+    wchar_t path[MAX_PATH]; lstrcpyW(path, g_dir); lstrcatW(path, L"BuildingTools-Blueprints\\mirror.ini");
+    int v = (int)GetPrivateProfileIntW(L"Mirror", key, (UINT)-1, path);
+    if (g_bpMirrorPickN < 256) { g_bpMirrorPickItem[g_bpMirrorPickN] = item; g_bpMirrorPick[g_bpMirrorPickN++] = (int8_t)(v < -1 || v > 1 ? -1 : v); }
+    return v < -1 || v > 1 ? -1 : v;
+}
+static void bp_mirror_set(uint32_t item, int v) {
+    bp_mirror_choice(item);
+    for (int q = 0; q < g_bpMirrorPickN; q++) if (g_bpMirrorPickItem[q] == item) g_bpMirrorPick[q] = (int8_t)v;
+    wchar_t p[MAX_PATH]; lstrcpyW(p, g_dir); lstrcatW(p, L"BuildingTools-Blueprints\\");
+    CreateDirectoryW(p, nullptr);
+    lstrcatW(p, L"mirror.ini");                          // its own file: write_full_ini rewrites BuildingTools.ini
+    wchar_t key[16], val[4] = { (wchar_t)('0' + v), 0 };
+    { Buf b; b.u(item, 16, 8); for (int k = 0; k <= b.n; k++) key[k] = (wchar_t)(uint8_t)b.z()[k]; }
+    WritePrivateProfileStringW(L"Mirror", key, val, p);
+}
+static bool bp_mirror_default(uint32_t item) {
     if (!g_bpItemById || !g_bpItemReg) return false;
+    uint8_t* it = g_bpItemById(item, g_bpItemReg);
     float mn[3], mx[3];
-    if (!bp_item_bounds(g_bpItemById(item, g_bpItemReg), mn, mx)) return false;
+    if (!bp_item_bounds(it, mn, mx)) return false;
     const float sx = mx[0] - mn[0], sz = mx[2] - mn[2];
-    const bool half = sx > 0.05f && sz < 0.6f * sx;
-    LOG(.str("  mirror: object ").x(item).str(" size ").f(sx).c('x').f(mx[1] - mn[1]).c('x').f(sz)
-        .str(" centre (").f((mn[0] + mx[0]) * 0.5f).c(',').f((mn[2] + mx[2]) * 0.5f).str(half ? ") -> half turn (thin panel)" : ") -> as is"));
+    const bool comfort = readable(it + 0x790, 4) && *(uint32_t*)(it + 0x790) > 0;
+    return sx > 0.05f && sz < 0.6f * sx && !(comfort && sz < 0.2f * sx);
+}
+static bool bp_mirror_half_turn(uint32_t item) {
+    const int c = bp_mirror_choice(item);
+    const bool half = c >= 0 ? c == 1 : bp_mirror_default(item);
+    LOG(.str("  mirror: object ").x(item).str(half ? " half turn" : " as is").str(c >= 0 ? " (chosen in the window)" : ""));
     return half;
 }
 static bool bp_place_object(void* ctx, uint32_t item, const double* posM, const float* rot) {

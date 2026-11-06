@@ -254,6 +254,20 @@ static void draw_bp_place_window() {
     if (ui_option(T(S_BP_ROTATION), turns, 4, g_bpRot & 3, &v)) { g_bpRot = v; LOG(.str("blueprint: turn ").i(v)); }
     {   const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
         if (ui_option(T(S_BP_MIRROR), offOn, 2, g_bpMirror ? 1 : 0, &v)) { g_bpMirror = v != 0; LOG(.str("blueprint: mirror ").i(v)); } }
+    if (g_bpMirror && g_cfg.bpObjects && g_bp.h.objects > 0) {   // each kind of object: turned around or not in the mirror
+        bp_text(T(S_BP_MIRROR_OBJS));
+        const char* const how[] = { T(S_BP_MIRROR_ASIS), T(S_BP_MIRROR_TURN) };
+        for (int q = 0; q < g_bp.h.objects; q++) {
+            const uint32_t item = g_bp.h.obj[q].item;
+            bool first = true;
+            for (int p = 0; p < q && first; p++) first = g_bp.h.obj[p].item != item;
+            if (!first) continue;
+            const int c = bp_mirror_choice(item);
+            const int cur = c >= 0 ? c : (bp_mirror_default(item) ? 1 : 0);
+            static char lbl[64][80]; Buf nb; bp_item_label(nb, item); copy_text(lbl[q & 63], nb.z(), sizeof lbl[0]);
+            if (ui_option(lbl[q & 63], how, 2, cur, &v)) { bp_mirror_set(item, (int)v); LOG(.str("blueprint: mirror ").x(item).str(v ? " turned" : " as is")); }
+        }
+    }
     if (ref_option(T(S_BP_REF), g_cfg.bpPlaceRef, &v)) g_cfg.bpPlaceRef = v;
     {
         BpRow r; bp_row_begin(r);
