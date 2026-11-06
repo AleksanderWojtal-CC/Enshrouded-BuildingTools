@@ -5,29 +5,28 @@ changelog on Nexus Mods, so keep it short and written for players.
 
 ## 0.32.0 (in development)
 
-- **Blueprints** (issue #49, stage 1: blocks). Blueprint is a new mode next to Prefab and
-  Area (the mode on the tools wheel, Options tab, keys in the Keys tab), with two actions on
-  the tools wheel:
+- **Blueprints** (issue #49). Blueprint is a new mode next to Prefab and Area (the mode on
+  the tools wheel, Options tab, keys in the Keys tab), with two actions on the tools wheel:
   - **Save**: click a block and a window like Exact mode's opens. Choose where the clicked
-    block sits in the box (now also front middle and back middle), move that point by
-    blocks, set width, depth and height, type a name, and Save (up to 65536 cells, whatever
-    MaxShapes says). The box is drawn beside the window; hold the right mouse
-    button to look around. The blocks inside are saved to a file in the new
-    `BuildingTools-Blueprints` folder next to `enshrouded.exe`.
+    block sits in the box (now also front middle and back middle), move that point by blocks,
+    set width, depth and height, type a name, and Save. The box is drawn beside the window;
+    hold the right mouse button to look around. The blocks inside, every block with its own
+    material, and the objects inside (doors, windows, chests, beds, furniture, lights,
+    decorations...) with their position and rotation are saved to a file in the new
+    `BuildingTools-Blueprints` folder next to `enshrouded.exe`. Save inside a base: the
+    objects are found through the game's comfort check, which runs there.
   - **Place**: click and pick a blueprint from the list. The next page shows the materials
-    it needs and what you have, its rotation (90 degree steps), Allow partial build, and
+    and objects it needs (by name) and what you have, its rotation (90 degree steps),
+    Mirror (left and right swapped), Allow partial build, Objects (build / leave out), and
     which point of it sits at the block you look at. Its ghost follows your aim (hold the
     right mouse button) until you press Place here; arrow rows move it by blocks right, away
-    and up (negative: left, closer, down). Build places every block with its own material in
-    one action. With partial build on, every block your materials cover is built, material
-    by material; undo works as for areas.
+    and up. Build places everything in one action: blocks first, then the objects, each
+    costing one of its item. With partial build on, every block your materials cover is
+    built, material by material; undo works as for areas.
   Blocks are saved per cell of the shape in your hand (hold the small 0.5 m cube for full
-  detail); a cell at least half full counts as a full block. Building pieces and objects are
-  not saved yet, and blueprints do not work on a dedicated server yet.
-- A blueprint saved in one world builds all its materials in another world too, also
-  materials not found there yet.
-- The blueprint name takes keys only after you click it (Enter or another click ends
-  typing), so walking around no longer types into it.
+  detail); a cell at least half full counts as a full block. Doors, windows and other
+  wirable objects are placed without their link to the base's logic network until the world
+  is loaded again. Blueprints do not work on a dedicated server yet.
 - Exact mode: two more reference points, front middle and back middle.
 
 ## 0.31.2

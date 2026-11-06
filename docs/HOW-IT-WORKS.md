@@ -439,8 +439,22 @@ keeps the ghost valid).
   shape's material, and the patch writes it into the blit parameters' material (+0xa1) for
   building placements. Partial build and the undo budget are those of Area mode; with partial
   build off the click is refused when the counts the picker knows do not cover the list.
-- **Rotation.** Quarter turns about the vertical axis (`core::bp_turn` / `bp_unturn`); the
-  cell size swaps x and z for odd turns, so the held shape must match the turned size.
+- **Rotation and mirror.** Quarter turns about the vertical axis (`core::bp_turn` /
+  `bp_unturn`; objects `bp_turn_point` / `bp_turn_rot`); the cell size swaps x and z for odd
+  turns, so the held shape must match the turned size. Mirror flips x before the turn (cells
+  i -> nx - 1 - i, object x -> width - x, rotation (x, y, z, w) -> (x, -y, -z, w)).
+- **Objects** (`src/bpobjects.h`). The save's objects come from the world's entity table (the
+  map 9b25f0 looks ids up in: [[sys]+0x30]+0x148, records at +0x188), walked from inside the
+  server system `comfort_energy_gathering` (the mod takes over its call that reads its own
+  range query's results, so it runs where entity records are consistent). Every entity in the
+  box whose 4-byte item component (`UsedItem`) names a placeable item is kept with its
+  CurrentTransform. Build: one cost entry per object (its item, count 1) after the blocks'
+  entries, then PlaceProp with the blueprint system's building context after the blocks,
+  inside the same undo budget. Logic objects (item flag 0x80000) make PlaceProp write a
+  LogicEntityPlacedEvent through context +0xe0, which the blueprint system has no writer for:
+  the mod gives it a private writer and the event is dropped. The window's names: ItemInfo
+  +0x48 (name loca reference) -> FNV-1a id -> aff9f0, as the game's item rows get them.
+- **Dedicated servers.** Not yet: the windows and the scan run in the player's game.
 
 ## Sounds
 

@@ -143,27 +143,35 @@ Exact mode (Area corners: exact)
 
 Blueprints (Blueprint mode: the mode on the tools wheel, Prefab -> Area -> Blueprint)
   The tools wheel switches Blueprint between Save and Place.
-  Save: click a block (left button). A window opens like Exact mode's: where
-  the clicked block sits in the box (middle, a corner, front or back middle),
-  rows that move that point by blocks, width, depth and height (up to 65536
-  cells; MaxShapes does not limit saving), and a name: click it, type on the keyboard, Enter or a click ends typing
-  (empty = date and time). The box is drawn beside the window; hold the right mouse button to
-  look around. Save writes the blocks in the box to a file in the folder
-  BuildingTools-Blueprints next to enshrouded.exe. The box is cut into cells the
-  size of the shape in your hand: hold the small 0.5 m cube for full detail. A
-  cell at least half full of one material is saved as a full block of it.
+  Save: click a block (left button) inside a base. A window opens like Exact
+  mode's: where the clicked block sits in the box (middle, a corner, front or
+  back middle), rows that move that point by blocks, width, depth and height
+  (up to 65536 cells; MaxShapes does not limit saving), and a name: click it,
+  type on the keyboard, Enter or a click ends typing (empty = date and time).
+  The box is drawn beside the window; hold the right mouse button to look
+  around. Save writes the blocks in the box, each with its material, and the
+  objects in it (doors, windows, chests, beds, stations, furniture, lights,
+  decorations) with their position and rotation to a file in the folder
+  BuildingTools-Blueprints next to enshrouded.exe. The objects are found
+  through the game's comfort check, which only runs inside a base. The box is
+  cut into cells the size of the shape in your hand: hold the small 0.5 m cube
+  for full detail. A cell at least half full of one material is saved as a
+  full block of it.
   Place: hold a block of the same size and click. Pick a blueprint from the
-  list; the next page shows its size, the materials it needs and how many you
-  have ("?" until the game's material picker was open once), the rotation (0,
-  90, 180, 270 degrees), the point of the blueprint that sits at the block you
-  look at, and Allow partial build (on: builds what your materials cover; off:
-  nothing unless all are there). The ghost follows your aim while you hold the
-  right mouse button; Place here fixes it. The Right / Away / Up rows move it
-  by blocks (negative: left, closer, down). Build (or Enter) builds every block with its
-  own material; Back returns to the list, Cancel (or Esc) closes. Undo and big
-  actions work as for areas.
-  Not yet: building pieces (foundations, stairs...) and objects are not saved;
-  blueprints work only in a world you host, not on a dedicated server.
+  list; the next page shows its size, the materials and objects it needs (by
+  name) and how many you have ("?" until the game's material picker was open
+  once), the rotation (0, 90, 180, 270 degrees), Mirror (left and right
+  swapped), the point of the blueprint that sits at the block you look at,
+  Allow partial build (on: builds what your materials cover; off: nothing
+  unless all are there) and Objects (Build / Leave out). The ghost follows your
+  aim while you hold the right mouse button; Place here fixes it. The Right /
+  Away / Up rows move it by blocks (negative: left, closer, down). Build (or
+  Enter) builds every block with its own material, then the objects (each costs
+  one of its item); Back returns to the list, Cancel (or Esc) closes. Undo and
+  big actions work as for areas.
+  Doors, windows and other wirable objects are not linked into the base's logic
+  network until the world is loaded again. Blueprints work only in a world you
+  host, not on a dedicated server.
 
 Undo after Replace
   Undo puts the old blocks back, returns the new material and takes back the
