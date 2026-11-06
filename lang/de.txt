@@ -352,6 +352,7 @@ bp.obj_build = Bauen
 bp.obj_leave = Weglassen
 bp.object_row = Objekt {0}: {1} benötigt, du hast {2}
 bp.obj_missing = Objekte, die das Spiel nicht kennt: {0} (ausgelassen)
+bp.obj_logic = Logik-Objekte (verdrahtbar, z. B. Schalter, Lampen) vorerst ausgelassen: {0}
 bp.costs = Benötigte Materialien:
 bp.material_row = Material {0}: {1} benötigt, du hast {2}
 bp.have_unknown = ?

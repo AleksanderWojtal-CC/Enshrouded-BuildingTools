@@ -498,12 +498,13 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
     // building materials (the picker's counts), so the checks below look at the blocks' entries and
     // the game's own charge decides about the objects
     const uint32_t blockCost = (uint32_t)list->count;
-    int objN = 0, objMissing = 0;
+    int objN = 0, objMissing = 0, objLogic = 0;
     if (g_cfg.bpObjects && g_bp.h.objects > 0 && g_placePropOrig && bp_item_registry(ctx, state))
         for (int k = 0; k < g_bp.h.objects && g_pend.n < kMaxPending; k++) {
             const uint32_t item = g_bp.h.obj[k].item;
             uint8_t* it = g_bpItemById(item, g_bpItemReg);
             if (!it || !prop_item(it)) { objMissing++; continue; }
+            if (bp_logic_object(ctx, it)) { objLogic++; continue; }
             const uint32_t before = (uint32_t)list->count;
             CostEntry* e = list_push(list);
             if (!e) break;
@@ -513,7 +514,14 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
             memset(g_pendPos[g_pend.n], 0, 24);
             g_pend.n++; objN++;
         }
-    if (objMissing) { Buf b; b.fmt(T(S_BP_OBJ_MISSING), num(objMissing).s); flash(b.z()); }
+    if (objMissing || objLogic) {
+        Buf b;
+        if (objMissing) b.fmt(T(S_BP_OBJ_MISSING), num(objMissing).s);
+        if (objMissing && objLogic) b.str("  |  ");
+        if (objLogic) b.fmt(T(S_BP_OBJ_LOGIC), num(objLogic).s);
+        flash(b.z());
+        LOG(.str("blueprint build: objects left out: ").i(objMissing).str(" unknown, ").i(objLogic).str(" logic"));
+    }
     if (objN) { priced += objN; LOG(.str("blueprint build: ").i(objN).str(" objects queued").str(objMissing ? ", some unknown" : "")); }
     g_pendCost[g_pend.n] = (uint32_t)list->count;
     LOG(.str("blueprint build: turn ").i(g_bpRot).str(", priced ").i(priced).str(" of ").i(g_bp.filled)

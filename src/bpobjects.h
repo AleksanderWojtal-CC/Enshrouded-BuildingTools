@@ -213,10 +213,16 @@ static bool bp_probe_request(const I3* c, const float* step, void* ctx, void* st
 typedef uint8_t (*PlacePropFn)(void* ctx, uint8_t* info, uint32_t item);
 static PlacePropFn g_placePropOrig = nullptr;        // objects.h finds it
 static volatile LONG g_bpObjRecord = 0;              // obj_rec_check (objects.h): record the blueprint's objects
+// Logic objects (item flag 0x80000 at +0x5d8) make PlaceProp send a LogicEntityPlacedEvent
+// through the context's +0xe0, which only the prop system's context has (null in the blueprint
+// system's: crash at 9c3760, 0.32.0-dev10). They are left out until the mod can give that event.
+static bool bp_logic_object(void* ctx, const uint8_t* it) {
+    return (*(const uint32_t*)(it + 0x5d8) & 0x80000) && !*(void**)((uint8_t*)ctx + 0xe0);
+}
 static bool bp_place_object(void* ctx, uint32_t item, const double* posM, const float* rot) {
     if (!g_placePropOrig || !g_bpItemById || !g_bpItemReg) return false;
     uint8_t* it = g_bpItemById(item, g_bpItemReg);
-    if (!it || !prop_item(it)) return false;
+    if (!it || !prop_item(it) || bp_logic_object(ctx, it)) return false;
     alignas(16) uint8_t info[0x50] = {};
     memcpy(info, it + 0x3c0, 16);                        // the placed entity template
     for (int a = 0; a < 3; a++) *(float*)(info + 0x10 + a * 4) = (float)posM[a];

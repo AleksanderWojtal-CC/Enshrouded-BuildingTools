@@ -352,6 +352,7 @@ bp.obj_build = İnşa et
 bp.obj_leave = Dışarıda bırak
 bp.object_row = Nesne {0}: {1} gerekli, sende {2} var
 bp.obj_missing = Oyunun tanımadığı nesneler: {0} (atlandı)
+bp.obj_logic = Mantık nesneleri (bağlanabilir: anahtarlar, lambalar…) şimdilik atlandı: {0}
 bp.costs = Gereken malzemeler:
 bp.material_row = Malzeme {0}: {1} gerekli, sende {2} var
 bp.have_unknown = ?

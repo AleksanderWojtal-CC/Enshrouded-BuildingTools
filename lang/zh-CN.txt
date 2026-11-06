@@ -352,6 +352,7 @@ bp.obj_build = 建造
 bp.obj_leave = 不建造
 bp.object_row = 物品 {0}：需要 {1}，拥有 {2}
 bp.obj_missing = 游戏不认识的物品：{0}（已跳过）
+bp.obj_logic = 逻辑物品（可连线的：开关、灯等）暂时跳过：{0}
 bp.costs = 所需材料：
 bp.material_row = 材料 {0}：需要 {1}，拥有 {2}
 bp.have_unknown = ?

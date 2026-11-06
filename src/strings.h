@@ -341,6 +341,7 @@
     X(S_BP_OBJ_LEAVE, "bp.obj_leave", "Leave out") \
     X(S_BP_OBJ_ROW, "bp.object_row", "Object {0}: {1} needed, you have {2}") \
     X(S_BP_OBJ_MISSING, "bp.obj_missing", "Objects the game does not know: {0} (left out)") \
+    X(S_BP_OBJ_LOGIC, "bp.obj_logic", "Logic objects (wirable: switches, lamps...) are left out for now: {0}") \
     X(S_BP_COSTS, "bp.costs", "Materials needed:") \
     X(S_BP_MAT_ROW, "bp.material_row", "Material {0}: {1} needed, you have {2}") \
     X(S_BP_MAT_UNKNOWN, "bp.have_unknown", "?") \

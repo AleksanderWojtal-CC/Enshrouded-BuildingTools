@@ -352,6 +352,7 @@ bp.obj_build = 건설
 bp.obj_leave = 제외
 bp.object_row = 물건 {0}: {1}개 필요, 보유 {2}
 bp.obj_missing = 게임이 모르는 물건: {0} (제외됨)
+bp.obj_logic = 로직 물건(스위치, 램프 등 연결 가능한 것)은 지금은 제외: {0}
 bp.costs = 필요한 재료:
 bp.material_row = 재료 {0}: {1}개 필요, 보유 {2}
 bp.have_unknown = ?
