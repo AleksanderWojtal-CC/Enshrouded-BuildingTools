@@ -963,3 +963,8 @@ all tested mod signatures match the file, so the disk image is plain).
   system the mod already sees, filtered by a component every placed prop has, then read each
   entity's WorldTransform and item. Needs in-game diagnostic builds (which component type id,
   which system context accepts the mod's queries).
+  - Only component types the query system registered can be queried: an unknown type hash
+    crashes it (null from the lookups at a290a1..a290d0, 0.32.0-dev7). The game's own range
+    queries (14 calls of 9600c0) ask for Actor, Boss, ClientRotationalEnergySource,
+    ComfortProvider, DangerousArea, Enemy01BehaviorState, EnemyMarker, InteractionOfferRuntime,
+    Ladder, PacifiedState and TemporaryMining. For props: ComfortProvider, InteractionOfferRuntime, Ladder.

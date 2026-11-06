@@ -28,9 +28,12 @@ static BpQFreeFn    g_bpQFree = nullptr;
 static BpEntityFn   g_bpEntity = nullptr;
 
 static uint32_t fnv1a32(const char* s) { uint32_t h = 0x811c9dc5u; for (; *s; s++) { h ^= (uint8_t)*s; h *= 0x01000193u; } return h; }
+// Only component types the query system has registered can be asked for: an unknown hash
+// crashes it (0.32.0-dev7: null lookup at a290d5). These are queried by the game itself:
+// ComfortProvider (comfort_energy_gathering), InteractionOfferRuntime (interactions: doors,
+// chests, beds, stations), Ladder.
 static const char* const kBpProbeTypes[] = {
-    "keen::ecs::CollisionFeedbackMaterialComponent", "keen::ecs::ComfortProvider", "keen::ecs::Collider",
-    "keen::ecs::CurrentTransform", "keen::ecs::StaticUsedItem", "keen::ecs::DismantleOverride",
+    "keen::ecs::InteractionOfferRuntime", "keen::ecs::ComfortProvider", "keen::ecs::Ladder",
 };
 static const int kBpProbeN = sizeof kBpProbeTypes / sizeof kBpProbeTypes[0];
 alignas(16) static float g_bpProbeBox[8];            // min xyz, 0, max xyz, 0 (metres)
@@ -79,7 +82,7 @@ static void bp_probe_dump(uint8_t* sys, uint8_t* frame, int q, const BpQResult& 
             b.str(" pos (").fix(pos[0]).c(',').fix(pos[1]).c(',').fix(pos[2]).str(") rot (").f(rot[0]).c(',').f(rot[1]).c(',').f(rot[2]).c(',').f(rot[3]).c(')');
         }
         log_line(b);
-        if (q != 0 || n >= 24 || !e) continue;            // the components of the first query's entities only
+        if (q > 1 || n >= 24 || !e) continue;             // the components of the first two queries' entities
         for (uint32_t k = 0; k < 640; k++) {
             uint8_t* c = bp_comp(e, k, &sz);
             if (!c) continue;
