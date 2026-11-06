@@ -594,7 +594,13 @@ static bool bp_commit_object(void* ctx, int i) {
     const float dx = (float)g_bp.h.n[0] * g_bp.h.step[0], dz = (float)g_bp.h.n[2] * g_bp.h.step[2];
     float tp[3], tr[4];
     float mp[3] = { o.pos[0], o.pos[1], o.pos[2] }, mr[4] = { o.rot[0], o.rot[1], o.rot[2], o.rot[3] };
-    if (g_bpMirror) { mp[0] = dx - mp[0]; mr[1] = -mr[1]; mr[2] = -mr[2]; }   // mirrored in x: x -> -x, the rotation reflected
+    if (g_bpMirror) {                                    // mirrored in x: x -> -x, the rotation reflected
+        mp[0] = dx - mp[0]; mr[1] = -mr[1]; mr[2] = -mr[2];
+        if (bp_mirror_half_turn(o.item)) {              // off-centre models: r * (0, 1, 0, 0), half a turn about local up
+            const float q0 = mr[0], q1 = mr[1], q2 = mr[2], q3 = mr[3];
+            mr[0] = -q2; mr[1] = q3; mr[2] = q0; mr[3] = -q1;
+        }
+    }
     core::bp_turn_point(g_bpRot, mp, dx, dz, tp);
     core::bp_turn_rot(g_bpRot, mr, tr);
     const int64_t lowc[3] = { g_bpMinArm.x, g_bpMinArm.y, g_bpMinArm.z };

@@ -22,6 +22,7 @@ static const char* SIG_BP_COMFORT_READ = "4C 8B 45 90 48 8D 95 A0 00 00 00 49 8B
 static const char* SIG_BP_QUERY_CREATE = "48 8B CB 48 89 7C 24 20 E8 ?? ?? ?? ?? 48 8B 4D B8 8B 9D 90 03 00 00 48 85 C9";   // call at +8 (9600c0)
 static const char* SIG_BP_ENTITY_GET   = "42 8B 1C 2B 8B D3 E8 ?? ?? ?? ?? 48 8B F0 48 85 C0 0F 84 ?? ?? ?? ?? 48 8B 55 48"; // call at +6 (9b25f0)
 static const char* SIG_BP_QUERY_FREE   = "44 8B C3 48 8B CF 8B 10 E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 8B 4D B8";        // call at +8 (960390)
+static const char* SIG_BP_LOCAL_BOUNDS = "48 8B D7 48 8D 4C 24 40 E8 ?? ?? ?? ?? 0F 10 87 C0 03 00 00 48 8B D7 48 8D 8D C0 03 00 00";   // call at +8 (494210, place_prop)
 static const char* SIG_BP_LOCA_TEXT    = "48 8D 48 48 E8 ?? ?? ?? ?? 8B D0 48 8D 4C 24 38 E8 ?? ?? ?? ?? 0F 10 44 24 38";   // call at +0x10 (aff9f0)
 static const char* SIG_BP_ITEM_BY_ID   = "8B 7F 38 8B CF E8 ?? ?? ?? ?? 0F 57 C0 4C 89 65 58 0F 57 C9 66 0F 7F 45 60";        // call at +5 (e94470, dismantle)
 
@@ -308,6 +309,27 @@ static BpEventBuf g_bpEvBuf = { g_bpEvData, sizeof g_bpEvData, 0, 0 };
 alignas(16) static uint8_t g_bpEvWriter[0x200];
 static bool bp_logic_item(const uint8_t* it) { return (*(const uint32_t*)(it + 0x5d8) & 0x80000) != 0; }
 static bool bp_logic_object(void*, const uint8_t*) { return false; }   // placed with the mod's writer (bp_place_object)
+// An item's local bounds as the prop system gives them to PlaceProp (494210: float4 min, float4 max).
+typedef void (*BpLocalBoundsFn)(float* out, uint8_t* item);
+static BpLocalBoundsFn g_bpLocalBounds = nullptr;
+static bool bp_item_bounds(uint8_t* it, float* mn, float* mx) {
+    if (!g_bpLocalBounds || !it) return false;
+    alignas(16) float b[8] = {};
+    g_bpLocalBounds(b, it);
+    for (int a = 0; a < 3; a++) { mn[a] = b[a]; mx[a] = b[4 + a]; }
+    return mx[0] >= mn[0] && mx[1] >= mn[1] && mx[2] >= mn[2];
+}
+// Mirroring an object = turning it and flipping one of its own axes; the mod flips its local x
+// (right for models symmetric left to right: chairs, beds, lamps). A model that reaches out to
+// one side of its pivot (a railing from its post) would then point the wrong way: it gets a
+// half turn about its up axis, which flips its local z instead.
+static bool bp_mirror_half_turn(uint32_t item) {
+    if (!g_bpItemById || !g_bpItemReg) return false;
+    float mn[3], mx[3];
+    if (!bp_item_bounds(g_bpItemById(item, g_bpItemReg), mn, mx)) return false;
+    const float sx = mx[0] - mn[0], cx = (mn[0] + mx[0]) * 0.5f;
+    return sx > 0.05f && (cx > 0.25f * sx || cx < -0.25f * sx);
+}
 static bool bp_place_object(void* ctx, uint32_t item, const double* posM, const float* rot) {
     if (!g_placePropOrig || !g_bpItemById || !g_bpItemReg) return false;
     uint8_t* it = g_bpItemById(item, g_bpItemReg);
@@ -316,7 +338,9 @@ static bool bp_place_object(void* ctx, uint32_t item, const double* posM, const 
     memcpy(info, it + 0x3c0, 16);                        // the placed entity template
     for (int a = 0; a < 3; a++) *(float*)(info + 0x10 + a * 4) = (float)posM[a];
     memcpy(info + 0x1c, rot, 16);
-    for (int a = 0; a < 3; a++) { *(float*)(info + 0x2c + a * 4) = -0.25f; *(float*)(info + 0x38 + a * 4) = 0.25f; }   // local bounds (the place event's volume)
+    float mn[3] = { -0.25f, -0.25f, -0.25f }, mx[3] = { 0.25f, 0.25f, 0.25f };
+    bp_item_bounds(it, mn, mx);                          // local bounds (as the prop system passes them)
+    for (int a = 0; a < 3; a++) { *(float*)(info + 0x2c + a * 4) = mn[a]; *(float*)(info + 0x38 + a * 4) = mx[a]; }
     void** evSlot = (void**)((uint8_t*)ctx + 0xe0);
     void* evSaved = *evSlot;
     const bool logic = bp_logic_item(it) && !evSaved;
@@ -363,6 +387,7 @@ static const char* bp_item_name(uint32_t item) {
 }
 
 static void bp_objects_install() {
+    if (uint8_t* lb = find_unique("BpLocalBounds", SIG_BP_LOCAL_BOUNDS)) g_bpLocalBounds = (BpLocalBoundsFn)(lb + 13 + *(int32_t*)(lb + 9));
     if (uint8_t* lt = find_unique("BpLocaText", SIG_BP_LOCA_TEXT)) g_bpLocaText = (BpLocaTextFn)(lt + 0x15 + *(int32_t*)(lt + 0x11));
     uint8_t* rd = find_unique("BpComfortRead", SIG_BP_COMFORT_READ);
     uint8_t* cr = find_unique("BpQueryCreate", SIG_BP_QUERY_CREATE);
