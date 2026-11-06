@@ -347,7 +347,8 @@ static int bp_map(void* ctx, int* mat, CostEntry* tmpl) {
 struct BpItem { uint32_t id; uint8_t mat; uint8_t* p; };
 static BpItem g_bpItemCache[128]; static int g_bpItemN = 0;
 static uint8_t* bp_find_item(uint8_t* pdata, uint32_t id, uint8_t mat) {
-    if (*(uint32_t*)pdata == id && pdata[0x454] == mat) return pdata;
+    auto match = [&](const uint8_t* c) { return *(const uint32_t*)c == id && (mat ? c[0x454] == mat : c[0x454] >= 0x80); };
+    if (match(pdata)) return pdata;
     for (int q = 0; q < g_bpItemN; q++) if (g_bpItemCache[q].id == id && g_bpItemCache[q].mat == mat) return g_bpItemCache[q].p;
     MEMORY_BASIC_INFORMATION mi;
     if (!VirtualQuery(pdata, &mi, sizeof mi)) return nullptr;
@@ -361,7 +362,7 @@ static uint8_t* bp_find_item(uint8_t* pdata, uint32_t id, uint8_t mat) {
         if (hi - lo < 0x460) continue;
         scanned += mi.RegionSize;
         for (uint8_t* c = lo + (((uintptr_t)pdata - (uintptr_t)lo) & 7); c + 0x460 <= hi; c += 8)
-            if (*(uint32_t*)c == id && c[0x454] == mat) { found = c; break; }
+            if (match(c)) { found = c; break; }
         if (scanned > (512ull << 20)) break;              // never more than 512 MB
     }
     LOG(.str("  blueprint: item ").x(id).str(" material ").x(mat).str(found ? " found" : " NOT found").str(" (scanned ")
@@ -390,14 +391,25 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
     }
     if (!g_caveForce) { LOG(.str("blueprint build: no blit patch")); return 0; }
     LOG(.str("  blueprint: material in hand item ").x(*(uint32_t*)pdata).str(" material ").x(pdata[0x454]));
+    // Each material by its saved item id, straight from the game's item data (the same in
+    // every world; the refund builder gave nothing for materials not found yet in a new
+    // world, 0.32.0-dev4). Only a file without item ids goes through the refund builder.
     static int mat[core::BP_MAX_MATS]; static CostEntry tmpl[core::BP_MAX_MATS]; static uint8_t* item[core::BP_MAX_MATS];
-    int missing = bp_map(ctx, mat, tmpl);
+    int missing = 0; bool mapped = false;
     for (int q = 0; q < g_bp.h.nm; q++) {
-        item[q] = nullptr; g_bpMatByte[q] = 0;
-        if (mat[q] < 0) continue;
-        item[q] = bp_find_item(pdata, *(uint32_t*)(tmpl[q].b + 0x10), (uint8_t)mat[q]);
-        if (!item[q]) { mat[q] = -1; missing++; continue; }
+        const core::BpMat& bm = g_bp.h.m[q];
+        item[q] = nullptr; g_bpMatByte[q] = 0; mat[q] = -1;
+        if (bm.item) {
+            item[q] = bp_find_item(pdata, bm.item, bm.mat);                     // the saved material byte
+            if (!item[q]) item[q] = bp_find_item(pdata, bm.item, 0);           // the game renumbered it
+        } else {
+            if (!mapped) { bp_map(ctx, mat, tmpl); mapped = true; }
+            if (mat[q] >= 0) item[q] = bp_find_item(pdata, *(uint32_t*)(tmpl[q].b + 0x10), (uint8_t)mat[q]);
+        }
+        if (!item[q]) { missing++; mat[q] = -1; LOG(.str("  blueprint material ").i(q).str(": item ").x(bm.item).str(" not found")); continue; }
+        mat[q] = item[q][0x454];
         g_bpMatByte[q] = (uint8_t)mat[q];
+        LOG(.str("  blueprint material ").i(q).str(": item ").x(bm.item).str(" saved as ").x(bm.mat).str(" -> ").x(mat[q]));
     }
     if (missing) { Buf b; b.fmt(T(S_BP_NO_MATERIAL), num(missing).s); flash(b.z()); }
     const uint64_t listBefore = list->count;
