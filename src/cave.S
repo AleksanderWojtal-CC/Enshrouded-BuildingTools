@@ -21,6 +21,10 @@
 # Registers also used: r8 = voxel data (2 bytes per voxel: material, density),
 # rdx = copy of rcx (scratch here, restored), xmm2 = 255.0, xmm0 free.
 #
+# force byte (blueprints): while not 0, a placement of a building material
+# ([r10+0xa0] == 0) writes this material instead of the one in the parameters
+# ([r10+0xa1] is overwritten; the write paths read it after the checks).
+#
 # The blob is copied next to the game image at runtime (rip-relative data and the
 # jump slots move with it).
 
@@ -35,8 +39,15 @@
     .globl bt_cave_vols
     .globl bt_cave_allow
     .globl bt_cave_hits
+    .globl bt_cave_force
 bt_cave_start:
-    cmp byte ptr [rip + bt_cave_mode], 0
+    movzx eax, byte ptr [rip + bt_cave_force]
+    test al, al
+    jz 2f
+    cmp byte ptr [r10 + 0xa0], 0
+    jne 2f                                           # a terrain placement: never forced
+    mov byte ptr [r10 + 0xa1], al
+2:  cmp byte ptr [rip + bt_cave_mode], 0
     jne 1f
     # ---- original checks
 0:  cmp r11b, 0x80
@@ -115,6 +126,7 @@ bt_cave_start:
 bt_cave_cont:  .quad 0
 bt_cave_skip:  .quad 0
 bt_cave_mode:  .byte 0
+bt_cave_force: .byte 0
     .p2align 2
 bt_cave_hits:  .long 0, 0, 0
 bt_cave_allow: .space 256

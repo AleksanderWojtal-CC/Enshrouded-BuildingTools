@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.32.0-dev2"
+#define MOD_VERSION "0.32.0-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -206,6 +206,9 @@ struct Config {
     int keyObjMode = 0, keyObjMenu = 0;          // object placement: next mode, settings window
     int toolBlueprint = 1, keyBlueprint = 0;     // blueprints: tool on, Blueprint mode key
     int bpPartial = 1;                           // build what the materials cover (else nothing unless all are there)
+    int bpRef = 1, bpW = 3, bpD = 3, bpH = 2;    // save window: reference and sizes (as Exact mode)
+    int bpPlaceRef = 5;                          // place window: the blueprint's point at the aimed block (core::EXACT_*; 5 = front middle)
+    int keyBpSub = 0;                            // Blueprint mode: save <-> place
     int objMode = 0, objCount = 10, objSpacing = 0, objRot = 0, objElev = 0, objRef = 0, objTurn = 1, objSeed = 1;
     char language[16] = "auto";  // text language: auto (as the game), or a file code (pl, de, ...)
 };
@@ -266,7 +269,8 @@ static void write_full_ini(const Config& c) {
      .t("; Replace is on while this key is held, back as it was when you let go\r\nHoldReplace=").i(c.keyReplaceHold).t("\r\n")
      .t("; Object placement (an object in hand): next mode (single / line / curve / circle), settings window\r\nObjectMode=").i(c.keyObjMode)
      .t("\r\nObjectSettings=").i(c.keyObjMenu).t("\r\n")
-     .t("; Blueprint mode on / off (right click two corners: save; left click: place a saved blueprint)\r\nBlueprintMode=").i(c.keyBlueprint).t("\r\n")
+     .t("; Blueprint mode on / off, and its action save <-> place (0 = no key)\r\nBlueprintMode=").i(c.keyBlueprint)
+     .t("\r\nBlueprintAction=").i(c.keyBpSub).t("\r\n")
      .t("\r\n[Tools]\r\n")
      .t("; Tools in use (1) or not (0). A tool that is off does nothing: its keys are free for the\r\n")
      .t(";     game and it leaves the building box hints and the tools wheel. AreaShapes = the roof,\r\n")
@@ -287,7 +291,7 @@ static void write_full_ini(const Config& c) {
      .t("; 2 = two opposite corners, 3 = two base corners then the height,\r\n")
      .t(";     1 = exact: one click, then width, depth and height in a window\r\nCorners=").i(c.exact ? 1 : c.corners).t("\r\n")
      .t("; Exact mode, last entered: reference (0 centre, 1 front left, 2 front right, 3 back left,\r\n")
-     .t(";     4 back right; bottom) and sizes in shapes past the clicked one (0 = one shape, negative = the other way)\r\n")
+     .t(";     4 back right, 5 front middle, 6 back middle; bottom) and sizes in shapes past the clicked one (0 = one shape, negative = the other way)\r\n")
      .t("ExactReference=").i(c.exactRef).t("\r\nExactWidth=").i(c.exactW).t("\r\nExactDepth=").i(c.exactD)
      .t("\r\nExactHeight=").i(c.exactH).t("\r\n")
      .t("; Free placement start distance in tenths of a metre (40 = 4 m)\r\nFreePlacementDistance=").i(c.hoverDist10).t("\r\n")
@@ -313,6 +317,9 @@ static void write_full_ini(const Config& c) {
      .t("\r\n[Blueprints]\r\n")
      .t("; Saved in the BuildingTools-Blueprints folder next to enshrouded.exe.\r\n")
      .t("; 1 = build the part of a blueprint the materials cover, 0 = build nothing unless all are there\r\nAllowPartial=").i(c.bpPartial).t("\r\n")
+     .t("; Save window, last entered: reference and sizes (as ExactReference / ExactWidth ... above)\r\n")
+     .t("SaveReference=").i(c.bpRef).t("\r\nSaveWidth=").i(c.bpW).t("\r\nSaveDepth=").i(c.bpD).t("\r\nSaveHeight=").i(c.bpH).t("\r\n")
+     .t("; Place window: the blueprint's point that sits at the block you look at (same numbers)\r\nPlaceReference=").i(c.bpPlaceRef).t("\r\n")
      .t("\r\n[Limits]\r\n")
      .t("; Most shapes one area action may build, replace or remove (max 20000)\r\nMaxShapes=").i(c.maxShapes).t("\r\n")
      .t("; Most shapes one connected replace (fill bucket) repaints (max = MaxShapes)\r\nFillLimit=").i(c.fillLimit).t("\r\n")
@@ -401,6 +408,14 @@ static void load_config() {
     g_cfg.toolBlueprint = ini_int(L"Tools", L"Blueprints", 1) != 0;
     g_cfg.keyBlueprint = ini_int(L"Keys", L"BlueprintMode", 0);
     g_cfg.bpPartial    = ini_int(L"Blueprints", L"AllowPartial", 1) != 0;
+    g_cfg.keyBpSub     = ini_int(L"Keys", L"BlueprintAction", 0);
+    {   auto clampv = [](int v, int lo, int hi, int def) { return v < lo || v > hi ? def : v; };
+        g_cfg.bpRef = clampv(ini_int(L"Blueprints", L"SaveReference", 1), 0, core::EXACT_REF_COUNT - 1, 1);
+        g_cfg.bpW = clampv(ini_int(L"Blueprints", L"SaveWidth", 3), -core::kExactMax, core::kExactMax, 3);
+        g_cfg.bpD = clampv(ini_int(L"Blueprints", L"SaveDepth", 3), -core::kExactMax, core::kExactMax, 3);
+        g_cfg.bpH = clampv(ini_int(L"Blueprints", L"SaveHeight", 2), -core::kExactMax, core::kExactMax, 2);
+        g_cfg.bpPlaceRef = clampv(ini_int(L"Blueprints", L"PlaceReference", 5), 0, core::EXACT_REF_COUNT - 1, 5);
+    }
     {   auto clampv = [](int v, int lo, int hi, int def) { return v < lo || v > hi ? def : v; };
         g_cfg.objMode    = clampv(ini_int(L"Objects", L"Mode", 0), 0, core::OBJ_MODE_COUNT - 1, 0);
         g_cfg.objCount   = clampv(ini_int(L"Objects", L"Count", 10), 2, core::kObjMax, 10);
@@ -434,7 +449,7 @@ static void load_config() {
         ini_int(L"Keys", L"RadialMenu", -1) == -1 || ini_int(L"Keys", L"HoldReplace", -1) == -1 ||
         ini_int(L"Area", L"DrawBoxBlocks", -1) == -1 || ini_int(L"Area", L"ExactWidth", -9999) == -9999 ||
         ini_int(L"Tools", L"AreaShapes", -1) == -1 || ini_int(L"Objects", L"Count", -1) == -1 ||
-        ini_int(L"Debug", L"Profile", -1) == -1 || ini_int(L"Blueprints", L"AllowPartial", -1) == -1)
+        ini_int(L"Debug", L"Profile", -1) == -1 || ini_int(L"Blueprints", L"PlaceReference", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -862,13 +877,14 @@ static CommitFn g_placeCommitOrig = nullptr;   // trampoline
 
 // ---- replace blit (src/cave.S)
 extern "C" uint8_t bt_cave_start[], bt_cave_end[], bt_cave_mode[], bt_cave_cont[], bt_cave_skip[],
-                   bt_cave_vols[], bt_cave_allow[], bt_cave_hits[];
+                   bt_cave_vols[], bt_cave_allow[], bt_cave_hits[], bt_cave_force[];
 static uint8_t* g_caveAllow = nullptr;
 static volatile uint32_t* g_caveHits = nullptr;
 // Materials Replace may repaint: those a normal removal could remove at that spot
 // (from a removal dry run), so protected world blocks are never touched.
 static uint8_t g_allow[256];
 static volatile uint8_t* g_caveMode = nullptr;   // in the runtime copy
+static volatile uint8_t* g_caveForce = nullptr;  // blueprint commits: the building material every voxel gets (0 = as placed)
 static uint32_t* g_caveVols = nullptr;
 enum { STYLE_OVERLAP = 1, STYLE_FULL = 2, STYLE_CONNECTED = 3 };   // cave modes 1 and 2; connected = overlap
 static volatile LONG g_modOff = 0;           // whole mod off (ToggleMod): vanilla game
@@ -2451,7 +2467,7 @@ static bool shrink_to_affordable(uint8_t* trans, CostList* list) {
     return true;
 }
 
-static void bp_before_commit(void* ctx, int i);      // blueprint.h
+static uint8_t bp_commit_material(int i);            // blueprint.h
 static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     bool mine = g_pend.n > 0 && g_pend.ctx == ctx && g_pend.tid == GetCurrentThreadId() &&
                 GetTickCount() - g_pend.tick < 3000;
@@ -2465,13 +2481,14 @@ static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     UndoSplit us; undo_begin(us, ctx, pd.list, g_pendCost, pd.n);
     for (int i = 0; i < pd.n; i++) {
         undo_before(us, i);
-        if (pd.bp) bp_before_commit(ctx, i);                         // blueprint: this shape's material
+        if (pd.bp && g_caveForce) *g_caveForce = bp_commit_material(i);   // blueprint: this shape's material
         Commit pc = *c;
         for (int a = 0; a < 3; a++) pc.pos[a] = (float)g_pendPos[i][a] * kInv;
         for (int k = 0; k < 4; k++) pc.rot[k] = pd.rot[k];
         if (g_placeCommitOrig(ctx, &pc, shape)) { any = 1; placed++; }
         undo_after(us);
     }
+    if (g_caveForce) *g_caveForce = 0;
     undo_end(us);
     *g_caveMode = 0;
     if (pd.replace && us.step0 && !us.lost && us.recorded > 0 && GetTickCount() - g_paidTick < 3000 && g_paidN > 0) {
@@ -3222,17 +3239,11 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
     if (g_ownRemoveTid == GetCurrentThreadId() || !is_server_ctx(ctx) || !box || !xfp)
         return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
     const bool connected = g_mode == MODE_PREFAB && g_replace && g_replaceStyle == STYLE_CONNECTED;
-    if (g_mode == MODE_BLUEPRINT && bp_tool()) {          // blueprint corners: nothing is removed
-        if (filter) {
-            LOG(.str("blueprint save click on a building piece: ignored"));
-            flash(T(S_BP_PIECE)); beep(MB_ICONHAND);
-            return 0;
-        }
-        EnterCriticalSection(&g_stateLock);
-        if (InterlockedExchange(&g_cancelReq, 0)) reset_corners();
-        uint8_t r = bp_save_click((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, check);
-        LeaveCriticalSection(&g_stateLock);
-        return r;
+    if (g_mode == MODE_BLUEPRINT && bp_tool() && (g_exactOpen || g_exactArmed)) {
+        // a right click to look around behind the blueprint window removes nothing
+        g_rpend.ctx = ctx; g_rpend.tid = GetCurrentThreadId(); g_rpend.tick = GetTickCount(); g_rpend.n = 0; g_rpend.only = 0;
+        g_rpend.suppress = true;
+        return 0;
     }
     if (filter && (connected || g_mode == MODE_AREA)) {
         // A building piece (foundation, stairs...) dismantled by entity: the dry run gets
@@ -3422,7 +3433,7 @@ static uint8_t place_hook_body(CostList* list, void* ctx, void* state, void* pda
         if (!haveAim && cc) { log_xf("  server cursor +300", (CursorXf*)(cc + 0x300)); log_xf("  server cursor +338", (CursorXf*)(cc + 0x338)); }
     }
     if (mode == MODE_BLUEPRINT) {
-        uint8_t rb = bp_place_click(list, ctx, state, (uint8_t*)pdata, clientPlace);
+        uint8_t rb = bp_place_click(list, ctx, state, (uint8_t*)pdata, clientPlace, haveAim ? &aim : nullptr);
         LeaveCriticalSection(&g_stateLock);
         if (rb) beep(MB_ICONASTERISK);
         return rb;
@@ -3725,7 +3736,38 @@ static bool game_focused() {
 }
 
 static int live_fill() { return g_mode == MODE_BLUEPRINT ? (int)core::FILL_SOLID : (int)g_fill; }
+// The centre of the shape the cursor aims at now, from the click's offset (g_scOff,
+// g_scCursorOff, g_scRot; see area_plan_live). False = no live cursor.
+static bool live_centre(I3* out) {
+    uint8_t* cc = live_cc();
+    if (!cc) return false;
+    LONG off = g_scCursorOff;
+    if (!readable(cc + off, 0x28)) return false;
+    int64_t* p = (int64_t*)(cc + off);
+    if (!p[0] && !p[1] && !p[2]) return false;
+    int64_t o[3] = { g_scOff[0], g_scOff[1], g_scOff[2] };
+    const float* rot = (const float*)(cc + off + 0x18);
+    if (g_scRotOk && quat_ok(rot)) {
+        double v[3] = { (double)o[0], (double)o[1], (double)o[2] }, l[3], w[3];
+        quat_rot(g_scRot, true, v, l);
+        quat_rot(rot, false, l, w);
+        for (int a = 0; a < 3; a++) o[a] = (int64_t)(w[a] < 0 ? w[a] - 0.5 : w[a] + 0.5);
+    }
+    *out = I3{ p[0] + o[0], p[1] + o[1], p[2] + o[2] };
+    return true;
+}
 static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
+    if (g_mode == MODE_BLUEPRINT && g_bpWin == BPW_SAVE && (g_exactOpen || g_exactArmed)) {   // the save window's box
+        I3 c[3];
+        if (g_exactArmed) { c[0] = g_exactC[0]; c[1] = g_exactC[1]; }
+        else core::exact_corners(g_scPos[0], g_cfg.bpRef, g_cfg.bpW, g_cfg.bpD, g_cfg.bpH, g_exFAxis, g_exFSign, g_exRAxis, g_exRSign, g_scStep, c);
+        c[2] = c[1];
+        for (int a = 0; a < 3; a++) step[a] = g_scStep[a];
+        if (step[0] <= 0.f || step[1] <= 0.f || step[2] <= 0.f) return false;
+        *pl = core::Plan{};
+        *ok = core::plan_area(c, 3, step, 50000000, core::FILL_SOLID, fill_opts(), pl);
+        return true;
+    }
     LONG nc = g_corners;
     if (g_mode == MODE_AREA && nc == 1 && exact_on()) {   // exact: the entered sizes, not the cursor
         I3 c[3];
@@ -3738,8 +3780,7 @@ static bool area_plan_live(core::Plan* pl, float step[3], bool* ok) {
         return true;
     }
     uint8_t* cc = live_cc();
-    const bool bpSave = g_mode == MODE_BLUEPRINT && g_scOp == OP_SAVE;
-    if ((g_mode != MODE_AREA && !bpSave) || nc < 1 || (nc > g_cfg.corners - 1 && !bpSave) || nc > 2 || !cc) return false;
+    if (g_mode != MODE_AREA || nc < 1 || nc > g_cfg.corners - 1 || !cc) return false;
     LONG off = g_scCursorOff;
     if (!readable(cc + off, 0x18)) return false;
     int64_t* p = (int64_t*)(cc + off);
@@ -4284,7 +4325,7 @@ enum {
     ACT_STYLE_FULL, ACT_STYLE_OVERLAP, ACT_STYLE_CONNECTED, ACT_FILL_SOLID, ACT_FILL_HOLLOW, ACT_FILL_WALLS,
     ACT_CREATIVE, ACT_PREFAB, ACT_AREA_ON, ACT_REPLACE_ON, ACT_REPLACE_OFF, ACT_FILL_ROOF, ACT_ROOF_TURN, ACT_ROOF_SHAPE,
     ACT_THICK, ACT_OVERHANG, ACT_FILL_ROUND, ACT_ROUND_HOLLOW, ACT_ROUND_LYING, ACT_FILL_DIAG, ACT_EXACT,
-    ACT_OBJ_MODE, ACT_OBJ_MENU, ACT_BP,
+    ACT_OBJ_MODE, ACT_OBJ_MENU, ACT_BP, ACT_BP_SUB,
     ACT_KEYED,          // the actions above have their own key
     ACT_MENU = ACT_KEYED,             // the wheel's menu entry (the menu key is handled with the menu)
     ACT_OBJ_CLEAR,                    // the wheel's "clear points" of object placement
@@ -4297,7 +4338,7 @@ static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyPrefab, &g_cfg.keyAreaOn, &g_cfg.keyReplaceOn, &g_cfg.keyReplaceOff,
     &g_cfg.keyFillRoof, &g_cfg.keyRoofTurn, &g_cfg.keyRoofShape, &g_cfg.keyThick, &g_cfg.keyOverhang,
     &g_cfg.keyFillRound, &g_cfg.keyRoundHollow, &g_cfg.keyRoundLying, &g_cfg.keyFillDiag, &g_cfg.keyExact,
-    &g_cfg.keyObjMode, &g_cfg.keyObjMenu, &g_cfg.keyBlueprint,
+    &g_cfg.keyObjMode, &g_cfg.keyObjMenu, &g_cfg.keyBlueprint, &g_cfg.keyBpSub,
 };
 static volatile LONG g_menuReq = 0;                 // 1 = open, 2 = close (input thread -> UI thread)
 static volatile LONG g_offReq = 0;                  // the Options page switched the whole mod off
@@ -4338,7 +4379,7 @@ static bool act_allowed(int a) {
     case ACT_AREA: case ACT_CLEAR: case ACT_FILL: case ACT_FILL_SOLID: case ACT_FILL_HOLLOW: case ACT_FILL_WALLS:
     case ACT_PREFAB: case ACT_AREA_ON: case ACT_THICK: case ACT_EXACT: return g_cfg.toolArea != 0;
     case ACT_OBJ_MODE: case ACT_OBJ_MENU: case ACT_OBJ_CLEAR: return g_cfg.toolObjects != 0;
-    case ACT_BP: return g_cfg.toolBlueprint != 0;
+    case ACT_BP: case ACT_BP_SUB: return g_cfg.toolBlueprint != 0;
     default: return true;
     }
 }
@@ -4358,17 +4399,20 @@ static void do_act(int a) {
     if (a == ACT_OBJ_MODE || a == ACT_OBJ_MENU || a == ACT_OBJ_CLEAR) { obj_act(a); return; }
     if (a == ACT_CLEAR && prop_now()) { obj_act(ACT_OBJ_CLEAR); return; }
     switch (a) {
-    case ACT_BP: {
-        LONG m = g_mode == MODE_BLUEPRINT ? MODE_PREFAB : MODE_BLUEPRINT;
+    case ACT_BP: case ACT_BP_SUB: {
+        LONG m = a == ACT_BP && g_mode == MODE_BLUEPRINT ? MODE_PREFAB : MODE_BLUEPRINT;
         if (m == MODE_BLUEPRINT && remote_session()) { flash(T(S_BP_REMOTE)); beep(MB_ICONHAND); return; }
-        set_mode(m);
-        flash(T(m == MODE_BLUEPRINT ? S_MODE_BP : S_MODE_PREFAB));
+        if (a == ACT_BP_SUB && g_mode == MODE_BLUEPRINT) { g_bpSub = g_bpSub == BP_SAVE ? BP_PLACE : BP_SAVE; LOG(.str("blueprint action -> ").i(g_bpSub)); }
+        if (m != g_mode) set_mode(m);
+        if (m == MODE_BLUEPRINT) { Buf b; b.fmt(T(S_MODE_BP), T(g_bpSub == BP_SAVE ? S_BP_SUB_SAVE : S_BP_SUB_PLACE)); flash(b.z()); }
+        else flash(T(S_MODE_PREFAB));
         break;
     }
-    case ACT_AREA: {
-        LONG m = g_mode == MODE_AREA ? MODE_PREFAB : MODE_AREA;
+    case ACT_AREA: {                              // Prefab -> Area -> Blueprint -> Prefab
+        LONG m = g_mode == MODE_PREFAB ? MODE_AREA : g_mode == MODE_AREA && g_cfg.toolBlueprint && !remote_session() ? MODE_BLUEPRINT : MODE_PREFAB;
         set_mode(m);
-        flash(T(m == MODE_AREA ? S_MODE_AREA : S_MODE_PREFAB));
+        if (m == MODE_BLUEPRINT) { Buf b; b.fmt(T(S_MODE_BP), T(g_bpSub == BP_SAVE ? S_BP_SUB_SAVE : S_BP_SUB_PLACE)); flash(b.z()); }
+        else flash(T(m == MODE_AREA ? S_MODE_AREA : S_MODE_PREFAB));
         break;
     }
     case ACT_REPLACE: case ACT_REPLACE_ON: case ACT_REPLACE_OFF: {
@@ -4796,6 +4840,7 @@ static KeyAction g_keyActions[] = {
     { S_ACT_ROUND_LYING, &g_cfg.keyRoundLying, 0 },
     { S_ACT_EXACT, &g_cfg.keyExact, 0 },
     { S_ACT_BP, &g_cfg.keyBlueprint, 0 },
+    { S_ACT_BP_SUB, &g_cfg.keyBpSub, 0 },
     { S_ACT_OBJ_MODE, &g_cfg.keyObjMode, 0 },
     { S_ACT_OBJ_MENU, &g_cfg.keyObjMenu, 0 },
     { S_ACT_OBJ_UNDO, &g_cfg.keyObjUndo, 0 },
@@ -5140,6 +5185,19 @@ static void exact_hint(int key, Str label) {
     hud_key_row(key, b.z(), -1);
 }
 
+// The reference row (exact and blueprint windows): the seven points, shown front to back.
+static bool ref_option(const char* label, LONG cur, LONG* out) {
+    static const int order[core::EXACT_REF_COUNT] = { core::EXACT_CENTRE, core::EXACT_FRONT_LEFT, core::EXACT_FRONT_CENTRE, core::EXACT_FRONT_RIGHT,
+                                                      core::EXACT_BACK_LEFT, core::EXACT_BACK_CENTRE, core::EXACT_BACK_RIGHT };
+    static const Str names[core::EXACT_REF_COUNT] = { S_EXACT_REF_CENTRE, S_EXACT_REF_FL, S_EXACT_REF_FR, S_EXACT_REF_BL, S_EXACT_REF_BR,
+                                                      S_EXACT_REF_FC, S_EXACT_REF_BC };
+    const char* shown[core::EXACT_REF_COUNT]; LONG idx = 0;
+    for (int k = 0; k < core::EXACT_REF_COUNT; k++) { shown[k] = T(names[order[k]]); if (order[k] == cur) idx = k; }
+    LONG v;
+    if (!ui_option(label, shown, core::EXACT_REF_COUNT, idx, &v)) return false;
+    *out = order[v];
+    return true;
+}
 // Full height at the left like the game's menus, always the same size (the rows scroll); the
 // world stays visible on the right (no blur), and the right mouse button hides it all.
 static void draw_exact_window() {
@@ -5183,9 +5241,8 @@ static void draw_exact_window() {
     ui.setLayout(ui_node(list), &topLeft);
     ui.setStretch(ui_node(list), UiVec2{ 1, 0 });
     {
-        const char* refs[core::EXACT_REF_COUNT] = { T(S_EXACT_REF_CENTRE), T(S_EXACT_REF_FL), T(S_EXACT_REF_FR), T(S_EXACT_REF_BL), T(S_EXACT_REF_BR) };
         LONG v;
-        if (ui_option(T(S_EXACT_REF), refs, core::EXACT_REF_COUNT, g_cfg.exactRef, &v)) g_cfg.exactRef = v;
+        if (ref_option(T(S_EXACT_REF), g_cfg.exactRef, &v)) g_cfg.exactRef = v;
     }
     const Str labels[3] = { S_EXACT_WIDTH, S_EXACT_DEPTH, S_EXACT_HEIGHT };
     for (int k = 1; k <= 3; k++) {
@@ -5377,9 +5434,8 @@ static void draw_hud_rows() {
     }
     if (bp_tool() && g_cfg.keyBlueprint > 0) hud_key_row(g_cfg.keyBlueprint, T(S_HUD_BP), g_mode == MODE_BLUEPRINT);
     if (g_mode == MODE_BLUEPRINT) {
-        Buf r; r.str("\xC2\xA0\xC2\xA0\xC2\xA0").str(T(S_HUD_BP_SAVE)); hud_key_row(VK_RBUTTON, r.z());
-        Buf l; l.str("\xC2\xA0\xC2\xA0\xC2\xA0").str(T(S_HUD_BP_PLACE)); hud_key_row(VK_LBUTTON, l.z());
-        if (g_corners > 0) hud_key_row(g_cfg.keyCancel, T(S_HUD_CLEAR));
+        Buf l; l.str("\xC2\xA0\xC2\xA0\xC2\xA0").str(T(g_bpSub == BP_SAVE ? S_HUD_BP_SAVE : S_HUD_BP_PLACE)); hud_key_row(VK_LBUTTON, l.z());
+        if (g_cfg.keyBpSub > 0) { Buf b; b.str(T(S_BP_SUB_NAME)).str(": ").str(T(g_bpSub == BP_SAVE ? S_BP_SUB_SAVE : S_BP_SUB_PLACE)); hud_key_row(g_cfg.keyBpSub, b.z()); }
     }
     if (g_cfg.toolReplace) hud_key_row(g_cfg.keyReplace, T(sw ? S_HUD_REPLACE : g_replace ? S_HUD_REPLACE_ON : S_HUD_REPLACE_OFF), g_replace != 0);
     if (g_replace) {
@@ -5709,7 +5765,7 @@ static int wheel_entries(int* act) {
         return k;
     }
     act[n++] = ACT_AREA;
-    act[n++] = ACT_BP;
+    if (g_mode == MODE_BLUEPRINT) act[n++] = ACT_BP_SUB;
     if (g_mode == MODE_AREA) act[n++] = ACT_FILL;
     if (roof_on()) act[n++] = ACT_ROOF_SHAPE;
     if (roof_on()) act[n++] = ACT_OVERHANG;
@@ -5737,6 +5793,7 @@ static void wheel_texts(int a, char* name, char* value) {
     switch (a) {
     case ACT_AREA: nm = T(S_OPT_MODE); v = T(g_mode == MODE_AREA ? S_OPT_MODE_AREA : g_mode == MODE_BLUEPRINT ? S_OPT_MODE_BP : S_OPT_MODE_PREFAB); break;
     case ACT_BP: nm = T(S_OPT_TOOL_BP); v = T(g_mode == MODE_BLUEPRINT ? S_OPT_ON : S_OPT_OFF); break;
+    case ACT_BP_SUB: nm = T(S_BP_SUB_NAME); v = T(g_bpSub == BP_SAVE ? S_BP_SUB_SAVE : S_BP_SUB_PLACE); break;
     case ACT_FILL: nm = T(S_OPT_FILL); v = T(fills[g_fill % core::FILL_COUNT]); break;
     case ACT_ROOF_SHAPE:
         if (g_fill == core::FILL_ROUND) { nm = T(S_OPT_ROUND_SHAPE); v = T(kRoundName[g_roundShape % core::ROUND_COUNT]); break; }
@@ -5853,6 +5910,7 @@ static DWORD WINAPI input_thread(void*) {
         Sleep(15);
         if (!g_active) continue;
         bool focus = game_focused();
+        bp_type_keys(focus);                     // the blueprint save window's name (only while it is up)
         if (g_radialOpen && (g_modOff || !focus)) radial_close(false);
         {   // whole mod off / on
             bool down = focus && key_down(g_cfg.keyOff);
@@ -5962,6 +6020,8 @@ static bool install_cave(uint8_t* sig) {
     g_caveMode = mem + (bt_cave_mode - bt_cave_start);
     g_caveVols = (uint32_t*)(mem + (bt_cave_vols - bt_cave_start));
     g_caveHits = (uint32_t*)(mem + (bt_cave_hits - bt_cave_start));
+    g_caveForce = mem + (bt_cave_force - bt_cave_start);
+    *g_caveForce = 0;
     *g_caveMode = 0;
     FlushInstructionCache(GetCurrentProcess(), mem, size);
     DWORD old;

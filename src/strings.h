@@ -235,6 +235,8 @@
     X(S_EXACT_REF_FR, "exact.ref_front_right", "Front right corner") \
     X(S_EXACT_REF_BL, "exact.ref_back_left", "Back left corner") \
     X(S_EXACT_REF_BR, "exact.ref_back_right", "Back right corner") \
+    X(S_EXACT_REF_FC, "exact.ref_front_centre", "Front middle (bottom)") \
+    X(S_EXACT_REF_BC, "exact.ref_back_centre", "Back middle (bottom)") \
     X(S_EXACT_WIDTH, "exact.width", "Width") \
     X(S_EXACT_DEPTH, "exact.depth", "Depth") \
     X(S_EXACT_HEIGHT, "exact.height", "Height") \
@@ -287,30 +289,50 @@
     /* blueprints */ \
     X(S_OPT_TOOL_BP, "bp.tool", "Blueprints") \
     X(S_ACT_BP, "bp.key", "Blueprint mode on / off") \
+    X(S_ACT_BP_SUB, "bp.key_sub", "Blueprint mode: save <-> place") \
     X(S_OPT_MODE_BP, "bp.mode", "Blueprint") \
-    X(S_MODE_BP, "bp.mode_on", "Blueprint mode: right click two corners to save, left click to place a blueprint") \
+    X(S_BP_SUB_NAME, "bp.sub_name", "Blueprint") \
+    X(S_BP_SUB_SAVE, "bp.sub_save", "Save") \
+    X(S_BP_SUB_PLACE, "bp.sub_place", "Place") \
+    X(S_MODE_BP, "bp.mode_on", "Blueprint mode ({0}): click a block") \
     X(S_HUD_BP, "bp.hud", "Blueprint mode") \
-    X(S_HUD_BP_SAVE, "bp.hud_save", "Right click: save corners") \
-    X(S_HUD_BP_PLACE, "bp.hud_place", "Left click: place a blueprint") \
-    X(S_BP_CORNER, "bp.corner", "Blueprint area: corner 1 set, right click the opposite corner to save") \
+    X(S_HUD_BP_SAVE, "bp.hud_save", "Click: area to save") \
+    X(S_HUD_BP_PLACE, "bp.hud_place", "Click: pick a blueprint") \
     X(S_BP_SAVED, "bp.saved", "Blueprint saved: {0} ({1} blocks, {2} materials)") \
     X(S_BP_EMPTY, "bp.empty", "Nothing to save there: only building blocks are saved") \
     X(S_BP_WRITE_FAIL, "bp.write_fail", "Could not write the blueprint file") \
-    X(S_BP_PIECE, "bp.piece", "Aim at a block, not at a building piece") \
     X(S_BP_REMOTE, "bp.remote", "Blueprints work only in a world you host (not yet on a dedicated server)") \
     X(S_BP_CANCELLED, "bp.cancelled", "Blueprint cancelled") \
     X(S_BP_SHAPE, "bp.shape", "Hold a block of the blueprint's size ({0} x {1} x {2} m) to build it") \
     X(S_BP_NOT_ENOUGH, "bp.not_enough", "Not enough materials for the whole blueprint (Allow partial build is off)") \
     X(S_BP_NO_MATERIAL, "bp.no_material", "Materials of this blueprint the game does not know: {0} (their blocks are left out)") \
     X(S_BP_NOTHING, "bp.nothing", "Nothing to build: no material of this blueprint could be used") \
-    X(S_BP_TITLE, "bp.title", "Blueprint") \
-    X(S_BP_HELP, "bp.help", "Built with the block in your hand at the clicked spot (bottom centre), one block per saved cell.") \
-    X(S_BP_NONE, "bp.none", "No blueprints yet. In Blueprint mode, right click two corners to save one.") \
-    X(S_BP_PICK, "bp.pick", "Blueprint") \
+    X(S_BP_SAVE_TITLE, "bp.save_title", "Save blueprint") \
+    X(S_BP_SAVE_HELP, "bp.save_help", "The clicked block is the reference. Blocks in the drawn box are saved (only building blocks).") \
+    X(S_BP_NAME, "bp.name", "Name: {0}") \
+    X(S_BP_NAME_HINT, "bp.name_hint", "Type the name on the keyboard (empty = date and time).") \
+    X(S_BP_CLEAR_NAME, "bp.clear_name", "Clear name") \
+    X(S_BP_SAVE_BTN, "bp.save_button", "Save") \
+    X(S_BP_CELLS, "bp.cells", "Cells of {0} m (the shape in your hand): {1} x {2} x {3}") \
+    X(S_BP_LIST_TITLE, "bp.list_title", "Blueprints") \
+    X(S_BP_NONE, "bp.none", "No blueprints yet. Switch Blueprint to Save on the tools wheel, click a block and save one.") \
+    X(S_BP_BAD_FILE, "bp.bad_file", "This file is not a blueprint this version can read") \
+    X(S_BP_SIZE, "bp.size", "Size {0} x {1} x {2} cells, {3} blocks") \
     X(S_BP_ROTATION, "bp.rotation", "Rotation") \
     X(S_BP_PARTIAL, "bp.partial", "Allow partial build") \
-    X(S_BP_SIZE, "bp.size", "Size {0} x {1} x {2} cells, {3} blocks") \
-    X(S_BP_BAD_FILE, "bp.bad_file", "This file is not a blueprint this version can read") \
+    X(S_BP_REF, "bp.reference", "Point you look at") \
+    X(S_BP_FOLLOWING, "bp.following", "The ghost follows where you look: hold the right mouse button and aim, then Place here.") \
+    X(S_BP_PLACED, "bp.placed", "Placed: move it with the buttons, then Build.") \
+    X(S_BP_PLACE_BTN, "bp.place_here", "Place here") \
+    X(S_BP_FOLLOW_BTN, "bp.follow", "Follow the aim") \
+    X(S_BP_MOVE, "bp.move", "Move by one block:") \
+    X(S_BP_LEFT, "bp.left", "Left") \
+    X(S_BP_RIGHT, "bp.right", "Right") \
+    X(S_BP_AWAY, "bp.away", "Away") \
+    X(S_BP_CLOSER, "bp.closer", "Closer") \
+    X(S_BP_UP, "bp.up", "Up") \
+    X(S_BP_DOWN, "bp.down", "Down") \
+    X(S_BP_BACK, "bp.back", "Back to the list") \
     X(S_BP_COSTS, "bp.costs", "Materials needed:") \
     X(S_BP_MAT_ROW, "bp.material_row", "Material {0}: {1} needed, you have {2}") \
     X(S_BP_MAT_UNKNOWN, "bp.have_unknown", "?") \

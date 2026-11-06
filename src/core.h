@@ -656,12 +656,13 @@ inline int net_corner_index(int serverCount, int lastSeq, int seq, int count, in
 // past it across, `d` along the view and `h` up (0 = only the clicked shape's row: 0, 0, 0 is
 // one shape; the box is |w| + 1 by |d| + 1 by |h| + 1). Width runs along the player's right, depth along the view
 // (both snapped to world x / z), height up (y). The reference is the bottom centre or one of
-// the bottom corners; front = the side toward the player. A negative size grows the other
+// the bottom corners, or the middle of the front or back bottom edge; front = the side toward the player. A negative size grows the other
 // way (left instead of right, toward the player, downward). Out: the two
 // opposite corners (shape centres) as an Area click pair would give them: corner 1 is the
 // box corner at the reference's side, so turns of roofs, rounds and diagonals keep meaning
 // "from corner 1".
-enum { EXACT_CENTRE = 0, EXACT_FRONT_LEFT, EXACT_FRONT_RIGHT, EXACT_BACK_LEFT, EXACT_BACK_RIGHT, EXACT_REF_COUNT };
+enum { EXACT_CENTRE = 0, EXACT_FRONT_LEFT, EXACT_FRONT_RIGHT, EXACT_BACK_LEFT, EXACT_BACK_RIGHT,
+       EXACT_FRONT_CENTRE, EXACT_BACK_CENTRE, EXACT_REF_COUNT };   // values kept (ini): new ones at the end
 static const int kExactMax = 999;
 // shapes along one axis: from a to b (inclusive) in steps from the reference cell
 inline void exact_span(int n, int mode, int* a, int* b) {
@@ -674,8 +675,9 @@ inline void exact_span(int n, int mode, int* a, int* b) {
 // fAxis / rAxis: 0 = x, 2 = z; fSign / rSign: +1 or -1 (world direction of forward / right).
 inline void exact_corners(const I3& p, int ref, int w, int d, int h, int fAxis, int fSign, int rAxis, int rSign,
                           const float step_m[3], I3 out[2]) {
-    int rm = ref == EXACT_CENTRE ? 0 : (ref == EXACT_FRONT_LEFT || ref == EXACT_BACK_LEFT) ? 1 : -1;
-    int fm = ref == EXACT_CENTRE ? 0 : (ref == EXACT_FRONT_LEFT || ref == EXACT_FRONT_RIGHT) ? 1 : -1;
+    int rm = ref == EXACT_CENTRE || ref == EXACT_FRONT_CENTRE || ref == EXACT_BACK_CENTRE ? 0
+           : (ref == EXACT_FRONT_LEFT || ref == EXACT_BACK_LEFT) ? 1 : -1;
+    int fm = ref == EXACT_CENTRE ? 0 : (ref == EXACT_FRONT_LEFT || ref == EXACT_FRONT_RIGHT || ref == EXACT_FRONT_CENTRE) ? 1 : -1;
     int ra, rb, fa, fb, ha, hb;
     exact_span(w, rm, &ra, &rb);
     exact_span(d, fm, &fa, &fb);
