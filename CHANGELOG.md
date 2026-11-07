@@ -3,6 +3,15 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.32.1
+
+- Flying: clicking the side of a block now aims at that block (the preview box and Area
+  delete / Replace sometimes took the block below or above it).
+- Flying: Area delete no longer stops working after switching from a big shape to a small
+  one (it kept treating the hammer as holding the big shape until it was put away).
+- The hoe, seeds and other tools no longer mark Area corners (their clicks counted as
+  building clicks, and single player could think it was on a remote server).
+
 ## 0.32.0
 
 - **Blueprints** (issue #49): save part of a building to a file and build it again anywhere,

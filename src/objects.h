@@ -243,6 +243,16 @@ static uint64_t cursor_query_hook(uint8_t* q, uint8_t* sys, uint8_t* item, void*
     PROF(PF_CQUERY);
     uint64_t r = PROF_CALL(PF_CQUERY_G, g_cursorQueryOrig(q, sys, item, d, e, f));
     if (sys && readable(sys - 0x220, 8)) g_objWorld = *(void**)(sys - 0x220);     // client_cursor's deps (rbp+0xa0) + 0x130
+    // the 4th argument is the building item: the held material itself, or the hammer's selected
+    // shape (client_cursor r13; the held item, the 3rd, is the hammer then)
+    uint8_t* shp = (uint8_t*)d;
+    if (shp && q && q[3] == 4 && readable(shp, 0x4b8) && item_kind(shp) != ITEM_OTHER) {
+        if (shp != g_queryShape) {
+            static LONG logs = 0;
+            if (InterlockedIncrement(&logs) <= 40) log_item("cursor query shape", shp);
+        }
+        g_queryShape = shp; g_queryShapeTick = GetTickCount();
+    }
     uint8_t* it = prop_item(item) ? item : nullptr;
     if (it != g_propItem && g_propItem && it && g_objPtN) {
         obj_clear("other object in hand");

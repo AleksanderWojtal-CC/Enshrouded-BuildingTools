@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.32.0"
+#define MOD_VERSION "0.32.1-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1045,7 +1045,23 @@ static volatile DWORD g_buildTick = 0;   // last frame the hammer's place cursor
 typedef void (*HudRowFn)(uint8_t action, void* params);
 static HudRowFn g_hudRowOrig = nullptr;
 static volatile DWORD g_gameRowTick = 0;      // last time the game drew its own building box rows
+static volatile LONG g_hudScreen = 0;               // the HUD screen (UI thread -> input thread)
+static volatile DWORD g_hudScreenTick = 0;
+static volatile DWORD g_liveItemTick = 0;           // last time the client's blueprint system read the hammer's cursor
+// The hammer's screens: 29 BlueprintMultiTool (hammer), 30 its material catalog, 52 the mod's
+// menu / exact window. A building material in hand builds from the game's own screen (1); the
+// client's blueprint system then reads its cursor. Other tools also draw the building key rows
+// and cast the building ray (the hoe, seeds, the wrench), but on screen 1 without that read
+// (or on their own screens): their clicks are not area corners.
+static bool building_screen() {
+    const DWORD now = GetTickCount();
+    if (now - g_hudScreenTick > 1000) return true;   // HUD screen not known (no UI hook): as before
+    const LONG s = g_hudScreen;
+    if (s == 29 || s == 30 || s == 52) return true;
+    return s == 1 && now - g_liveItemTick < 500;
+}
 static bool building_now(DWORD window = 300) {
+    if (!building_screen()) return false;
     return g_hudRowOrig ? GetTickCount() - g_gameRowTick < window : GetTickCount() - g_buildTick < window + 200;
 }
 // The last place cursor each cursor system computed: the raw ray hit (not yet on the
@@ -2870,21 +2886,25 @@ static bool query_cursor(int64_t placeC[3], int64_t aimC[3], int64_t step[3]) {
     const int64_t d = (int64_t)(0.05 * 4294967296.0), q = (int64_t)1 << 30;   // 5 cm, 0.25 m
     // The face is on the axis whose grid line the hit is closest to (on it, up to float
     // noise). Only that axis steps: a hit near a block edge must not step twice.
-    int face = 0; int64_t best = 0x7fffffffffffffffLL;
+    int face = 0; int64_t best = 0x7fffffffffffffffLL, dist[3];
     for (int a = 0; a < 3; a++) {
-        int64_t r = e.pos[a] & (((int64_t)1 << 31) - 1), dist = r < ((int64_t)1 << 30) ? r : ((int64_t)1 << 31) - r;
-        if (dist < best) { best = dist; face = a; }
+        int64_t r = e.pos[a] & (((int64_t)1 << 31) - 1);
+        dist[a] = r < ((int64_t)1 << 30) ? r : ((int64_t)1 << 31) - r;
+        if (dist[a] < best) { best = dist[a]; face = a; }
     }
+    // The cursor's normal: its rotation turns +y onto the face (or terrain) normal.
+    float x = e.rot[0], y = e.rot[1], z = e.rot[2], w = e.rot[3];
+    float n[3] = { 2.f * (x * y - w * z), 1.f - 2.f * (x * x + z * z), 2.f * (y * z + w * x) };
+    int nAxis = 0;
+    for (int a = 1; a < 3; a++) if ((n[a] < 0 ? -n[a] : n[a]) > (n[nAxis] < 0 ? -n[nAxis] : n[nAxis])) nAxis = a;
+    const int64_t onLine = (int64_t)(0.01 * 4294967296.0);
+    // A hit near a block's edge is on two grid lines: the face is the one the cursor's normal
+    // says (clicking the side of a block near its bottom picked the block below).
+    if (dist[nAxis] < onLine) { face = nAxis; best = dist[nAxis]; }
     // Terrain is not on the grid: the hit lies inside the place cell. The aimed cell is
-    // the next one into the surface, along the cursor's normal (its rotation turns +y
-    // onto the surface normal), on the side the camera looks to.
-    const bool onGrid = best < (int64_t)(0.01 * 4294967296.0);
-    if (!onGrid) {
-        float x = e.rot[0], y = e.rot[1], z = e.rot[2], w = e.rot[3];
-        float n[3] = { 2.f * (x * y - w * z), 1.f - 2.f * (x * x + z * z), 2.f * (y * z + w * x) };
-        face = 0;
-        for (int a = 1; a < 3; a++) if ((n[a] < 0 ? -n[a] : n[a]) > (n[face] < 0 ? -n[face] : n[face])) face = a;
-    }
+    // the next one into the surface, along the cursor's normal, on the side the camera looks to.
+    const bool onGrid = best < onLine;
+    if (!onGrid) face = nAxis;
     for (int a = 0; a < 3; a++) {
         int64_t fd = onGrid && a == face ? (int64_t)(e.fwd[a] * (float)d) : 0;
         int64_t front = (e.pos[a] + fd) >> 31, back = (e.pos[a] - fd) >> 31;   // 0.5 m cells
@@ -3000,7 +3020,11 @@ static void net_watch(uint8_t* input);
 // the selected shape for its own copy of the area corners when the server is remote.
 static bool g_cursorItemOk = false;
 static uint8_t* volatile g_liveItem = nullptr;
-static volatile DWORD g_liveItemTick = 0;
+// The building item (shape or material) the client cursor's query got this frame (objects.h,
+// cursor_query_hook). It runs every frame, also while flying, when the blueprint system above
+// stops reading the cursor and g_liveItem keeps the shape held before.
+static uint8_t* volatile g_queryShape = nullptr;
+static volatile DWORD g_queryShapeTick = 0;
 extern "C" uint8_t* bt_cursor_get(uint8_t* out, uint8_t* player, uint8_t* cc, uint8_t* item) {
     uint8_t* r = g_cursorGetOrig(out, player, cc);
     uint8_t* frame = out - 0xf8;
@@ -3554,7 +3578,9 @@ static void remote_update() {
     if (!g_buildingSince) g_buildingSince = now;
     LONG was = g_remoteKnown, is = was;
     if (now - g_serverWorldTick < 500) is = 0;
-    else if (now - g_buildingSince > 1000) is = 1;
+    // no server world read while this game's own blueprint system reads the cursor: remote. Flying
+    // (or the free camera) stops both reads, which says nothing (single player flipped to remote)
+    else if (now - g_buildingSince > 1000 && now - g_liveItemTick < 500) is = 1;
     if (is != was) { g_remoteKnown = is; LOG(.str("session: ").str(is ? "remote server" : "local world")); }
 }
 static bool remote_session() {
@@ -3640,9 +3666,14 @@ static bool ray_live() {
     return k >= 0 && k <= 3 && g_cxSeen[k].valid && GetTickCount() - g_cxSeen[k].tick < 250;
 }
 static uint8_t* building_item() {
+    const DWORD now = GetTickCount();
+    if (now - g_liveItemTick < 500) return g_liveItem;
+    // flying or free camera: the blueprint system's item is the one held when it stopped (a big
+    // shape picked since then still looked like the small one, or the other way round)
+    uint8_t* qs = g_queryShape;
+    if (qs && now - g_queryShapeTick < 500) return qs;
     uint8_t* item = g_liveItem;
-    if (!item) return nullptr;
-    return GetTickCount() - g_liveItemTick < 500 || ray_live() ? item : nullptr;
+    return item && ray_live() ? item : nullptr;
 }
 // Far from the character the client's cursor component keeps old values, so the aim it
 // sends (secondary transform, src+0x330) is stale while the place cursor (src+0x2f8)
@@ -4556,9 +4587,7 @@ static void draw_float_info();
 static void draw_radial();
 // the game, or the hammer's screens (29..37; the menu goes back to 29 when opened from there)
 static bool wheel_screen(LONG s) { return s == SCREEN_INGAME || (s >= 29 && s <= 37); }
-static volatile LONG g_hudScreen = 0;               // the HUD screen (UI thread -> input thread)
 static volatile DWORD g_escCloseTick = 0;           // Esc closed the menu / exact window (input thread)
-static volatile DWORD g_hudScreenTick = 0;
 static volatile LONG g_objWinShown = 0;           // the object settings window was drawn (objects.h)
 static void obj_window_closed();
 static void play_ui_hook(void* a, void* b, void* c, void* d) {

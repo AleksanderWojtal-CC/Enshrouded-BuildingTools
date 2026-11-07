@@ -315,9 +315,18 @@ hooks are skipped. The server never sees a player's keys, so the client sends th
 - **Remote or local.** The client mirrors corners only when no in-process server world
   builds (`remote_session`). The server world reads the building cursor only while the
   hammer or a material is in hand, so the choice is made only while the game draws its
-  building box (`building_now`: no server world read for a second of building = remote)
+  building box (`building_now`: no server world read for a second of building, while this
+  game's own blueprint system reads the cursor, = remote; flying stops both reads)
   and kept when the player switches to a weapon or tool. Mirrored clicks also need the
-  building box, so attack and mining clicks never count as corners.
+  building box, so attack and mining clicks never count as corners. The hoe, seeds and the
+  wrench draw that box too: `building_screen` also wants the hammer's HUD screen (29, its
+  catalog 30, the mod's 52) or screen 1 with the blueprint system reading the cursor (a
+  material in hand).
+- **Flying.** The blueprint system stops reading the cursor while flying (as with the free
+  camera far away), so its item is the shape held before. The client cursor's query
+  (`cursor_query_hook`, 4th argument) still gets the selected shape every frame
+  (`g_queryShape`). The aimed cell comes from the ray hit (`query_cursor`); a hit on two grid
+  lines (near a block's edge) steps across the face the cursor's normal points out of.
 
 ## Off switch
 
