@@ -5724,10 +5724,9 @@ static uint8_t* find_screen52_call(uint8_t* pu) {
         return je + 6 + *(int32_t*)(je + 2);
     }
     if (!pu) return nullptr;
-    DWORD64 img = 0;
-    PRUNTIME_FUNCTION rf = RtlLookupFunctionEntry((DWORD64)pu, &img, nullptr);
-    uint8_t* end = rf ? (uint8_t*)(img + rf->EndAddress) : pu + 0x2000;
-    if (end > pu + 0x4000) end = pu + 0x4000;
+    // its unwind entry covers only the prologue (the body is split off), so search a fixed
+    // window: on 1.0.1.1 the dispatch is at +0x64b and the screen 52 call at +0xe5e
+    uint8_t* end = pu + 0x2000;
     if (end > g_textBase + g_textSize) end = g_textBase + g_textSize;
     auto jumped_to = [&](const uint8_t* t) {
         for (uint8_t* p = pu; p + 6 <= end; p++)
