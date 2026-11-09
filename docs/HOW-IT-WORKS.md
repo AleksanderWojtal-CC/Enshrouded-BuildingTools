@@ -30,8 +30,22 @@ not match the mod looks for it with the 18-byte prologue left out and calls what
 call reached before.
 
 The DLL also works when loaded by another loader (for example as `BuildingTools.dll`
-listed in the XHL Native Core's `dinput8-chain.ini`): everything starts from `DllMain`,
-and the ini and log are kept next to `enshrouded.exe`.
+listed in the XHL Native Core's `dinput8-chain.ini`, or by Shroudforge from
+`mods/building-tools/` through its `native-plugin.ini`): everything starts from `DllMain`,
+and the ini, log, languages and blueprints are kept next to `enshrouded.exe` (the folder of
+the process's exe, not of the DLL). The Vulkan drawing needs the DLL in the process before
+the game looks up `vkGetInstanceProcAddr` (it patches the game's `GetProcAddress` import);
+the dinput8 proxy, the XHL chain and Shroudforge (which loads native DLLs while it still
+holds the game's entry point) all do that. Only one copy runs per process: the first copy
+sets the environment variable `BUILDINGTOOLS_LOADED` to its path, a later copy (two loaders
+set up at once) returns from `DllMain` without doing anything and leaves its path in
+`BUILDINGTOOLS_SECOND_COPY`, which the first copy writes to the log.
+
+Shroudforge (checked at its 1.7.9 source) hooks its own building cursor and building dispatch
+through per-game-build profiles; for the current client build (26430625) its profile has no
+code hooks, and the patches it does install (unlimited flight, no fall damage, stamina) are in
+functions this mod does not touch. Its main menu patch is in the title screen's menu builder,
+not in the play-state UI. Recheck when Shroudforge adds hooks for a new game build.
 
 ## The game's building pipeline
 

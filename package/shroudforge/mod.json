@@ -1,0 +1,12 @@
+{
+  "id": "building-tools",
+  "name": "Building Tools",
+  "version": "@VERSION@",
+  "description": "Construction Hammer extras: Replace, connected delete, Area mode (lines, floors, walls, rooms, roofs, round and diagonal fills), Exact mode and Blueprints. A native DLL, loaded through native-plugin.ini.",
+  "authors": [
+    "Aleksander Wojtal"
+  ],
+  "license": "MIT",
+  "dependencies": [],
+  "capabilities": []
+}

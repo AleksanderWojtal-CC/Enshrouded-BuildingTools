@@ -2,7 +2,8 @@ Enshrouded Building Tools 0.30.0
 ================================
 
 Files in the game folder
-  dinput8.dll           the mod (Windows loads it with the game)
+  dinput8.dll           the mod (Windows loads it with the game; with the
+                        Shroudforge download: mods\building-tools\BuildingTools.dll)
   BuildingTools.ini     settings, created on first start
   BuildingTools.log     what the mod did (previous session: BuildingTools.prev.log)
   BuildingTools-Languages\   the translations, one text file per language
@@ -320,6 +321,24 @@ Magic chests of all bases
 Uninstall
   Close the game and delete dinput8.dll and the BuildingTools-Languages folder
   (the ini and log can go too).
+
+With the Shroudforge mod loader
+  Shroudforge installs its own dinput8.dll. Use the Shroudforge download
+  (EnshroudedBuildingTools-Shroudforge-<version>.zip) and extract it into the
+  game folder like the normal zip. It puts the mod in mods\building-tools\
+  (BuildingTools.dll, mod.json, extended.mod.json, native-plugin.ini), so
+  Shroudforge lists it in its Modloader (F9) and loads it when the game starts.
+  BuildingTools.ini, the log, BuildingTools-Languages and BuildingTools-Blueprints
+  stay next to enshrouded.exe. On a dedicated server with Shroudforge, extract
+  the same zip next to enshrouded_server.exe.
+  Keys: Shroudforge uses F9 (Modloader) and F10 (its log), the same keys as
+  Replace style and Free placement here. Change one of them: in the Building
+  Tools menu (Home, Keys tab), in BuildingTools.ini or in Shroudforge's settings.
+  Keep only one copy of Building Tools: remove its dinput8.dll or
+  BuildingTools.dll from the game folder (and its line in dinput8-chain.ini).
+  If two copies are loaded, the second does nothing and BuildingTools.log
+  says where it is.
+  Uninstall: delete the mods\building-tools folder and BuildingTools-Languages.
 
 With other mods that ship a dinput8.dll (Creative Mode, XHL mods)
   Only one file can be called dinput8.dll. Use the XHL Native Core (the

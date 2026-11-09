@@ -1,11 +1,19 @@
 # Nexus Mods page
 
-New versions are uploaded automatically by the Release workflow (see
+New versions are uploaded automatically by the release pipeline on the build VM (see
 [BUILDING.md](BUILDING.md#releasing)); this page text is for the first upload and for
-editing the description. Manual upload: `EnshroudedBuildingTools-<version>.zip` from the
-GitHub release as the main file.
-The zip root is the game folder, so Vortex and manual installs put `dinput8.dll` next to
-`enshrouded.exe`.
+editing the description. Each release has two files on the Files tab, both *Main files*:
+
+| File | Name on Nexus | Zip |
+|---|---|---|
+| normal install | Building Tools `<version>` | `EnshroudedBuildingTools-<version>.zip` |
+| with Shroudforge | Building Tools for Shroudforge `<version>` | `EnshroudedBuildingTools-Shroudforge-<version>.zip` |
+
+Both zip roots are the game folder, so Vortex and manual installs put `dinput8.dll`
+(normal) or `mods/building-tools/` (Shroudforge) next to `enshrouded.exe`. The Shroudforge
+file has to be created by hand once (Manage Files → add a file, upload that version's
+Shroudforge zip); after that the pipeline uploads new versions of it when its file id is set
+(`NEXUS_SF_FILE_ID`).
 
 Suggested settings: category *Building*, requirement *none*, single player and
 dedicated servers,
@@ -134,6 +142,8 @@ of a large area; use an area remove for the rest.
 Extract the zip into the game folder (next to enshrouded.exe), with the
 BuildingTools-Languages folder.
 Uninstall: delete dinput8.dll and BuildingTools-Languages.
+Using the [b]Shroudforge[/b] mod loader? Download "Building Tools for Shroudforge" instead
+(see below).
 
 [b]Install on a dedicated server[/b]
 [list=1]
@@ -154,6 +164,15 @@ safely if the game code changed; check BuildingTools.log.
 Multiplayer: dedicated servers are supported (see Install). In a game hosted by a player
 (not a dedicated server) the mod runs in the host's game, and per-player settings are not
 supported yet.
+
+[b]With Shroudforge[/b]
+Shroudforge has its own dinput8.dll. Download "Building Tools for Shroudforge" from the Files
+tab and extract it into the game folder like the normal zip (on a server: next to
+enshrouded_server.exe). It installs the mod as mods\building-tools, Shroudforge shows it in
+its Modloader (F9) and loads it at game start. Settings, log, languages and blueprints stay
+next to enshrouded.exe. Shroudforge's F9 and F10 are also our Replace style and Free placement
+keys: change one side (our menu: Home, Keys tab; or BuildingTools.ini). Keep only one copy of
+Building Tools (remove our dinput8.dll / BuildingTools.dll from the game folder).
 
 [b]With Creative Mode / XHL mods[/b]
 They also ship a dinput8.dll. Keep the XHL dinput8.dll, rename ours to BuildingTools.dll

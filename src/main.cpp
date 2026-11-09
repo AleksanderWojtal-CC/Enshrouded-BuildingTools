@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.32.2"
+#define MOD_VERSION "0.33.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -6203,6 +6203,14 @@ static DWORD WINAPI init_thread(void*) {
     if (g_hoverDist < 1.f) g_hoverDist = 1.f; if (g_hoverDist > 20.f) g_hoverDist = 20.f;
     LOG(.str(MOD_NAME " " MOD_VERSION " starting, image base ").x((uint64_t)g_base)
         .str(" .text size ").x(g_textSize));
+    {
+        char path[MAX_PATH];
+        if (GetEnvironmentVariableA("BUILDINGTOOLS_LOADED", path, MAX_PATH) - 1u < MAX_PATH - 1u)
+            LOG(.str("loaded from ").str(path));
+        if (GetEnvironmentVariableA("BUILDINGTOOLS_SECOND_COPY", path, MAX_PATH) - 1u < MAX_PATH - 1u)
+            LOG(.str("WARNING: a second copy of Building Tools was loaded and left off: ").str(path)
+                .str(" - keep only one (root dinput8.dll, a dinput8-chain.ini entry or mods\\building-tools)"));
+    }
     lang_update();
     uint8_t* place  = find_hookable("PlaceShape", SIG_PLACE, 10);
     uint8_t* remove = find_hookable("RemoveShape", SIG_REMOVE, 10);
@@ -6495,6 +6503,19 @@ extern "C" HRESULT WINAPI DirectInput8Create(HINSTANCE inst, DWORD ver, const vo
 extern "C" BOOL WINAPI DllMainCRTStartup(HINSTANCE self, DWORD reason, LPVOID) {
     if (reason != DLL_PROCESS_ATTACH) return TRUE;
     DisableThreadLibraryCalls(self);
+    // One copy per process: with two loaders (e.g. the root dinput8.dll or an XHL chain entry
+    // and the Shroudforge package in mods\building-tools) a second copy would hook everything
+    // twice. The first copy marks the process; a later one stays loaded but does nothing and
+    // leaves its path for the first copy's log.
+    {
+        wchar_t me[MAX_PATH];
+        if (!GetModuleFileNameW(self, me, MAX_PATH)) me[0] = 0;
+        if (GetEnvironmentVariableW(L"BUILDINGTOOLS_LOADED", nullptr, 0)) {
+            SetEnvironmentVariableW(L"BUILDINGTOOLS_SECOND_COPY", me);
+            return TRUE;
+        }
+        SetEnvironmentVariableW(L"BUILDINGTOOLS_LOADED", me[0] ? me : L"1");
+    }
     g_base = (uint8_t*)GetModuleHandleW(nullptr);
     GetModuleFileNameW(nullptr, g_dir, MAX_PATH);
     for (int i = lstrlenW(g_dir); i > 0; i--) if (g_dir[i - 1] == L'\\') {

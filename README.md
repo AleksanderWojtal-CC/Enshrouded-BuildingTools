@@ -80,7 +80,10 @@ replicate like vanilla building.
 ## Install
 
 1. Download `EnshroudedBuildingTools-<version>.zip` from the
-   [Releases](../../releases) page.
+   [Nexus Mods page](https://www.nexusmods.com/enshrouded/mods/221) (Files tab).
+   If you use the **Shroudforge** mod loader, take
+   `EnshroudedBuildingTools-Shroudforge-<version>.zip` instead (see
+   [Compatibility](#compatibility)).
 2. Extract it into the game folder, next to `enshrouded.exe`
    (Steam: right click Enshrouded → Manage → Browse local files).
 3. Start the game. The banner "Building Tools <version> ready" confirms it loaded.
@@ -146,6 +149,21 @@ settings to the server with its input, so everyone builds with their own Area/Re
 settings, and players without the mod build as usual. The server's `BuildingTools.ini`
 sets creative building, chests of all bases and the shape limits for everyone. In a game
 hosted by a player (not a dedicated server), per-player settings are not supported yet.
+
+**Shroudforge** ([bonsaibauer/shroudforge](https://github.com/bonsaibauer/shroudforge)):
+the mod loader installs its own `dinput8.dll`, so use the second download,
+`EnshroudedBuildingTools-Shroudforge-<version>.zip`. Extract it into the game folder like the
+normal zip; it holds the mod as `mods/building-tools/BuildingTools.dll` with a `mod.json`,
+`extended.mod.json` and `native-plugin.ini`, so Shroudforge lists it (F9) and loads the DLL
+while the game is still held at start-up, before it creates its renderer (the 3D preview
+needs that). `BuildingTools.ini`, the log, `BuildingTools-Languages` and
+`BuildingTools-Blueprints` stay next to `enshrouded.exe` as with the normal zip. On a server
+with Shroudforge, extract the same zip next to `enshrouded_server.exe`. Shroudforge's own keys
+F9 (Modloader) and F10 (log) are also Building Tools' default Replace style and Free placement
+keys: change one side, in the Building Tools menu (Home) or `BuildingTools.ini`, or in
+Shroudforge's settings. Keep only one copy of the mod: delete a `dinput8.dll` or
+`BuildingTools.dll` of Building Tools from the game folder (and its `dinput8-chain.ini` line).
+If two copies get loaded anyway, the second stays off and `BuildingTools.log` names it.
 
 **Other mods with a `dinput8.dll`** (Creative Mode, XHL mods): only one file can have
 that name. Use the XHL Native Core (the `dinput8.dll` from an XHL mod) and chain the
