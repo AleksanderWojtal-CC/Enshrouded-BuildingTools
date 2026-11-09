@@ -5,6 +5,7 @@
 #   ./build.sh            build build/dinput8.dll
 #   ./build.sh test       build + run the unit tests (Linux/macOS host compiler)
 #   ./build.sh package    build + test + dist/EnshroudedBuildingTools-<version>.zip
+#                         and dist/EnshroudedBuildingTools-Shroudforge-<version>.zip
 #
 # Requirements: clang (C/C++ with x86_64-w64-mingw32 target), lld, and the
 # MinGW-w64 headers and import libraries (kernel32, user32, gdi32).
@@ -67,4 +68,21 @@ if [ "$1" = "package" ]; then
     rm -f "$ZIP"
     (cd build/pkg && zip -q -9 "../../$ZIP" dinput8.dll BuildingTools-README.txt BuildingTools-LICENSE.txt BuildingTools-Languages/*.txt)
     echo "packaged $ZIP"
+
+    # Shroudforge layout (second Nexus file): the same DLL as mods/building-tools/BuildingTools.dll,
+    # loaded by Shroudforge through native-plugin.ini, so Shroudforge keeps its own dinput8.dll.
+    # The ini, log, languages and blueprints stay next to enshrouded.exe as in the normal zip.
+    SF=build/pkg-sf/mods/building-tools
+    rm -rf build/pkg-sf && mkdir -p "$SF" build/pkg-sf/BuildingTools-Languages
+    cp build/dinput8.dll "$SF/BuildingTools.dll"
+    sed "s/@VERSION@/$VERSION/" package/shroudforge/mod.json > "$SF/mod.json"
+    cp package/shroudforge/extended.mod.json package/shroudforge/native-plugin.ini "$SF/"
+    cp build/pkg/BuildingTools-README.txt build/pkg/BuildingTools-LICENSE.txt build/pkg-sf/
+    cp lang/*.txt build/pkg-sf/BuildingTools-Languages/
+    SFZIP="dist/EnshroudedBuildingTools-Shroudforge-$VERSION.zip"
+    rm -f "$SFZIP"
+    (cd build/pkg-sf && zip -q -9 "../../$SFZIP" mods/building-tools/BuildingTools.dll mods/building-tools/mod.json \
+        mods/building-tools/extended.mod.json mods/building-tools/native-plugin.ini \
+        BuildingTools-README.txt BuildingTools-LICENSE.txt BuildingTools-Languages/*.txt)
+    echo "packaged $SFZIP"
 fi

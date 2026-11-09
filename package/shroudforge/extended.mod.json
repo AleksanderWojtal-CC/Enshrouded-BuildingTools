@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "targets": [
+    "client",
+    "server"
+  ],
+  "links": {
+    "website": "https://www.nexusmods.com/enshrouded/mods/221"
+  }
+}

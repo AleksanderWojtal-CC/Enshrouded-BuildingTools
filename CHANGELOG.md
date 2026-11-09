@@ -3,6 +3,16 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.33.0
+
+- **Shroudforge**: a second download, "Building Tools for Shroudforge", for players who use
+  the Shroudforge mod loader. It installs the mod in Shroudforge's `mods` folder, so
+  Shroudforge keeps its own `dinput8.dll`, lists Building Tools in its Modloader and loads
+  it. Note: Shroudforge's F9 and F10 are also Building Tools' Replace style and Free
+  placement keys; change one of them in either menu.
+- If Building Tools gets loaded twice (for example by Shroudforge and by an old copy in the
+  game folder), the second copy stays off and `BuildingTools.log` says where it is.
+
 ## 0.32.2
 
 - **Menu with other mods**: some players had no in-game menu ("menu: not available" in

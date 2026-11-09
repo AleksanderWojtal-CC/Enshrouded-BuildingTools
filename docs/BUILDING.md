@@ -37,6 +37,7 @@ shaders twice, the second time with `-DDEPTH` and a `Depth` name).
 ./build.sh           # build/dinput8.dll
 ./build.sh test      # build + unit tests
 ./build.sh package   # build + tests + dist/EnshroudedBuildingTools-<version>.zip
+                     #   and dist/EnshroudedBuildingTools-Shroudforge-<version>.zip
 ```
 
 The build is reproducible: no timestamps, stripped, so the same sources give the same
@@ -63,37 +64,37 @@ DLL.
 | `src/cave.S` | Replacement code patched into the game's voxel write loop (Replace) |
 | `src/chkstk.S` | `___chkstk_ms` (stack probe needed without a C runtime) |
 | `src/dinput8.def` | Exports `DirectInput8Create`, forwarded to the real `System32\dinput8.dll` |
-| `package/` | Files shipped in the release zip |
+| `package/` | Files shipped in the release zips (`package/shroudforge/`: the Shroudforge package's `mod.json`, `extended.mod.json`, `native-plugin.ini`) |
 | `tests/` | Unit tests |
 | `tools/re/` | Python scripts used to analyse the game executable (see its README) |
 
 ## Releasing
 
+The GitHub repository is not used any more (the account is suspended). The working repo is
+on the build VM, with a bare repo `~/git/Enshrouded-BuildingTools.git` (remote `vm`), and a
+release pipeline in `~/projects_dev/bt-pipeline` (its README has the details) runs on every
+push to that repo.
+
 1. Set the version in `src/main.cpp` (`#define MOD_VERSION "x.y.z"`), add a `## x.y.z`
    section at the top of [CHANGELOG.md](../CHANGELOG.md), and update
-   `package/BuildingTools-README.txt` and the docs if features changed.
-2. Merge to `main` (pull request). The **Release** workflow sees a `MOD_VERSION` that
-   has no GitHub release yet, builds, runs the tests and publishes the release
-   `vx.y.z` with `EnshroudedBuildingTools-x.y.z.zip`. The notes are the version's
-   changelog section. (Pushing a tag `vx.y.z` or running the workflow by hand does
-   the same.)
-3. The same workflow then uploads the zip to Nexus Mods as a new version of the
-   existing main file, with the changelog section, through
-   [Nexus-Mods/upload-action](https://github.com/Nexus-Mods/upload-action). It needs,
-   in the repository settings:
-   - environment **Release** with the secret `NEXUS_API_KEY` (your Nexus Mods API key),
-   - `NEXUS_MOD_ID` and `NEXUS_FILE_ID`, as variables or secrets, in the repository or in
-     the Release environment. Take both from the mod page's Files tab: "Advanced" under the
-     main file (or Manage Files → the file's menu → Advanced). The file id there is the
-     API id of the file; the number in the old download links does not work (404 "Mod file
-     not found").
-   If one is missing, the upload is skipped with a warning naming it. To upload a version
-   that is already released (for example after adding the settings), run the Release
-   workflow by hand (Actions → Release → Run workflow) with "Upload the current version to
-   Nexus Mods again" ticked.
-
-Every push and pull request runs the **Build** workflow, which uploads the zip as a
-workflow artifact.
+   `package/BuildingTools-README.txt`, the [README](../README.md) and these docs if features
+   or installation changed. Test builds use `x.y.z-devN`; the pipeline never releases those.
+2. Every push builds the branch (`./build.sh package`, tests included) and keeps both zips
+   in `bt-pipeline/artifacts/<branch>/<version>-<commit>/`.
+3. A push to `main` with a `MOD_VERSION` that has no tag `vx.y.z` yet is a release: the
+   version's changelog section becomes the notes, both zips go to `releases/x.y.z/`, and
+   `bin/nexus-upload.sh` uploads them to Nexus Mods as new versions of the two files on
+   the mod page:
+   - `EnshroudedBuildingTools-x.y.z.zip` → the main file (`NEXUS_FILE_ID`), which also
+     sets the mod's version and gets the changelog;
+   - `EnshroudedBuildingTools-Shroudforge-x.y.z.zip` → the Shroudforge file
+     (`NEXUS_SF_FILE_ID`). Nexus cannot create a file through the API, so this file was
+     added by hand once; while `NEXUS_SF_FILE_ID` is empty its upload is skipped with a
+     message.
+   Then the commit is tagged `vx.y.z`. The settings are in
+   `~/.config/bt-pipeline/nexus.env` (`NEXUS_UPLOAD=1` uploads, `0` is a dry run). The ids
+   are on the mod page's Files tab: "Advanced" under each file (the API id, not the number
+   in old download links).
 
 ## Updating for a new game version
 
