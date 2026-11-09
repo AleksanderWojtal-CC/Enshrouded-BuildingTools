@@ -3,6 +3,12 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.32.2
+
+- **Menu with other mods**: some players had no in-game menu ("menu: not available" in
+  the log) because another mod changes the game's screen switching code that the menu
+  opens through. The mod now finds that code even when it has been changed.
+
 ## 0.32.1
 
 - Flying: clicking the side of a block now aims at that block (the preview box and Area
