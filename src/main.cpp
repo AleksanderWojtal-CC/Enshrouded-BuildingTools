@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.32.1"
+#define MOD_VERSION "0.32.2-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -5702,15 +5702,75 @@ static uint8_t* find_play_ui() {
     return pu;
 }
 
+static bool is_fn_start(const uint8_t* p) {
+    DWORD64 img = 0;
+    PRUNTIME_FUNCTION rf = RtlLookupFunctionEntry((DWORD64)p, &img, nullptr);
+    return rf && (const uint8_t*)(img + rf->BeginAddress) == p;
+}
+static void log_bytes(const char* what, const uint8_t* p, int n) {
+    Buf b; b.str(what).str(" rva ").x((uint64_t)(p - g_base)).c(':');
+    for (int k = 0; k < n; k++) b.c(' ').u(p[k], 16, 2);
+    log_line(b);
+}
+
+// The call to screen 52's function inside the play-state UI (the target of the screen
+// dispatch's first je). When the dispatch signature does not match (another mod patched
+// those bytes, or a game update changed them), look for it by its shape instead: inside
+// the play-state UI, "E8 <screen 53> EB xx E8 <screen 52>" with both calls reaching
+// function starts, and a je in the same function jumping to each of the two calls.
+static uint8_t* find_screen52_call(uint8_t* pu) {
+    if (uint8_t* disp = find_unique("ScreenDispatch", SIG_SCREEN_DISPATCH)) {
+        uint8_t* je = disp + 10;                                 // 0F 84 rel32 -> E8 <screen 52>
+        return je + 6 + *(int32_t*)(je + 2);
+    }
+    if (!pu) return nullptr;
+    DWORD64 img = 0;
+    PRUNTIME_FUNCTION rf = RtlLookupFunctionEntry((DWORD64)pu, &img, nullptr);
+    uint8_t* end = rf ? (uint8_t*)(img + rf->EndAddress) : pu + 0x2000;
+    if (end > pu + 0x4000) end = pu + 0x4000;
+    if (end > g_textBase + g_textSize) end = g_textBase + g_textSize;
+    auto jumped_to = [&](const uint8_t* t) {
+        for (uint8_t* p = pu; p + 6 <= end; p++)
+            if (p[0] == 0x0F && p[1] == 0x84 && p + 6 + *(int32_t*)(p + 2) == t) return p;
+        return (uint8_t*)nullptr;
+    };
+    uint8_t* found = nullptr; uint8_t* foundJe = nullptr; int n = 0;
+    uint8_t* shape[4]; int nShape = 0;
+    for (uint8_t* p = pu + 7; p + 5 <= end; p++) {
+        uint8_t* s53 = p - 7;
+        if (p[0] != 0xE8 || s53[0] != 0xE8 || p[-2] != 0xEB) continue;
+        uint8_t* t52 = p + 5 + *(int32_t*)(p + 1);
+        uint8_t* t53 = s53 + 5 + *(int32_t*)(s53 + 1);
+        bool inText52 = t52 >= g_textBase && t52 < g_textBase + g_textSize;
+        bool inText53 = t53 >= g_textBase && t53 < g_textBase + g_textSize;
+        // another mod may have taken a call over (target outside the game's code)
+        if ((inText52 && !is_fn_start(t52)) || (inText53 && !is_fn_start(t53))) continue;
+        if (nShape < 4) shape[nShape++] = p;
+        uint8_t* j52 = jumped_to(p);
+        if (!j52 || !jumped_to(s53)) continue;
+        found = p; foundJe = j52; n++;
+    }
+    if (n != 1) {
+        LOG(.str("  ScreenDispatch: ").i(n).str(" candidates in the play-state UI (rva ").x((uint64_t)(pu - g_base))
+            .str("..").x((uint64_t)(end - g_base)).c(')'));
+        // the bytes around the dispatch's usual compare, for the next report
+        for (uint8_t* p = pu; p + 5 <= end; p++)
+            if (p[0] == 0x0F && p[1] == 0xB6 && p[2] == 0x08 && p[3] == 0x83 && p[4] == 0xE9 && readable(p - 8, 40))
+                log_bytes("  ScreenDispatch: compare at", p - 8, 40);
+        for (int k = 0; k < nShape; k++) log_bytes("  ScreenDispatch: call pair at", shape[k] - 7, 12);
+        return nullptr;
+    }
+    log_bytes("  ScreenDispatch: signature changed, found by its shape; je at", foundJe - 12, 30);
+    return found;
+}
+
 static void install_menu() {
     uint8_t* call = find_unique("PlayUiCall", SIG_PLAY_UI_CALL);
     uint8_t* site = call ? call + 2 : nullptr;
     uint8_t* pu = call ? find_play_ui() : nullptr;
-    uint8_t* disp = find_unique("ScreenDispatch", SIG_SCREEN_DISPATCH);
+    uint8_t* s52 = find_screen52_call(pu);
     g_toggleScreen = (ToggleScreenFn)find_unique("ToggleScreen", SIG_TOGGLE_SCREEN);
-    if (!pu || !call || !disp || !g_toggleScreen) { LOG(.str("menu: not available (UI code not found)")); return; }
-    uint8_t* je = disp + 10;                                     // 0F 84 rel32 -> E8 <screen 52>
-    uint8_t* s52 = je + 6 + *(int32_t*)(je + 2);
+    if (!pu || !call || !s52 || !g_toggleScreen) { LOG(.str("menu: not available (UI code not found)")); return; }
     // the call reaches the play-state UI, or another mod's hook that took the call over
     uint8_t* callee = site + 5 + *(int32_t*)(site + 1);
     bool callOther = callee != pu && (callee < g_textBase || callee >= g_textBase + g_textSize);
