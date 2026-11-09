@@ -41,6 +41,12 @@ sets the environment variable `BUILDINGTOOLS_LOADED` to its path, a later copy (
 set up at once) returns from `DllMain` without doing anything and leaves its path in
 `BUILDINGTOOLS_SECOND_COPY`, which the first copy writes to the log.
 
+The Shroudforge package's manifests (`package/shroudforge/`) must use only the fields and
+link names Shroudforge accepts, or it rejects the whole mod ("Mod rejected ... unsupported mod
+link"): `mod.json` fields id, name, version, description, authors, license, icon,
+dependencies, capabilities; `extended.mod.json` links only source, source-github, issues,
+wiki, website, store and support-* (the Nexus page is under `website`).
+
 Shroudforge (checked at its 1.7.9 source) hooks its own building cursor and building dispatch
 through per-game-build profiles; for the current client build (26430625) its profile has no
 code hooks, and the patches it does install (unlimited flight, no fall damage, stamina) are in
