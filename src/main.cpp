@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.32.2"
+#define MOD_VERSION "0.32.3-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1030,6 +1030,8 @@ static core::FillOpts fill_opts() {
 static float g_hoverDist = 4.f;
 static float g_lastRot[4] = { 0.f, 0.f, 0.f, 1.f };
 static volatile LONG g_cxLogged = 0;
+static volatile DWORD g_hoverOffTick = 0;        // free placement turned off (diagnostic log for 15 s)
+static volatile DWORD g_hoverOffLog = 0;
 typedef uint8_t* (*CursorXfFn)(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray);
 static CursorXfFn g_cxOrig = nullptr;
 static int64_t round_grid(double v, double grid) {           // v, grid in fixed point
@@ -1213,6 +1215,20 @@ static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* 
     // exact: while Build's click is on its way the ghost must be valid, else the game drops
     // the click (flying, looking at the sky); the click's own position is not used
     const bool exactHold = exact_hold();
+    if (!g_hover && g_hoverOffTick && g_buildTick - g_hoverOffTick < 15000 && g_buildTick - g_hoverOffLog >= 1000) {
+        // diagnostic (0.32.3-dev1): what the game's own cursor does after free placement went off
+        g_hoverOffLog = g_buildTick;
+        const int64_t* cam = (const int64_t*)(sys + 0x640);
+        const int64_t* pos = (const int64_t*)out;
+        double d2 = 0;
+        for (int a = 0; a < 3; a++) { double v = (double)(pos[a] - cam[a]) / core::kFix; d2 += v * v; }
+        uint8_t* src = readable(q + 0x60, 8) ? *(uint8_t**)(q + 0x60) : nullptr;
+        LOG(.str("free placement off: game cursor (").fix(pos[0]).c(',').fix(pos[1]).c(',').fix(pos[2])
+            .str(") valid=").i(valid).c(' ').f(core::core_sqrt((float)d2), 2).str(" m from camera, ray type=").u(ray ? ray[0] : 255)
+            .str(" q=").u(q[0], 16).c(' ').u(q[1], 16).c(' ').u(q[2], 16).c(' ').u(q[13], 16)
+            .str(" held=").u(src && readable(src + 0x3a8, 8) ? src[0x3a8] : 255, 16)
+            .str(" exact hold=").i(exactHold).str(" caller=").x((uint64_t)((uint8_t*)__builtin_return_address(0) - g_base)));
+    }
     if (!g_hover && !(exactHold && !valid)) return r;
     const int64_t* cam = (const int64_t*)(sys + 0x640);
     const float* cq = (const float*)(sys + 0x658);
@@ -4357,7 +4373,13 @@ static bool shape_turn_on() { return roof_turn_on() || round_turn_on() || diag_o
 static bool thick_on() {
     return g_mode == MODE_AREA && g_fill != core::FILL_SOLID && !(g_fill == core::FILL_ROUND && !g_roundHollow);
 }
-static void set_hover(LONG h) { g_hover = h; g_cxLogged = 0; LOG(.str("free placement -> ").i(h)); }
+static void set_hover(LONG h) {
+    g_hover = h; g_cxLogged = 0;
+    if (!h) { g_hoverOffTick = GetTickCount(); g_hoverOffLog = 0; }
+    Buf b; b.str("free placement -> ").i(h);
+    if (g_cxFn) { b.str(", cursor function starts"); for (int k = 0; k < 8; k++) b.c(' ').u(g_cxFn[k], 16, 2); }
+    log_line(b);
+}
 static bool set_creative(bool on) {
     if (remote_session()) { flash(T(S_CREATIVE_SERVER)); beep(MB_ICONHAND); return false; }   // the server's ini decides
     g_cfg.creative = on;
