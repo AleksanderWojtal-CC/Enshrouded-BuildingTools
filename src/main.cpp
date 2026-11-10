@@ -868,6 +868,8 @@ static const char* SIG_CURSOR_XF = "48 8B C4 55 53 56 57 41 56 48 8D 6C 24 90 48
 // The cursor flags check after the placement check (29bfb0 on 1.0.1.2: the placement collider against
 // the physics -> AreaOccupied); 4 calls in the client (2 client_cursor, 2 server cursor), 2 in the server
 static const char* SIG_CURSOR_FLAGS = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 56 41 57 48 8D 6C 24 C0 48 81 EC 40 01 00 00 0F B6 85 88 00 00 00 4D 8B F1";
+// client_cursor's two calls of the placement check 2994d0 (place cursor rsi+0x10, aim rsi+0x48; props.h)
+static const char* SIG_PROP_CHECK_CALL = "48 8D 56 10 48 8D 8E 80 00 00 00 48 89 5C 24 20 4C 8D 8E A0 00 00 00 E8 ?? ?? ?? ?? 48 8D 45 20 45 33 C0";
 static const char* SIG_PROP_PLACE_CALL = "44 8B 07 48 8D 95 20 01 00 00 48 8D 8D 70 01 00 00 E8 ?? ?? ?? ?? 0F B6 D8";
 static const char* SIG_PROP_PAY_A = "49 8D 90 10 01 00 00 45 0F B6 80 F8 01 00 00 E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ??";
 static const char* SIG_PROP_PAY_B = "41 B0 01 48 8D 95 C0 04 00 00 48 8D 8D D0 03 00 00 E8 ?? ?? ?? ?? 84 C0";
@@ -1261,11 +1263,11 @@ static uint8_t* g_cxClientRet = nullptr;          // return address of client_cu
 static bool prop_now();
 static bool prop_item(const uint8_t* it);
 static void obj_ghost(const uint8_t* out, const uint8_t* q);
-static void prop_ghost(uint8_t* out);
-// ret = the hook's return address (client_cursor's call of the ghost is told by it)
-static uint8_t* cursor_xf_body(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray, uint8_t* ret) {
+static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
+    PROF(PF_CXF);
     uint8_t* r = PROF_CALL(PF_CXF_G, g_cxOrig(out, sys, q, ray));
-    if (out && sys && q && q[3] != 4 && prop_now() && g_cxClientRet && ret == g_cxClientRet) {
+    if (out && q && g_cxClientRet && (uint8_t*)__builtin_return_address(0) == g_cxClientRet) obj_ghost(out, q);
+    if (out && sys && q && q[3] != 4 && prop_now() && g_cxClientRet && (uint8_t*)__builtin_return_address(0) == g_cxClientRet) {
         // an object in hand: the camera for the drawn path (the building cursor is not running)
         const DWORD now = GetTickCount();
         cam_ring_push(sys, (const int64_t*)(sys + 0x640), (const float*)(sys + 0x658), now);
@@ -1315,14 +1317,6 @@ static uint8_t* cursor_xf_body(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* 
     for (int a = 0; a < 3; a++) pos[a] = round_grid((double)cam[a] + (double)f[a] * dist * M, grid);
     for (int k = 0; k < 4; k++) rot[k] = g_lastRot[k];
     out[0x28] = 1;
-    return r;
-}
-static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* ray) {
-    PROF(PF_CXF);
-    uint8_t* ret = (uint8_t*)__builtin_return_address(0);
-    uint8_t* r = cursor_xf_body(out, sys, q, ray, ret);
-    // the held object's ghost: the exact rotation and nudge on top (props.h), then objects.h reads it
-    if (out && q && g_cxClientRet && ret == g_cxClientRet) { prop_ghost(out); obj_ghost(out, q); }
     return r;
 }
 
@@ -6870,6 +6864,7 @@ static DWORD WINAPI init_thread(void*) {
     if (g_cxOrig) g_cxFn = cxf;
     install_overlap();                              // also on a dedicated server
     install_objects();
+    install_props();
     if (!g_cxOrig) LOG(.str("free placement not available"));
     if (!g_dedicated) if (uint8_t* rf = find_hookable("RenderFrame", SIG_RENDER_FRAME, 5)) g_renderFrameOrig = hook(rf, 5, (void*)render_frame_thunk);
     if (!g_renderFrameOrig) LOG(.str("render camera: not available (the box may sit off behind the exact window)"));
