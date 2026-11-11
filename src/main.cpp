@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.33.0"
+#define MOD_VERSION "0.33.1-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -3588,6 +3588,10 @@ static bool remote_session() {
     LONG k = g_remoteKnown;
     return k >= 0 ? k == 1 : GetTickCount() - g_serverWorldTick > 2000;
 }
+// only a session already found to be remote: switches the player makes outside building
+// (Creative building, Blueprint mode) must not be refused while the session is not decided
+// yet, as in single player before the first building stretch
+static bool remote_known() { return !g_dedicated && g_remoteKnown == 1; }
 
 static uint32_t net_client_state() {
     uint32_t s = core::NET_TAG | ((uint32_t)core::NET_VERSION << core::NET_VERSION_SHIFT);
@@ -4359,7 +4363,10 @@ static bool thick_on() {
 }
 static void set_hover(LONG h) { g_hover = h; g_cxLogged = 0; LOG(.str("free placement -> ").i(h)); }
 static bool set_creative(bool on) {
-    if (remote_session()) { flash(T(S_CREATIVE_SERVER)); beep(MB_ICONHAND); return false; }   // the server's ini decides
+    if (remote_known()) {                         // the server's ini decides
+        LOG(.str("creative building: change refused, session remote"));
+        flash(T(S_CREATIVE_SERVER)); beep(MB_ICONHAND); return false;
+    }
     g_cfg.creative = on;
     write_full_ini(g_cfg);
     LOG(.str("creative building -> ").str(on ? "on" : "off"));
@@ -4448,7 +4455,10 @@ static void do_act(int a) {
     switch (a) {
     case ACT_BP: case ACT_BP_SUB: {
         LONG m = a == ACT_BP && g_mode == MODE_BLUEPRINT ? MODE_PREFAB : MODE_BLUEPRINT;
-        if (m == MODE_BLUEPRINT && remote_session()) { flash(T(S_BP_REMOTE)); beep(MB_ICONHAND); return; }
+        if (m == MODE_BLUEPRINT && remote_known()) {
+            LOG(.str("blueprint mode: refused, session remote"));
+            flash(T(S_BP_REMOTE)); beep(MB_ICONHAND); return;
+        }
         if (a == ACT_BP_SUB && g_mode == MODE_BLUEPRINT) { g_bpSub = g_bpSub == BP_SAVE ? BP_PLACE : BP_SAVE; LOG(.str("blueprint action -> ").i(g_bpSub)); }
         if (m != g_mode) set_mode(m);
         if (m == MODE_BLUEPRINT) { Buf b; b.fmt(T(S_MODE_BP), T(g_bpSub == BP_SAVE ? S_BP_SUB_SAVE : S_BP_SUB_PLACE)); flash(b.z()); }
@@ -4456,7 +4466,9 @@ static void do_act(int a) {
         break;
     }
     case ACT_AREA: {                              // Prefab -> Area -> Blueprint -> Prefab
-        LONG m = g_mode == MODE_PREFAB ? MODE_AREA : g_mode == MODE_AREA && g_cfg.toolBlueprint && !remote_session() ? MODE_BLUEPRINT : MODE_PREFAB;
+        const bool bpRemote = g_mode == MODE_AREA && g_cfg.toolBlueprint && remote_known();
+        if (bpRemote) LOG(.str("blueprint mode: skipped, session remote"));
+        LONG m = g_mode == MODE_PREFAB ? MODE_AREA : g_mode == MODE_AREA && g_cfg.toolBlueprint && !bpRemote ? MODE_BLUEPRINT : MODE_PREFAB;
         set_mode(m);
         if (m == MODE_BLUEPRINT) { Buf b; b.fmt(T(S_MODE_BP), T(g_bpSub == BP_SAVE ? S_BP_SUB_SAVE : S_BP_SUB_PLACE)); flash(b.z()); }
         else flash(T(m == MODE_AREA ? S_MODE_AREA : S_MODE_PREFAB));

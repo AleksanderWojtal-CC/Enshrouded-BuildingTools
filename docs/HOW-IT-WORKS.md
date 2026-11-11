@@ -342,6 +342,8 @@ hooks are skipped. The server never sees a player's keys, so the client sends th
   wrench draw that box too: `building_screen` also wants the hammer's HUD screen (29, its
   catalog 30, the mod's 52) or screen 1 with the blueprint system reading the cursor (a
   material in hand).
+  Switches made outside building (Creative building, Blueprint mode) are refused only
+  when the session is known to be remote (`remote_known`), not while it is undecided.
 - **Flying.** The blueprint system stops reading the cursor while flying (as with the free
   camera far away), so its item is the shape held before. The client cursor's query
   (`cursor_query_hook`, 4th argument) still gets the selected shape every frame
