@@ -968,3 +968,18 @@ all tested mod signatures match the file, so the disk image is plain).
     queries (14 calls of 9600c0) ask for Actor, Boss, ClientRotationalEnergySource,
     ComfortProvider, DangerousArea, Enemy01BehaviorState, EnemyMarker, InteractionOfferRuntime,
     Ladder, PacifiedState and TemporaryMining. For props: ComfortProvider, InteractionOfferRuntime, Ladder.
+
+## 0.33.1-dev2: blur shown black on a 3440x1440 SDR screen
+- RVAs of the current exe. blurBehind `d05cc0`(ctx, rect, colour): pass = ctx+0x18 (draws
+  only in pass 4, list pass+0x6ce0), transform = window on top of pass+0x4690 (entries
+  0x18, count +0x4698), window+0x20 {scale, x, y}; rect clipped to desc+0x60 (desc =
+  [[ctx+0xd0]], texture handle desc+0x50), UVs from that, then `11aa520` draws it.
+- BeginWindow `a3f530` -> `a3c460` -> `11bf610`: layer at window+0x7c, input mask +0x74
+  (input tests only), flags +0x78; the layer becomes the draw sort key (layer << 8) | 0x80
+  (pass+0x6ce8, list+0x35214).
+- The game's blurred HUD parts are all in the layer-5 window doHudScreenSpace (`becf80`):
+  item wheel `c14370` (via `ba2c40`), snapping hint soft backdrop `cbe060`. Other blur
+  windows: Blur Vignette layer 0, freezing vignette layer 1.
+- Report: the mod's pop-up (layer 1) was black inside, the tools wheel (layer 8) was
+  blurred inside its mask and black outside. dev2 draws both in layer 5 (hidden ini key
+  [Interface] BlurLayer) and logs the blur inputs once per caller ("blur ...").

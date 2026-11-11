@@ -3,11 +3,13 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
-## 0.33.1-dev1
+## 0.33.1-dev2
 
 - Creative building and Blueprint mode can be switched in single player before you first
   build with the hammer; before, the game was taken for a server session and the switch
   was refused.
+- Tools wheel and pop-up messages: the blurred background no longer shows as a black box on
+  ultrawide screens.
 
 ## 0.33.0
 

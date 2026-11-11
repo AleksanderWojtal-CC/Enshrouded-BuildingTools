@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.33.1-dev1"
+#define MOD_VERSION "0.33.1-dev2"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -183,6 +183,7 @@ struct Config {
     int preview      = 1;          // area preview: 1 = edge highlights, 2 = base-area box, 3 = both, 0 = off
     int hoverDist10  = 40;         // free placement distance in tenths of a metre
     int hudRows      = 1;      // mod state and keys in the game's building HUD box
+    int blurLayer    = 5;      // window layer of the blurred wheel and pop-up (the game's HUD: 5); hidden ini key
     int creative     = 0;      // building is free: no charge, no refund, no missing materials
     int keyOff       = VK_F5;  // the whole mod off / on (vanilla game while off)
     int fillLimit    = 500;    // most shapes one connected replace (fill bucket) may repaint
@@ -372,6 +373,8 @@ static void load_config() {
     g_cfg.drawBoxCells = ini_int(L"Area", L"DrawBoxBlocks", 1);
     g_cfg.hoverDist10  = ini_int(L"Area", L"FreePlacementDistance", 40);
     g_cfg.hudRows      = ini_int(L"Interface", L"HudRows", 1);
+    g_cfg.blurLayer    = ini_int(L"Interface", L"BlurLayer", 5);
+    if (g_cfg.blurLayer < 0 || g_cfg.blurLayer > 0x22) g_cfg.blurLayer = 5;
     g_cfg.creative     = ini_int(L"Creative", L"CreativeBuilding", 0) != 0;
     g_cfg.keyOff       = ini_int(L"Keys", L"ToggleMod", VK_F5);
     g_cfg.fillLimit    = ini_int(L"Limits", L"FillLimit", 500);
@@ -5104,6 +5107,7 @@ static bool mod_tab_draw(void* tab, void* out) {
     }
     return false;
 }
+static void blur_logged(int tag, const float* rect);
 static void draw_mod_menu() {
     alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, panel[0x40] = {}, tabs[0x40] = {};
     UiStringView name{ "buildingToolsMenu", 17 };
@@ -5113,7 +5117,7 @@ static void draw_mod_menu() {
     UiVec2 rgap{ 0, 0 };
     ui.setSpacing(ui_node(root), &rgap, 0);
     const float* screen = (const float*)((uint8_t*)ui_node(root) + 0x114);   // node rect (last layout)
-    ui.blurBehind(*g_uiCtxGlobal, screen, 0x3f800000ffffffffull);
+    blur_logged(0, screen);
     ui.fillRect(screen, 0x3f800000a0000000ull);   // {ABGR colour, intensity}
     {   // mouse click edge for the tabs
         static bool wasDown = false;
@@ -5531,6 +5535,41 @@ static bool hud_info(char* out, int cap) {
 // Mod messages and the area size as floating text below the screen centre, drawn like
 // the game's snapping hint (cab2a0): centred box, offset down, blurred backdrop, body text.
 // The game's backdrop of the snapping hint: blur behind the rect, then the soft rounded frame.
+// blurBehind (d05cc0) maps the rect through the current window's transform (top of
+// pass+0x4690, transform at window+0x20 {scale, x, y}), clips it to the blurred scene's rect
+// (desc+0x60, desc = [[ctx+0xd0]], texture handle at desc+0x50) and draws that part of the
+// texture with the window's sort key ((layer << 8) | 0x80). The game draws its blurred HUD
+// parts (hotbar, snapping hint cbe060, item wheel c14370 under doHudScreenSpace becf80) in
+// its layer-5 HUD window. Logged once per caller so an in-game log shows the inputs.
+static void blur_logged(int tag, const float* rect) {
+    static LONG logged[4] = {};
+    void* ctx = *g_uiCtxGlobal;
+    if (tag >= 0 && tag < 4 && !InterlockedExchange(&logged[tag], 1)) {
+        static const char* const names[4] = { "menu", "pop-up", "pop-up (plain)", "wheel" };
+        uint8_t* c = (uint8_t*)ctx;
+        uint8_t* pass = *(uint8_t**)(c + 0x18);
+        uint8_t** fr = *(uint8_t***)(c + 0xd0);
+        uint8_t* desc = fr ? fr[0] : nullptr;
+        Buf b; b.str("blur ").str(names[tag]).str(": layer ").i(g_cfg.blurLayer).str(", rect ")
+            .f(rect[0], 1).c(' ').f(rect[1], 1).c(' ').f(rect[2], 1).c(' ').f(rect[3], 1);
+        if (pass) {
+            b.str(", pass ").i(*(int32_t*)(pass + 8));
+            uint64_t n = *(uint64_t*)(pass + 0x4698);
+            if (n) {
+                uint8_t* top = *(uint8_t**)(*(uint8_t**)(pass + 0x4690) + n * 0x18 - 0x18);
+                if (top) { const float* t = (const float*)(top + 0x20);
+                    b.str(", window ").i(n).str(" layer ").i(*(int32_t*)(top + 0x7c)).str(" transform ")
+                     .f(t[0], 3).c(' ').f(t[1], 1).c(' ').f(t[2], 1); }
+            }
+        }
+        if (desc) { const float* t = (const float*)(desc + 0x60);
+            b.str(", blur texture ").x(*(uint64_t*)(desc + 0x50)).str(" covers ")
+             .f(t[0], 1).c(' ').f(t[1], 1).c(' ').f(t[2], 1).c(' ').f(t[3], 1); }
+        else b.str(", no blur texture");
+        log_line(b);
+    }
+    ui.blurBehind(ctx, rect, 0x3f800000ffffffffull);
+}
 static void soft_backdrop(const float* node) {
     void* ctx = *g_uiCtxGlobal;
     uint8_t* bundle = *(uint8_t**)((uint8_t*)ctx + 0xc8);
@@ -5539,7 +5578,7 @@ static void soft_backdrop(const float* node) {
     alignas(16) const float radii[4] = { c, c, c, c };
     alignas(16) uint8_t tex[16]; memcpy(tex, bundle + 0xd530, 16);
     alignas(16) float borders[4]; memcpy(borders, bundle + 0xd540, 16);
-    ui.blurBehind(ctx, rect, 0x3f800000ffffffffull);
+    blur_logged(1, rect);
     bool draw = ui.passId(ui.passObj(ctx)) == 4;
     if (draw) ui.blend(ui.drawList(ui.passObj(ctx)), 3);
     uint32_t h = 0;
@@ -5556,7 +5595,7 @@ static void draw_float_info() {
     if (!scr || !(*scr == SCREEN_INGAME || (*scr >= 29 && *scr <= 37)) || !hud_info(text, sizeof text)) return;
     alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, box[0x40] = {};
     UiStringView name{ "buildingToolsInfo", 17 };
-    g_beginWindow(win, &name, 1, 1, 0, 0);                  // fullscreen, low layer, takes no input
+    g_beginWindow(win, &name, 1, g_cfg.blurLayer, 0, 0);    // fullscreen, the game's HUD layer, takes no input
     ui.beginRoot(root, ui.windowContext(win));
     ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
     ui.beginBox(box, 0);
@@ -5568,7 +5607,7 @@ static void draw_float_info() {
     ui.setPadding(n, pad);
     const float* r = (const float*)(n + 0x114);            // node rect {x, y, w, h} (last layout)
     if (ui.nineSlice && ui.imageCtx) soft_backdrop(r);
-    else { ui.blurBehind(*g_uiCtxGlobal, r, 0x3f800000ffffffffull); ui.fillRect(r, 0x3f80000080000000ull); }
+    else { blur_logged(2, r); ui.fillRect(r, 0x3f80000080000000ull); }
     ui_text(text, STYLE_BODY);
     ui.endBox(box);
     ui.endBox(root);
@@ -5620,7 +5659,7 @@ static void draw_radial() {
     uint8_t* bundle = *(uint8_t**)(*g_uiCtxGlobal + 0xc8);
     alignas(16) uint8_t win[0x40] = {}, root[0x40] = {}, wheel[0x40] = {};
     UiStringView name{ "buildingToolsWheel", 18 };
-    g_beginWindow(win, &name, 1, 8, 0, 0);
+    g_beginWindow(win, &name, 1, g_cfg.blurLayer, 0, 0);    // the game's wheel: HUD window, layer 5
     ui.beginRoot(root, ui.windowContext(win));
     ui.setStretch(ui_node(root), UiVec2{ 1, 1 });
     ui.beginBox(wheel, 0);
@@ -5633,7 +5672,7 @@ static void draw_radial() {
     if (w > 8.f && h > 8.f) {
         const uint64_t white = 0x3f800000ffffffffull;
         const float big[4] = { x - 30.f, y - 30.f, w + 60.f, h + 60.f };
-        ui.blurBehind(*g_uiCtxGlobal, big, white);
+        blur_logged(3, big);
         ui.drawRect(wheel, big, 0, 0x3f80000040000000ull);        // 25% black
         ui.boxBlend(wheel, 3);
         ui.drawRect(wheel, big, ui_image(bundle, 0xdd60), white); // itemWheel.blurredBackgroundMask
