@@ -983,3 +983,27 @@ all tested mod signatures match the file, so the disk image is plain).
 - Report: the mod's pop-up (layer 1) was black inside, the tools wheel (layer 8) was
   blurred inside its mask and black outside. dev2 draws both in layer 5 (hidden ini key
   [Interface] BlurLayer) and logs the blur inputs once per caller ("blur ...").
+
+## 0.33.1-dev3: the game blurs inside an offscreen UI layer
+- dev2 in game: still black with BlurLayer 5, 0 and 3: the window layer is not the cause.
+  Blurred inside the mask, fading into a black square outside it (wheel and pop-up).
+- The game's item wheel `c14370` and snapping hint backdrop `cbe060` open an offscreen layer
+  on the box before the blur: `a3c8b0`(layer, &box, 0, colour u64, 1, &margin float[4], 0)
+  (margin: wheel {30,30,30,30} at `1d92ce0`, hint 10.0 from `a4a990`), `a4d310` allocates it
+  through `11c3e10` (pool pass+0x6bf0, at most 0x400, only in pass type 1; layer+0x24 = 1
+  when allocated). Then blur `d05cc0`, wheel: 25% black `a48e30` -> `11a7d30`, boxBlend
+  `11c9b50`(box, 3), mask `a48cf0`(bundle+0xdd60), boxBlend 0; hint: list blend `11c9bc0`
+  3, nine-slice `11a6f50`, blend 0 (only when passId `11b69c0` == 4). The layer ends with
+  `a3fc30`(layer): draws the layer texture with its colour (`11a76b0` or `11a8770`, blend
+  layer+0x6c, then 0). Wheel: ended just before endBox of the wheel box (`c1560e`); hint:
+  ended after the backdrop, before the text box.
+- So blend 3 (multiply by the mask) clears the layer's own pixels. The mod drew without the
+  layer: the multiply hit what was already drawn under the UI, black where the mask is clear.
+  Probably the UI drew into its own target on the HDR setup and straight onto the screen
+  on the new SDR one (not proven).
+- dev3: the same layer around the mod's wheel and pop-up backdrop. Hidden ini key
+  [Interface] BlurStyle: 0 = layer (default), 1 = no layer (as dev2), 2 = no blur, dark
+  fill of the same shape (mask image / nine-slice at 63% black, normal blend). The planned
+  "draw inside doHudScreenSpace" variant was not built: not needed for the fix, and riskier.
+  Log: "blur <element> <n>" for the first 6 calls (3 frames, pass 1 and 4), with style,
+  blend mode, offscreen (layer allocated), passId and the window.

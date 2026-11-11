@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.33.1-dev2"
+#define MOD_VERSION "0.33.1-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -184,6 +184,7 @@ struct Config {
     int hoverDist10  = 40;         // free placement distance in tenths of a metre
     int hudRows      = 1;      // mod state and keys in the game's building HUD box
     int blurLayer    = 5;      // window layer of the blurred wheel and pop-up (the game's HUD: 5); hidden ini key
+    int blurStyle    = 0;      // 0 = blur in an offscreen UI layer (as the game), 1 = blur without it (0.33.1-dev2), 2 = no blur, dark fill; hidden
     int creative     = 0;      // building is free: no charge, no refund, no missing materials
     int keyOff       = VK_F5;  // the whole mod off / on (vanilla game while off)
     int fillLimit    = 500;    // most shapes one connected replace (fill bucket) may repaint
@@ -375,6 +376,8 @@ static void load_config() {
     g_cfg.hudRows      = ini_int(L"Interface", L"HudRows", 1);
     g_cfg.blurLayer    = ini_int(L"Interface", L"BlurLayer", 5);
     if (g_cfg.blurLayer < 0 || g_cfg.blurLayer > 0x22) g_cfg.blurLayer = 5;
+    g_cfg.blurStyle    = ini_int(L"Interface", L"BlurStyle", 0);
+    if (g_cfg.blurStyle < 0 || g_cfg.blurStyle > 2) g_cfg.blurStyle = 0;
     g_cfg.creative     = ini_int(L"Creative", L"CreativeBuilding", 0) != 0;
     g_cfg.keyOff       = ini_int(L"Keys", L"ToggleMod", VK_F5);
     g_cfg.fillLimit    = ini_int(L"Limits", L"FillLimit", 500);
@@ -784,6 +787,11 @@ static const char* SIG_UI_SOFT_BACKDROP =
 static const char* SIG_UI_DRAW_RECT    = "48 8B 41 08 48 8B 48 50 48 8B 49 18 48 85 C9 74 12 83 79 08 04 75 0C 48 8B 89 E0 6C 00 00";
 static const char* SIG_UI_DRAW_ROTATED = "4C 8B DC 49 89 5B 18 49 89 6B 20 56 48 81 EC F0 00 00 00 48 8B 41 08 41 8B D9";
 static const char* SIG_UI_BOX_BLEND    = "48 8B 41 08 48 8B 48 50 4C 8B 41 18 4D 85 C0 74 5E 41 83 78 08 04 75 57";
+// Offscreen UI layer of a box (the item wheel c14370 and the snapping hint backdrop cbe060
+// draw their blur and mask inside one): begin a3c8b0(layer 0x70, &box, 0, colour u64, 1,
+// &margin float[4], 0), end a3fc30(layer) draws the layer's texture with the colour.
+static const char* SIG_UI_LAYER_BEGIN  = "4C 8B DC 53 48 81 EC A0 00 00 00 33 C0 48 89 54 24 20 48 89 41 28 49 8D 53 B8";
+static const char* SIG_UI_LAYER_END    = "48 89 5C 24 08 55 48 8D 6C 24 A9 48 81 EC C0 00 00 00 48 83 39 00 48 8B D9";
 // Scrolling list (the settings menu cc49d0): default parameters a324d0(params 0x104,
 // GameUiScrollingLayoutParameterData), begin a31640(state 0x4e0, 1, &offset float, 0,
 // params), end a33780(state); mouse scroll speed d3aff0(state), stored at state+0x464.
@@ -4731,6 +4739,8 @@ static struct {
     void (*drawRect)(void* box, const float* rect, uint32_t image, uint64_t color);          // optional: the tools wheel
     void (*drawRotated)(void* box, const float* rect, float angle, uint32_t image, uint64_t color);
     void (*boxBlend)(void* box, uint8_t mode);
+    void* (*layerBegin)(void* layer, void* box, uintptr_t, uint64_t color, uint8_t on, const float* margin, void*);  // optional
+    void (*layerEnd)(void* layer);
     void (*scrollParams)(void* params);                      // optional: the scrolling key list
     void (*beginScroll)(void* state, uint8_t, float* offset, void*, const void* params);
     void (*endScroll)(void* state);
@@ -5540,37 +5550,62 @@ static bool hud_info(char* out, int cap) {
 // (desc+0x60, desc = [[ctx+0xd0]], texture handle at desc+0x50) and draws that part of the
 // texture with the window's sort key ((layer << 8) | 0x80). The game draws its blurred HUD
 // parts (hotbar, snapping hint cbe060, item wheel c14370 under doHudScreenSpace becf80) in
-// its layer-5 HUD window. Logged once per caller so an in-game log shows the inputs.
-static void blur_logged(int tag, const float* rect) {
-    static LONG logged[4] = {};
-    void* ctx = *g_uiCtxGlobal;
-    if (tag >= 0 && tag < 4 && !InterlockedExchange(&logged[tag], 1)) {
-        static const char* const names[4] = { "menu", "pop-up", "pop-up (plain)", "wheel" };
-        uint8_t* c = (uint8_t*)ctx;
-        uint8_t* pass = *(uint8_t**)(c + 0x18);
-        uint8_t** fr = *(uint8_t***)(c + 0xd0);
-        uint8_t* desc = fr ? fr[0] : nullptr;
-        Buf b; b.str("blur ").str(names[tag]).str(": layer ").i(g_cfg.blurLayer).str(", rect ")
-            .f(rect[0], 1).c(' ').f(rect[1], 1).c(' ').f(rect[2], 1).c(' ').f(rect[3], 1);
-        if (pass) {
-            b.str(", pass ").i(*(int32_t*)(pass + 8));
-            uint64_t n = *(uint64_t*)(pass + 0x4698);
-            if (n) {
-                uint8_t* top = *(uint8_t**)(*(uint8_t**)(pass + 0x4690) + n * 0x18 - 0x18);
-                if (top) { const float* t = (const float*)(top + 0x20);
-                    b.str(", window ").i(n).str(" layer ").i(*(int32_t*)(top + 0x7c)).str(" transform ")
-                     .f(t[0], 3).c(' ').f(t[1], 1).c(' ').f(t[2], 1); }
-            }
-        }
-        if (desc) { const float* t = (const float*)(desc + 0x60);
-            b.str(", blur texture ").x(*(uint64_t*)(desc + 0x50)).str(" covers ")
-             .f(t[0], 1).c(' ').f(t[1], 1).c(' ').f(t[2], 1).c(' ').f(t[3], 1); }
-        else b.str(", no blur texture");
-        log_line(b);
-    }
-    ui.blurBehind(ctx, rect, 0x3f800000ffffffffull);
+// its layer-5 HUD window. The game draws blur, mask (blend 3) and blend 0 inside an
+// offscreen layer of the box (a3c8b0 .. a3fc30, see SIG_UI_LAYER_BEGIN): the mask then
+// clears the layer's own pixels, and the layer is laid over the scene. Without the layer
+// (0.33.1-dev2) the mask darkens what is under the UI: black where the mask is clear, on
+// setups where the UI draws straight onto the screen. [Interface] BlurStyle picks
+// 0 = layer (as the game), 1 = no layer (dev2), 2 = no blur, a dark fill of the same shape.
+// The first 6 calls per caller are logged (3 frames: layout pass 1 and draw pass 4 each).
+enum { BLUR_LAYERED = 0, BLUR_DIRECT = 1, BLUR_NONE = 2 };
+static int blur_style() {
+    int st = g_cfg.blurStyle;
+    if (st == BLUR_LAYERED && !ui.layerBegin) st = BLUR_DIRECT;
+    return st;
 }
-static void soft_backdrop(const float* node) {
+static void blur_log(int tag, const float* rect, int blend, const uint8_t* layer) {
+    static LONG logged[4] = {};
+    if (tag < 0 || tag >= 4 || InterlockedIncrement(&logged[tag]) > 6) return;
+    static const char* const names[4] = { "menu", "pop-up", "pop-up (plain)", "wheel" };
+    uint8_t* c = (uint8_t*)*g_uiCtxGlobal;
+    uint8_t* pass = *(uint8_t**)(c + 0x18);
+    uint8_t** fr = *(uint8_t***)(c + 0xd0);
+    uint8_t* desc = fr ? fr[0] : nullptr;
+    Buf b; b.str("blur ").str(names[tag]).c(' ').i(logged[tag]).str(": style ").i(blur_style())
+        .str(", layer ").i(g_cfg.blurLayer).str(", rect ")
+        .f(rect[0], 1).c(' ').f(rect[1], 1).c(' ').f(rect[2], 1).c(' ').f(rect[3], 1)
+        .str(", blend ").i(blend);
+    if (layer) b.str(", offscreen ").i(layer[0x24]);
+    if (ui.passId && ui.passObj) b.str(", passId ").i(ui.passId(ui.passObj(c)));
+    if (pass) {
+        b.str(", pass ").i(*(int32_t*)(pass + 8));
+        uint64_t n = *(uint64_t*)(pass + 0x4698);
+        if (n) {
+            uint8_t* top = *(uint8_t**)(*(uint8_t**)(pass + 0x4690) + n * 0x18 - 0x18);
+            if (top) { const float* t = (const float*)(top + 0x20);
+                b.str(", window ").i(n).str(" layer ").i(*(int32_t*)(top + 0x7c)).str(" transform ")
+                 .f(t[0], 3).c(' ').f(t[1], 1).c(' ').f(t[2], 1); }
+        }
+    }
+    if (desc) { const float* t = (const float*)(desc + 0x60);
+        b.str(", blur texture ").x(*(uint64_t*)(desc + 0x50)).str(" covers ")
+         .f(t[0], 1).c(' ').f(t[1], 1).c(' ').f(t[2], 1).c(' ').f(t[3], 1); }
+    else b.str(", no blur texture");
+    log_line(b);
+}
+static void blur_logged(int tag, const float* rect) {
+    blur_log(tag, rect, 0, nullptr);
+    ui.blurBehind(*g_uiCtxGlobal, rect, 0x3f800000ffffffffull);
+}
+// Offscreen layer around a box's blur (the game's margin: the wheel 30, the snapping hint 10).
+static bool blur_layer_begin(uint8_t* layer, void* box, float margin) {
+    if (blur_style() != BLUR_LAYERED) return false;
+    alignas(16) const float m[4] = { margin, margin, margin, margin };
+    ui.layerBegin(layer, box, 0, 0x3f800000ffffffffull, 1, m, nullptr);
+    return true;
+}
+static const uint64_t kPlainBackdrop = 0x3f800000a0000000ull;   // BlurStyle 2: 63% black
+static void soft_backdrop(void* box, const float* node) {
     void* ctx = *g_uiCtxGlobal;
     uint8_t* bundle = *(uint8_t**)((uint8_t*)ctx + 0xc8);
     const float rect[4] = { node[0] - 8, node[1] - 4, node[2] + 16, node[3] + 8 };
@@ -5578,15 +5613,20 @@ static void soft_backdrop(const float* node) {
     alignas(16) const float radii[4] = { c, c, c, c };
     alignas(16) uint8_t tex[16]; memcpy(tex, bundle + 0xd530, 16);
     alignas(16) float borders[4]; memcpy(borders, bundle + 0xd540, 16);
-    blur_logged(1, rect);
+    alignas(16) uint8_t layer[0x80] = {};
+    bool plain = blur_style() == BLUR_NONE;
+    bool layered = blur_layer_begin(layer, box, 10.f);
+    blur_log(1, rect, plain ? 0 : 3, layered ? layer : nullptr);
+    if (!plain) ui.blurBehind(ctx, rect, 0x3f800000ffffffffull);
     bool draw = ui.passId(ui.passObj(ctx)) == 4;
-    if (draw) ui.blend(ui.drawList(ui.passObj(ctx)), 3);
+    if (draw && !plain) ui.blend(ui.drawList(ui.passObj(ctx)), 3);
     uint32_t h = 0;
     uint32_t image = *ui.resolveImage(ui.imageCtx(), &h, tex);
     if (draw) {
-        ui.nineSlice(ui.drawList(ui.passObj(ctx)), rect, image, borders, radii, 0x3f800000ffffffffull);
-        ui.blend(ui.drawList(ui.passObj(ctx)), 0);
+        ui.nineSlice(ui.drawList(ui.passObj(ctx)), rect, image, borders, radii, plain ? kPlainBackdrop : 0x3f800000ffffffffull);
+        if (!plain) ui.blend(ui.drawList(ui.passObj(ctx)), 0);
     }
+    if (layered) ui.layerEnd(layer);
 }
 
 static void draw_float_info() {
@@ -5606,7 +5646,8 @@ static void draw_float_info() {
     const float pad[4] = { 16, 6, 16, 6 };
     ui.setPadding(n, pad);
     const float* r = (const float*)(n + 0x114);            // node rect {x, y, w, h} (last layout)
-    if (ui.nineSlice && ui.imageCtx) soft_backdrop(r);
+    if (ui.nineSlice && ui.imageCtx) soft_backdrop(box, r);
+    else if (blur_style() == BLUR_NONE) { blur_log(2, r, 0, nullptr); ui.fillRect(r, kPlainBackdrop); }
     else { blur_logged(2, r); ui.fillRect(r, 0x3f80000080000000ull); }
     ui_text(text, STYLE_BODY);
     ui.endBox(box);
@@ -5672,11 +5713,19 @@ static void draw_radial() {
     if (w > 8.f && h > 8.f) {
         const uint64_t white = 0x3f800000ffffffffull;
         const float big[4] = { x - 30.f, y - 30.f, w + 60.f, h + 60.f };
-        blur_logged(3, big);
-        ui.drawRect(wheel, big, 0, 0x3f80000040000000ull);        // 25% black
-        ui.boxBlend(wheel, 3);
-        ui.drawRect(wheel, big, ui_image(bundle, 0xdd60), white); // itemWheel.blurredBackgroundMask
-        ui.boxBlend(wheel, 0);
+        alignas(16) uint8_t layer[0x80] = {};
+        bool layered = blur_layer_begin(layer, wheel, 30.f);   // the game's wheel: margin 30
+        if (blur_style() == BLUR_NONE) {                      // dark disc: the mask image as a plain image
+            blur_log(3, big, 0, nullptr);
+            ui.drawRect(wheel, big, ui_image(bundle, 0xdd60), 0x3f800000a0000000ull);
+        } else {
+            blur_log(3, big, 3, layered ? layer : nullptr);
+            ui.blurBehind(*g_uiCtxGlobal, big, white);
+            ui.drawRect(wheel, big, 0, 0x3f80000040000000ull);        // 25% black
+            ui.boxBlend(wheel, 3);
+            ui.drawRect(wheel, big, ui_image(bundle, 0xdd60), white); // itemWheel.blurredBackgroundMask
+            ui.boxBlend(wheel, 0);
+        }
         const float cd[4] = { x + w * (0.5f - kWheelDisc * 0.5f), y + h * (0.5f - kWheelDisc * 0.5f), w * kWheelDisc, h * kWheelDisc };
         ui.drawRect(wheel, cd, ui_image(bundle, 0xdd00), *(uint64_t*)(bundle + 0xdcf8));   // background, previewCenterColor
         uint64_t accent = *(uint64_t*)(bundle + 0xd640);
@@ -5694,6 +5743,7 @@ static void draw_radial() {
             uint64_t c = k == sel ? accent : (accent & 0xffffffff00ffffffull) | 0x80000000ull;   // others at half alpha
             ui.drawRotated(wheel, dr, slot_angle(k, count), dot, c);
         }
+        if (layered) ui.layerEnd(layer);                     // as the game: before the wheel box ends
     }
     ui.endBox(wheel);
     ui.endBox(root);
@@ -5876,6 +5926,9 @@ static void install_menu() {
     ui.drawRect = (void (*)(void*, const float*, uint32_t, uint64_t))find_hookable("UiDrawRect", SIG_UI_DRAW_RECT, 12);   // Find hooks it (chest glow)
     ui.drawRotated = (void (*)(void*, const float*, float, uint32_t, uint64_t))find_unique("UiDrawRotated", SIG_UI_DRAW_ROTATED);
     ui.boxBlend = (void (*)(void*, uint8_t))find_unique("UiBoxBlend", SIG_UI_BOX_BLEND);
+    ui.layerBegin = (void* (*)(void*, void*, uintptr_t, uint64_t, uint8_t, const float*, void*))find_unique("UiLayerBegin", SIG_UI_LAYER_BEGIN);
+    ui.layerEnd = (void (*)(void*))find_unique("UiLayerEnd", SIG_UI_LAYER_END);
+    if (!ui.layerBegin || !ui.layerEnd) ui.layerBegin = nullptr;
     ui.scrollParams = (void (*)(void*))find_unique("UiScrollParams", SIG_UI_SCROLL_PARAMS);
     ui.beginScroll = (void (*)(void*, uint8_t, float*, void*, const void*))find_unique("UiScrollBegin", SIG_UI_SCROLL_BEGIN);
     ui.endScroll = (void (*)(void*))find_unique("UiScrollEnd", SIG_UI_SCROLL_END);
