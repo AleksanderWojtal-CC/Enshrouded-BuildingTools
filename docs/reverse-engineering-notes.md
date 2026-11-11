@@ -1007,3 +1007,4 @@ all tested mod signatures match the file, so the disk image is plain).
   "draw inside doHudScreenSpace" variant was not built: not needed for the fix, and riskier.
   Log: "blur <element> <n>" for the first 6 calls (3 frames, pass 1 and 4), with style,
   blend mode, offscreen (layer allocated), passId and the window.
+- Released as 0.33.1 with BlurStyle 0 (offscreen layer) as the default.

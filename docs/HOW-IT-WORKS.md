@@ -407,6 +407,12 @@ same functions, found by signatures, so everything looks like the game.
 - **Floating text.** After the play UI, the mod opens a fullscreen window that takes no
   input and draws a centred box below the crosshair like the game's snapping hint: blur
   behind, the soft nine-slice frame, body text.
+- **Blur of the wheel and pop-up.** As the game's item wheel and snapping hint, the blur and
+  its mask are drawn inside an offscreen UI layer on the box (since 0.33.1); without it the
+  mask multiply darkened the screen under the UI (black box on some SDR setups). Hidden,
+  diagnostic only ini keys under [Interface]: `BlurStyle` (0 layer, default; 1 no layer;
+  2 dark fill without blur) and `BlurLayer` (window layer, default 5). Details:
+  [reverse-engineering-notes.md](reverse-engineering-notes.md) (0.33.1-dev2 / dev3).
 
 - **Exact window.** In exact mode the first area click only notes corner 1 and the facing
   (camera forward and right snapped to world x / z) and opens screen 52, which then draws
