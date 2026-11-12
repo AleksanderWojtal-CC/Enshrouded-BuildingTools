@@ -108,6 +108,16 @@ static void binary_checks(const char* exe) {
     const uint8_t commitStolen[5] = {0x48,0x8B,0xC4,0x55,0x53};
     CHECK(!memcmp(&img[0x48e6f0], commitStolen, 5), "commit hook steals mov rax,rsp; push rbp; push rbx");
     CHECK(0x2d88f2 + 81 == 0x2d8943, "server branch sits directly before the placement call");
+    {   // magic chests: the two StockCount calls of the missing-materials check, found by scan
+        const uint8_t* hits[4];
+        if (core::scan(&img[textVa], textSz, sigs["SIG_STOCK_COUNT"].c_str(), hits, 4) == 1) {
+            const uint8_t* cnt = hits[0];
+            uint32_t mc = 0x29c092, mf = mc + 5 + *(int32_t*)&img[mc + 1];
+            const uint8_t* sites[2] = {};
+            int n = core::find_calls_to(&img[mf], 0x400, cnt, sites, 2);
+            CHECK(n == 2 && sites[0] == &img[mf + 0x137] && sites[1] == &img[mf + 0x2d7], "magic chests: StockCount calls at missing +0x137 / +0x2d7");
+        } else CHECK(false, "magic chests: StockCount signature unique");
+    }
     // call-site distance check used by the mod
     CHECK(0x2d8943 > 0x2d85fb && 0x2d8943 - 0x2d85fb < 0x400, "call-site layout check passes");
 
@@ -179,6 +189,22 @@ int main(int argc, char** argv) {
     // ---------------------------------------------------------------- planner
     const int64_t M = (int64_t)1 << 32;
     float step2[3] = {2.f, 2.f, 2.f};
+    {   // call-site scan (magic chests: the server build has other offsets)
+        uint8_t fn[0x400] = {};
+        const uint8_t* target = fn + 0x380;
+        auto put = [&](int at, const uint8_t* to) {
+            int32_t r = (int32_t)(to - (fn + at + 5));
+            fn[at] = 0xE8; memcpy(fn + at + 1, &r, 4);
+        };
+        put(0x140, target); put(0x200, fn + 0x390); put(0x2fb, target);
+        const uint8_t* sites[2] = {};
+        CHECK(core::find_calls_to(fn, sizeof(fn), target, sites, 2) == 2 && sites[0] == fn + 0x140 && sites[1] == fn + 0x2fb,
+              "find_calls_to: two calls to the target, other call ignored");
+        CHECK(core::find_calls_to(fn, 0x200, target, sites, 2) == 1, "find_calls_to: stays in the range");
+        put(0x100, target);
+        CHECK(core::find_calls_to(fn, sizeof(fn), target, sites, 2) == 3, "find_calls_to: counts past cap (caller refuses 3)");
+        CHECK(core::find_calls_to(fn, 4, target, sites, 2) == 0 && core::find_calls_to(nullptr, 16, target, sites, 2) == 0, "find_calls_to: short/null range");
+    }
     core::Plan pl;
     // line of 5 blocks along x (corners 0 and 8 m; 3rd click repeats corner 2)
     core::I3 line[3] = {{0, 0, 0}, {8 * M, 0, 0}, {8 * M, 0, 0}};

@@ -317,6 +317,8 @@ Magic chests of all bases
   placed, as without the mod. F5 (mod off) switches this off too.
   The game only sees chests in parts of the world it has loaded; chests of a
   base far away may not count until you have been near it. Off by default.
+  On a dedicated server, set it in the server's BuildingTools.ini (the mod
+  must be installed on the server too).
 
 Uninstall
   Close the game and delete dinput8.dll and the BuildingTools-Languages folder

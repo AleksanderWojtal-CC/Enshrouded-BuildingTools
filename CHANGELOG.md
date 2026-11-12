@@ -10,6 +10,8 @@ changelog on Nexus Mods, so keep it short and written for players.
   was refused.
 - Tools wheel and pop-up messages: the blurred background no longer shows as a black box on
   ultrawide screens.
+- Magic chests of all bases now work on dedicated servers (update the server too).
+  Thanks to holc-soptim for the report and analysis (#57).
 
 ## 0.33.0
 

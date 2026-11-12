@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.33.1"
+#define MOD_VERSION "0.33.1-dev4"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1890,9 +1890,11 @@ typedef uint32_t (*StockCountFn)(void* map, uint8_t* sys, uint32_t item, const f
 static StockCountFn g_stockCountOrig = nullptr;
 static uint32_t stock_count_hook(void* map, uint8_t* sys, uint32_t item, const float* pos) {
     PROF(PF_SCOUNT);
-    // a system that is not a known client world's is the server's; until the client
-    // world has shown up nothing is changed
-    if (!global_chests_on() || !sys || !g_clientChests[0] || is_client_sys(sys))
+    // a system that is not a known client world's is the server's; in a hosted game
+    // nothing is changed until the client world has shown up. A dedicated server has no
+    // client world: every system is the server's.
+    if (!global_chests_on() || !sys) return g_stockCountOrig(map, sys, item, pos);
+    if (!g_dedicated && (!g_clientChests[0] || is_client_sys(sys)))
         return g_stockCountOrig(map, sys, item, pos);
     return 0xffff;                                    // "plenty": the payment decides
 }
@@ -6409,8 +6411,16 @@ static DWORD WINAPI init_thread(void*) {
         uint8_t* dep = find_unique("DepositChests", SIG_DEPOSIT_CHESTS);
         auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
         // the missing-materials check's two stock counts
+        // (at +0x137 / +0x2d7 in the game, about +0x140 / +0x2fb in the dedicated server)
         uint8_t* mf = (uint8_t*)g_missingOrig;
-        uint8_t* cntSites[2] = { mf ? mf + 0x137 : nullptr, mf ? mf + 0x2d7 : nullptr };
+        uint8_t* cntSites[2] = { nullptr, nullptr };
+        if (mf && cnt && mf >= g_textBase && mf < g_textBase + g_textSize) {
+            size_t len = (size_t)(g_textBase + g_textSize - mf);
+            const uint8_t* found[2];
+            if (core::find_calls_to(mf, len < 0x400 ? len : 0x400, cnt, found, 2) == 2) {
+                cntSites[0] = (uint8_t*)found[0]; cntSites[1] = (uint8_t*)found[1];
+            }
+        }
         // ChestList and ClientStock use BaseAt and read a base record as {chest ids, count}
         // at sys + 0x30 + i * 0x130; BaseAt reads the base boxes and sub-boxes
         bool layout = cl && cs && ba && cnt && rel(cl + 0x74) == ba && rel(cs + 0xef) == ba &&

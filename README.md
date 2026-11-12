@@ -52,7 +52,8 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   building and crafting take materials from the magic chests of every flame altar area,
   not only the one you stand in, also outside a base. The material picker, the red
   "missing materials" ghost and the crafting menus count them too. Chests of the base you
-  are in are used first; the loot deposit still only fills local chests.
+  are in are used first; the loot deposit still only fills local chests. On a dedicated
+  server, set it in the server's `BuildingTools.ini` and install the mod there too.
 - **Object placement**: with an object (chair, torch, plant...) in hand, the tools wheel
   picks Single, Line, Curve, Circle, Arch or Standing circle. The line and a ring for each
   object are drawn over the world; the last click places them all, evenly spaced, with

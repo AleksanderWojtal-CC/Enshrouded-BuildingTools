@@ -279,8 +279,14 @@ instructions; the game functions themselves are not patched.
    With the option on, the server's count answers "plenty" and the payment (1) decides:
    it takes from every chest, or refuses the placement when there is not enough
    anywhere. The client's check is unchanged and still turns the ghost red when you are
-   short. Server and client worlds are told apart by the client world's system, which the
-   mod learns in (2); until then the check is left alone.
+   short. In a hosted game, server and client worlds are told apart by the client world's
+   system, which the mod learns in (2); until then the check is left alone. A dedicated
+   server has no client world, so there every count answers "plenty" (before 0.33.1 the
+   server counted only the local base and dropped the click, #57). The two `StockCount`
+   calls are found by scanning the missing-materials function for calls to it (exactly
+   two), since their offsets differ between the game (+0x137 / +0x2d7) and the dedicated
+   server build (about +0x140 / +0x2fb); with fixed offsets the server logged "not
+   available (game code differs)".
 
 Chests whose entity is not loaded are skipped by the game itself (the entity lookup
 fails), so a base far away may only count once the game has it in memory.

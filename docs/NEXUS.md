@@ -88,7 +88,7 @@ GlobalMagicChests=1 in BuildingTools.ini: building and crafting take materials f
 magic chests of all your flame altar areas, not only the one you stand in, also outside a
 base. The material picker, the missing-materials ghost and the crafting menus count them
 too. The loot deposit stays local. Chests of a base the game has not loaded (far away) may
-not count.
+not count. On a dedicated server, set it in the server's BuildingTools.ini.
 
 [b]Object placement[/b] (an object in hand, on the tools wheel)
 Place chairs, torches, plants and any other object in a Line, Curve, Circle, Arch or

@@ -54,6 +54,21 @@ inline int scan(const uint8_t* base, size_t len, const char* sig, const uint8_t*
     return found;
 }
 
+// Finds the direct calls (E8 rel32) to `target` in [fn, fn+len): writes up to `cap`
+// call addresses and returns how many there are. Used where the call offsets differ
+// between the game and the dedicated server builds.
+inline int find_calls_to(const uint8_t* fn, size_t len, const uint8_t* target, const uint8_t** sites, int cap) {
+    int found = 0;
+    for (size_t i = 0; fn && i + 5 <= len; i++) {
+        if (fn[i] != 0xE8) continue;
+        int32_t rel = (int32_t)((uint32_t)fn[i + 1] | (uint32_t)fn[i + 2] << 8 | (uint32_t)fn[i + 3] << 16 | (uint32_t)fn[i + 4] << 24);
+        if (fn + i + 5 + rel != target) continue;
+        if (found < cap) sites[found] = fn + i;
+        found++;
+    }
+    return found;
+}
+
 // --------------------------------------------------------------- game layout
 // World positions are signed 64-bit fixed point, 1 m == 2^32.
 static const double kFix = 4294967296.0;
