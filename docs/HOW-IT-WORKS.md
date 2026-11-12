@@ -390,6 +390,11 @@ With `CreativeBuilding=1`:
 - **Empty types.** When the material chosen last is not in a list, the game picks the
   selected entry and sends it as the new choice, but refuses an entry with count 0
   (406020). The mod accepts it, so a type with nothing in the inventory gets a material.
+- **Dedicated server.** Payment runs on the server, so the server's `CreativeBuilding`
+  decides what is paid. The picker list is built in the player's game (the server has no
+  stocks update), so the player's own `CreativeBuilding` decides whether every material is
+  listed; the two should match. The menu refuses to switch Creative while the session is
+  remote, and there is no way yet to switch the server's setting from the game.
 
 ## Menu and HUD (game UI)
 

@@ -12,8 +12,10 @@ Dedicated server
   Copy dinput8.dll (and BuildingTools-Languages) next to enshrouded_server.exe as
   well. Your game sends your Building Tools settings with its input, so each player
   builds with their own settings; players without the mod build as usual. The
-  server's BuildingTools.ini sets creative building, chests of all bases and the
-  shape limits. Games hosted by a player don't support per-player settings yet.
+  server's BuildingTools.ini sets creative building (what is paid), chests of all
+  bases and the shape limits. Set CreativeBuilding in each player's ini to the
+  server's value too (see Creative building). Games hosted by a player don't
+  support per-player settings yet.
 
 Keys (with the Construction Hammer)
   Caps Lock (hold)  Tools wheel: point the mouse at an option, let go to pick it
@@ -238,7 +240,7 @@ Menu (Home)
   Options tab: which tools you use. Building Tools (the whole mod), Replace,
   Area mode, Area shapes (roof, round and diagonal fills), Free placement,
   Object lines, Blueprints,
-  Creative building (single player; on a server its ini decides), Magic
+  Creative building (can't be changed while you're on a server), Magic
   chests of all bases, and the language. A tool that is off does nothing:
   its keys are the game's again and it leaves the building box hints and the
   tools wheel. Saved under [Tools] in the ini. The tools' own settings (mode,
@@ -304,6 +306,9 @@ Creative building
   A type you have nothing of (e.g. no roof at all) can be built right away.
   Blocks built in creative are refunded like any other block if you remove
   them later with creative off.
+  On a server, set CreativeBuilding in your game's BuildingTools.ini to the
+  same value as the server's: the server's setting decides what you pay, and
+  the Creative option in the menu can't be changed while you're on a server.
 
 Magic chests of all bases
   Set GlobalMagicChests=1 in the [Chests] section of BuildingTools.ini (close

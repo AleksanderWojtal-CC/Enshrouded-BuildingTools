@@ -47,7 +47,10 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   roofs, terrain and prefabs cost nothing and removing or undoing gives nothing back, so
   the inventory is never touched. The material picker's "backpack and magic chests"
   order lists every material, also ones you have none of; favourites and the other
-  orders stay normal. Props, crafting and chests work as normal.
+  orders stay normal. Props, crafting and chests work as normal. On a server, set
+  `CreativeBuilding` in your game's `BuildingTools.ini` to the same value as the server's:
+  the server's setting decides what you pay, and the Creative option in the menu can't be
+  changed while you're on a server.
 - **Magic chests of all bases** (optional, `GlobalMagicChests=1` in `BuildingTools.ini`):
   building and crafting take materials from the magic chests of every flame altar area,
   not only the one you stand in, also outside a base. The material picker, the red
@@ -148,7 +151,9 @@ byte signatures. If an update changes that code, the mod turns itself off safely
 to `enshrouded_server.exe` too. Each player's game sends that player's Building Tools
 settings to the server with its input, so everyone builds with their own Area/Replace
 settings, and players without the mod build as usual. The server's `BuildingTools.ini`
-sets creative building, chests of all bases and the shape limits for everyone. In a game
+sets creative building (what is paid), chests of all bases and the shape limits for
+everyone; set `CreativeBuilding` in each player's ini to the same value, as the material
+picker follows the player's own setting. In a game
 hosted by a player (not a dedicated server), per-player settings are not supported yet.
 
 **Shroudforge** ([bonsaibauer/shroudforge](https://github.com/bonsaibauer/shroudforge)):

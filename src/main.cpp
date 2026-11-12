@@ -284,6 +284,7 @@ static void write_full_ini(const Config& c) {
      .t("\r\n[Creative]\r\n")
      .t("; 1 = creative building: blocks cost nothing, removing or undoing gives nothing back,\r\n")
      .t(";     so your inventory is never touched (props, crafting and chests stay normal)\r\n")
+     .t(";     On a server, use the server's value: the server decides what you pay\r\n")
      .t("CreativeBuilding=").i(c.creative).t("\r\n")
      .t("\r\n[Chests]\r\n")
      .t("; 1 = building and crafting use the magic chests of all your bases (flame altar\r\n")

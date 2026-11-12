@@ -82,6 +82,9 @@ CreativeBuilding=1 in BuildingTools.ini: blocks, roofs, terrain and prefabs cost
 removing or undoing gives nothing back, so your inventory is never touched. The material
 picker ("backpack and magic chests" order) lists every material, also ones you have none
 of; favourites and the other orders stay normal. Props, chests and crafting are unchanged.
+On a server, set CreativeBuilding in your game's BuildingTools.ini to the same value as the
+server's: the server's setting decides what you pay, and the Creative option in the menu
+can't be changed while you're on a server.
 
 [b]Magic chests of all bases[/b] (optional)
 GlobalMagicChests=1 in BuildingTools.ini: building and crafting take materials from the
@@ -155,7 +158,9 @@ Using the [b]Shroudforge[/b] mod loader? Download "Building Tools for Shroudforg
 [/list]
 Each player builds with their own keys and settings (Area, Replace, styles, fill); players
 without the mod build as usual. The server's BuildingTools.ini (created on its first start)
-decides creative building, chests of all bases, MaxShapes and FillLimit for everyone.
+decides creative building (what is paid), chests of all bases, MaxShapes and FillLimit for
+everyone. Players should set CreativeBuilding in their own ini to the server's value, as the
+material picker follows the player's own setting.
 Server and players should run the same version of the mod.
 
 [b]Compatibility[/b]
