@@ -325,14 +325,16 @@ Magic chests of all bases
   On a dedicated server, set it in the server's BuildingTools.ini (the mod
   must be installed on the server too).
 
-Stuck blocks (blueprints of 0.33.0)
-  A blueprint built with 0.33.0 could leave blocks that nothing removes
-  (hammer, Area delete, explosives, pickaxe). 0.33.2 no longer builds them.
-  To remove ones already in your world: close the game, set
-  RemoveStuckBlocks=1 in the [Area] section of BuildingTools.ini, start the
-  game and delete them with Area mode, then set it back to 0. While it is on,
-  Area delete also removes other blocks the hammer cannot remove (ruin walls
-  in your base), and gives nothing back for them.
+Remove anything (risky / debug option)
+  Options > Remove anything (risky), off by default; saved as RemoveAnything=1
+  in the [Risky] section of BuildingTools.ini. Not on the tools wheel, no key.
+  While it is on, the hammer and Area delete remove every voxel in the shape
+  or box, also what the game keeps: terrain, ruin walls and roofs, and blocks
+  nothing else removes (such as the stuck blocks a 0.33.0 blueprint could
+  leave, #61). It can break your world (holes, floating ruins): back up your
+  save first and turn it off when done. Nothing is given back for what the
+  game would not let you remove. Only in a world you host; on a dedicated
+  server the game's rules stay.
 
 Uninstall
   Close the game and delete dinput8.dll and the BuildingTools-Languages folder

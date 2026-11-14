@@ -10,11 +10,16 @@ changelog on Nexus Mods, so keep it short and written for players.
   number, the mod could pick the wrong data and build a game-internal material instead.
   Blueprint materials are now looked up the way the game does, and only real building
   blocks are built; a material that cannot be found is left out (as before, with a
-  message). Thanks to Blaze1404 for the report and the blueprint (#61).
-- To clean up such blocks: set `RemoveStuckBlocks=1` in the `[Area]` section of
-  `BuildingTools.ini`, start the game and delete them with Area mode, then set it back
-  to 0. While it is on, Area delete also removes other blocks the hammer cannot remove,
-  such as ruin walls inside your base, and gives nothing back for them.
+  message that now names the material). Thanks to Blaze1404 for the report and the
+  blueprint (#61).
+- **Blueprints**: a block material whose refund is a plain item (the #61 blueprint's stone
+  wall blocks) was left out of the build. The mod now builds it with the building block of
+  that material when the game has one, and new saves store the block itself.
+- **Remove anything (risky)**, new in Options, off by default: the hammer and Area delete
+  remove everything in the shape or box, also what the game keeps: terrain, ruin walls and
+  roofs, and stuck blocks like those above. It can leave holes or floating ruins, so back
+  up your save. Nothing is given back for what the game would not let you remove. Only in
+  a world you host; on a server the game's rules stay. Not on the tools wheel and no key.
 
 ## 0.33.1
 

@@ -57,10 +57,14 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   "missing materials" ghost and the crafting menus count them too. Chests of the base you
   are in are used first; the loot deposit still only fills local chests. On a dedicated
   server, set it in the server's `BuildingTools.ini` and install the mod there too.
-- **Remove stuck blocks** (optional, `RemoveStuckBlocks=1` in the `[Area]` section of
-  `BuildingTools.ini`): Area delete also removes building blocks the hammer cannot remove,
-  such as the blocks a 0.33.0 blueprint could leave (#61), but also ruin walls in your base.
-  Nothing is given back for them. Off by default; turn it on only to clean up.
+- **Remove anything (risky / debug)**, in Options (saved as `RemoveAnything=1` under
+  `[Risky]` in `BuildingTools.ini`; off by default, not on the wheel, no key): the hammer
+  and Area delete remove every voxel in the shape or box, also what the game keeps:
+  terrain, ruin walls and roofs, and stuck blocks such as those a 0.33.0 blueprint could
+  leave (#61). It can break your world (holes, floating ruins): back up the save first.
+  Nothing is given back for what the game would not let you remove. Only in a world you
+  host (on a dedicated server the game's rules stay). The 0.33.2-dev1 setting
+  `RemoveStuckBlocks=1` turns it on too.
 - **Object placement**: with an object (chair, torch, plant...) in hand, the tools wheel
   picks Single, Line, Curve, Circle, Arch or Standing circle. The line and a ring for each
   object are drawn over the world; the last click places them all, evenly spaced, with

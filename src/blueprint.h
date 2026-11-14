@@ -32,6 +32,7 @@ struct Blueprint {
     wchar_t path[MAX_PATH];
 };
 static bool bp_block_item(const uint8_t* it);     // a building block item (blueprint materials)
+static uint8_t* bp_block_of_material(uint8_t* anchor, uint8_t mat);
 static Blueprint g_bp;                           // the one picked in the window (UI thread; the server reads it once armed)
 static volatile LONG g_bpSub = BP_SAVE;          // what a click in Blueprint mode does
 static volatile LONG g_bpRot = 0;                // quarter turns about the vertical axis
@@ -350,6 +351,13 @@ static uint8_t bp_save_box(void* ctx, void* state, const CursorXf& tmpl) {
         LOG(.str("  material ").x(h.m[q].mat).str(" item ").x(h.m[q].item).str(" cells ").u(h.m[q].cells).str(" items ").u(h.m[q].items));
         // the build looks the item up by id (issue #61): note when it is not a block of this material
         uint8_t* it = h.m[q].item && bp_item_registry(ctx, state) ? g_bpItemById(h.m[q].item, g_bpItemReg) : nullptr;
+        // the refund item of some block materials is not the block (issue #61: material 0xbf gives
+        // item 0x57f0f395 back): save the block item of that material, which the build finds by id
+        if (g_bpItemReg && !bp_block_item(it))
+            if (uint8_t* blk = bp_block_of_material((uint8_t*)state, h.m[q].mat)) {
+                LOG(.str("  material ").x(h.m[q].mat).str(": refund item ").x(h.m[q].item).str(" is not a block, saved as block item ").x(*(uint32_t*)blk));
+                h.m[q].item = *(uint32_t*)blk; it = blk;
+            }
         if (h.m[q].item && g_bpItemReg && !it)
             LOG(.str("  material ").x(h.m[q].mat).str(": item ").x(h.m[q].item).str(" not found by id (the build will leave it out)"));
         else if (it && readable(it, 0x4b8) && (!bp_block_item(it) || it[0x454] != h.m[q].mat))
@@ -446,6 +454,42 @@ static uint8_t* bp_find_item(uint8_t* pdata, uint32_t id, uint8_t mat) {
     if (found && g_bpItemN < 128) g_bpItemCache[g_bpItemN++] = BpItem{ id, mat, found };
     return found;
 }
+// The building block item of a material byte (issue #61). Blueprints store the item the game's
+// refund builder gives for each material; for some block materials that is not the block but a
+// plain item (the #61 file: material 0xbf, item 0x57f0f395, kind 0, material byte 0). The build
+// then needs a block item of that material: a read-only scan of the item data for a small
+// building shape whose material byte is `mat`, and the item registry must return that same
+// definition for its id (so only a real item counts, never stray data). Cached per material.
+struct BpMatItem { uint8_t mat; uint8_t* p; };
+static BpMatItem g_bpMatItem[64]; static int g_bpMatItemN = 0;
+static uint8_t* bp_block_of_material(uint8_t* anchor, uint8_t mat) {
+    if (mat < 0x80 || !anchor || !g_bpItemById || !g_bpItemReg) return nullptr;
+    for (int q = 0; q < g_bpMatItemN; q++) if (g_bpMatItem[q].mat == mat) return g_bpMatItem[q].p;
+    MEMORY_BASIC_INFORMATION mi;
+    if (!VirtualQuery(anchor, &mi, sizeof mi)) return nullptr;
+    uint8_t* base = (uint8_t*)mi.AllocationBase;
+    uint8_t* found = nullptr; uint64_t scanned = 0; int tried = 0;
+    const DWORD t0 = GetTickCount();
+    for (uint8_t* r = base; !found && VirtualQuery(r, &mi, sizeof mi) && mi.AllocationBase == base; r = (uint8_t*)mi.BaseAddress + mi.RegionSize) {
+        const DWORD okProt = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE;
+        if (mi.State != MEM_COMMIT || !(mi.Protect & okProt) || (mi.Protect & (PAGE_GUARD | PAGE_NOACCESS))) continue;
+        uint8_t* lo = (uint8_t*)mi.BaseAddress; uint8_t* hi = lo + mi.RegionSize;
+        if (hi - lo < 0x4b8) continue;
+        scanned += mi.RegionSize;
+        for (uint8_t* c = lo + (((uintptr_t)anchor - (uintptr_t)lo) & 7); c + 0x4b8 <= hi; c += 8) {
+            if (c[0x454] != mat || !c[0x440] || !*(const uint32_t*)c) continue;      // as item_kind: small building shape
+            if (!(*(const uint64_t*)(c + 0x458) | *(const uint64_t*)(c + 0x460))) continue;
+            if (*(const uint64_t*)(c + 0x468) | *(const uint64_t*)(c + 0x470)) continue;
+            if (++tried > 4096) break;
+            if (g_bpItemById(*(const uint32_t*)c, g_bpItemReg) == c) { found = c; break; }
+        }
+        if (scanned > (512ull << 20) || tried > 4096) break;      // never more than 512 MB
+    }
+    LOG(.str("  blueprint: block item of material ").x(mat).str(found ? ": " : ": none").x(found ? *(uint32_t*)found : 0)
+        .str(" (scanned ").u(scanned >> 20).str(" MB, ").i(tried).str(" candidates, ").u(GetTickCount() - t0).str(" ms)"));
+    if (g_bpMatItemN < 64) g_bpMatItem[g_bpMatItemN++] = BpMatItem{ mat, found };
+    return found;
+}
 static uint8_t g_bpMatByte[core::BP_MAX_MATS];   // the build's material byte per blueprint material (commit: cave force)
 static uint8_t bp_commit_material(int i) {       // main.cpp's commit hook, per queued shape
     uint8_t mi = g_pendMat[i];
@@ -479,9 +523,23 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
         if (bm.item && reg) {
             uint8_t* it = g_bpItemById(bm.item, g_bpItemReg);                  // as the game looks items up
             if (bp_block_item(it)) item[q] = it;
-            else if (it) LOG(.str("  blueprint: item ").x(bm.item).str(" is not a building block (kind ").i(item_kind(it))
-                             .str(" material ").x(readable(it, 0x458) ? it[0x454] : 0).str("), left out"));
-            else LOG(.str("  blueprint: item ").x(bm.item).str(" not in the item registry, left out"));
+            else {
+                if (it) LOG(.str("  blueprint: item ").x(bm.item).str(" is not a building block (kind ").i(item_kind(it))
+                            .str(" material ").x(readable(it, 0x458) ? it[0x454] : 0).str(") ")
+                            .str(bp_item_name_cached(bm.item) ? bp_item_name_cached(bm.item) : ""));
+                else LOG(.str("  blueprint: item ").x(bm.item).str(" not in the item registry"));
+                // a file that saved a material's refund item (0.33.1 and older, issue #61): the
+                // saved material byte, built only when a real building block item has it and the
+                // game still refunds the saved item for it (nothing yet in a new world is fine);
+                // never a material no block item has (game-internal, unremovable)
+                uint8_t* blk = bp_block_of_material(pdata, bm.mat);
+                CostEntry e;
+                const bool sameMat = blk && (!bp_entry(ctx, bm.mat, &e) || *(uint32_t*)(e.b + 0x10) == bm.item);
+                if (sameMat) {
+                    item[q] = blk;
+                    LOG(.str("  blueprint: material ").x(bm.mat).str(" built with block item ").x(*(uint32_t*)blk));
+                } else LOG(.str("  blueprint: material ").x(bm.mat).str(blk ? " now refunds another item" : " has no building block").str(", left out"));
+            }
         } else if (bm.item) {
             item[q] = bp_find_item(pdata, bm.item, bm.mat);                     // the saved material byte
             if (!item[q]) item[q] = bp_find_item(pdata, bm.item, 0);           // the game renumbered it
@@ -494,7 +552,18 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
         g_bpMatByte[q] = (uint8_t)mat[q];
         LOG(.str("  blueprint material ").i(q).str(": item ").x(bm.item).str(" saved as ").x(bm.mat).str(" -> ").x(mat[q]));
     }
-    if (missing) { Buf b; b.fmt(T(S_BP_NO_MATERIAL), num(missing).s); flash(b.z()); }
+    if (missing) {           // name what is left out: the item's name (as the window shows it) or the material
+        Buf names;
+        for (int q = 0, k = 0; q < g_bp.h.nm; q++) {
+            if (item[q]) continue;
+            if (k++) names.str(", ");
+            if (k > 4) { names.str("..."); break; }
+            const char* nm = bp_item_name_cached(g_bp.h.m[q].item);
+            if (nm) names.str(nm); else names.str("material ").x(g_bp.h.m[q].mat);
+            names.str(" (").u(g_bp.h.m[q].cells).c(')');
+        }
+        Buf b; b.fmt(T(S_BP_NO_MATERIAL), names.z()); flash(b.z());
+    }
     const uint64_t listBefore = list->count;
     pend_begin(ctx, target, false, state ? *(uint32_t*)state : 0);
     g_pend.bp = true;

@@ -230,6 +230,22 @@ found cell is then dry-run in the dismantle's own context (so the game builds th
 refund for the clicked material only) and committed with one `RemoveCommit` per cell,
 with the same undo budget as Area remove.
 
+## Remove anything (risky)
+
+Options > Remove anything (`RemoveAnything=1` under `[Risky]`; the 0.33.2-dev1 key
+`RemoveStuckBlocks=1` under `[Area]` is read as the same setting). Same table redirect as
+connected delete, the other way round: while a player's removal runs on this thread, every
+material 1..0xff is set to removable (terrain, ruin materials, game-internal materials such
+as the #61 stuck blocks). Each dry run (`remove_dry`, hammer and every Area remove cell) runs
+twice: once as the game into the real cost list, so the refund holds only what the game
+itself would give back, and once widened into a scratch list, so a shape holding only kept
+material still counts as something to remove. The commit is widened for Area remove (its own
+commit loop) and for a hammer removal whose widened dry run found something on the same
+thread and context within 3 s. Pieces dismantled by entity (filter set) and connected delete
+are not widened. Off on a dedicated server (`g_dedicated`) and in a remote session
+(`remote_session()`), where the server's table decides. In a world the player hosts the
+host's setting applies to every removal the host's server context runs.
+
 ## Magic chests of all bases
 
 With `GlobalMagicChests=1`, building and crafting use the magic chests of every base
@@ -487,9 +503,16 @@ keeps the ghost valid).
   the item, so the game prices the right item. Issue #61: 0.33.0's scan, after missing
   the saved byte, accepted any memory with the item id and a byte >= 0x80 at +0x454, and
   built a game-internal material (0xfa in the report) that the hammer, Area delete and the
-  pickaxe cannot remove. `RemoveStuckBlocks=1` lets Area delete clear such blocks: while
-  Area delete dry-runs and commits on its thread, the removal table hook (48f1c0, the
-  same redirect as connected delete) sets every building material 0x80..0xff to removable. PlaceCommit builds the material the
+  pickaxe cannot remove. The saved item id is the item the refund builder gives for the
+  material; for some block materials that is a plain item, not the block (the #61 file:
+  material 0xbf, item 0x57f0f395, which the registry returns as kind 0 with material byte
+  0). Then `bp_block_of_material` scans the item data for a small building shape with that
+  material byte, accepted only when `BpItemById` returns that same definition for its id;
+  the build uses it when the refund builder still gives the saved item for the byte (or
+  nothing, in a new world), so a renumbered or game-internal material is never built. The
+  save stores that block item instead of the refund item. A material left out is named in
+  the message (item name the blueprint window looked up, else its material byte).
+  PlaceCommit builds the material the
   player picked (the dry run changes nothing in the placement context, tested), so the
   replace blit patch has a force byte: before each blueprint shape's commit it holds the
   shape's material, and the patch writes it into the blit parameters' material (+0xa1) for

@@ -58,6 +58,8 @@
     X(S_PLACED, "msg.placed", "Placed {0} shapes") \
     X(S_PLACED_PARTIAL, "msg.placed_partial", "Placed {0} of {1} shapes (not enough material)") \
     X(S_REMOVED, "msg.removed", "Removed {0} shapes") \
+    X(S_REMOVE_ANY_ON, "msg.remove_any_on", "Remove anything ON (risky): removal ignores the game's rules") \
+    X(S_REMOVE_ANY_OFF, "msg.remove_any_off", "Remove anything off") \
     X(S_AREA_SENT, "msg.area_sent", "Area sent to the server: {0} shapes") \
     X(S_UNDO_COVERS, "msg.undo_covers", "undo covers {0}") \
     X(S_NOT_ENOUGH, "msg.not_enough", "Not enough material for {0} shapes (needs {1} items)") \
@@ -222,6 +224,9 @@
     X(S_OPT_TOOL_AREA, "option.tool_area", "Area mode") \
     X(S_OPT_TOOL_SHAPES, "option.tool_shapes", "Area shapes (roofs, round, diagonal)") \
     X(S_OPT_GLOBAL_CHESTS, "option.global_chests", "Magic chests of all bases") \
+    X(S_OPT_REMOVE_ANY, "option.remove_any", "Remove anything (risky)") \
+    X(S_OPT_REMOVE_ANY_HINT, "option.remove_any_hint", "Risky, for fixing a world: the hammer and Area remove also remove terrain, ruin walls and roofs and blocks the game keeps. Can leave holes or floating ruins; back up your save. Nothing back for what the game would not let you remove. Only in a world you host.") \
+    X(S_OPT_REMOVE_ANY_REMOTE, "option.remove_any_remote", "Remove anything works only in a world you host: on this server the game's rules stay.") \
     X(S_OPT_LANGUAGE, "option.language", "Language") \
     X(S_OPT_LANGUAGE_GAME, "option.language_game", "Same as the game") \
     /* exact mode window */ \
@@ -305,7 +310,7 @@
     X(S_BP_CANCELLED, "bp.cancelled", "Blueprint cancelled") \
     X(S_BP_SHAPE, "bp.shape", "Hold a block of the blueprint's size ({0} x {1} x {2} m) to build it") \
     X(S_BP_NOT_ENOUGH, "bp.not_enough", "Not enough materials for the whole blueprint (Allow partial build is off)") \
-    X(S_BP_NO_MATERIAL, "bp.no_material", "Materials of this blueprint the game does not know: {0} (their blocks are left out)") \
+    X(S_BP_NO_MATERIAL, "bp.no_material", "Blueprint materials left out (no building block of them in this game): {0}") \
     X(S_BP_NOTHING, "bp.nothing", "Nothing to build: no material of this blueprint could be used") \
     X(S_BP_SAVE_TITLE, "bp.save_title", "Save blueprint") \
     X(S_BP_SAVE_HELP, "bp.save_help", "The clicked block is the reference. Blocks in the drawn box are saved (only building blocks).") \

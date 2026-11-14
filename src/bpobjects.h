@@ -401,6 +401,12 @@ typedef BpText* (*BpLocaTextFn)(BpText* out, uint32_t id);
 static BpLocaTextFn g_bpLocaText = nullptr;
 struct BpName { uint32_t item; char s[64]; };
 static BpName g_bpNameCache[128]; static int g_bpNameCacheN = 0;
+// only what the window already looked up (any thread: no game call, no new entry)
+static const char* bp_item_name_cached(uint32_t item) {
+    const int n = g_bpNameCacheN < 128 ? g_bpNameCacheN : 128;
+    for (int q = 0; q < n; q++) if (g_bpNameCache[q].item == item) return g_bpNameCache[q].s[0] ? g_bpNameCache[q].s : nullptr;
+    return nullptr;
+}
 static const char* bp_item_name(uint32_t item) {
     for (int q = 0; q < g_bpNameCacheN; q++) if (g_bpNameCache[q].item == item) return g_bpNameCache[q].s[0] ? g_bpNameCache[q].s : nullptr;
     if (!g_bpLocaText || !g_bpItemById || !g_bpItemReg || !item) return nullptr;
