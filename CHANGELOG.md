@@ -10,8 +10,10 @@ changelog on Nexus Mods, so keep it short and written for players.
   number, the mod could pick the wrong data and build a game-internal material instead.
   Blueprint materials are now looked up the way the game does, and only real building
   blocks are built; a material that cannot be found is left out (as before, with a
-  message that now names the material). Blocks such a blueprint already built stay in the
-  world. Thanks to Blaze1404 for the report and the blueprint (#61).
+  message that now names the material). Blocks placed with the wrong material by
+  0.33.0/0.33.1 blueprints can now be removed with the hammer or Area delete (no refund;
+  ruins and other blocks the game protects stay protected). Thanks to Blaze1404 for the
+  report and the blueprint (#61).
 - **Blueprints**: a block material whose refund is a plain item (the #61 blueprint's stone
   wall blocks) was left out of the build. The mod now builds it with the building block of
   that material when the game has one, and new saves store the block itself.

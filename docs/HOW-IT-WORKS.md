@@ -495,8 +495,9 @@ keeps the ghost valid).
   the candidate must also pass the block check; cached). It runs one dry run per cell with
   the item, so the game prices the right item. Issue #61: 0.33.0's scan, after missing
   the saved byte, accepted any memory with the item id and a byte >= 0x80 at +0x454, and
-  built a game-internal material (0xfa in the report) that the hammer, Area delete and the
-  pickaxe cannot remove. The saved item id is the item the refund builder gives for the
+  built a game-internal material (0xfa in the report) that the game's removal never
+  allows. Since 0.33.2 such blocks can be removed, see "Blocks of the wrong material" below.
+  The saved item id is the item the refund builder gives for the
   material; for some block materials that is a plain item, not the block (the #61 file:
   material 0xbf, item 0x57f0f395, which the registry returns as kind 0 with material byte
   0). Then `bp_block_of_material` scans the item data for a small building shape with that
@@ -527,6 +528,35 @@ keeps the ghost valid).
   the mod gives it a private writer and the event is dropped. The window's names: ItemInfo
   +0x48 (name loca reference) -> FNV-1a id -> aff9f0, as the game's item rows get them.
 - **Dedicated servers.** Not yet: the windows and the scan run in the player's game.
+
+### Blocks of the wrong material (#61)
+
+Removal (RemoveShape's dry run and RemoveCommit) builds a 256-entry "may remove" table per
+material; the removal blit leaves every voxel whose entry is 0. `remove_table_hook` sits on
+both calls (the same redirect connected delete uses) and always sets the entry of material
+0xfa, the material 0.33.0 / 0.33.1 blueprints wrote in issue #61 (`wrong_mat`). No option:
+it is on whenever the mod is (the mod-off switch gives the vanilla table back). Only that one
+material: it is the only one seen in the report and in the dev1/dev2 tests. The bad fallback
+took whatever byte >= 0x80 followed the item id in memory, so no other value can be derived
+safely, and allowing every material the game protects would also open ruin walls and roofs,
+which share the 0x80..0xff range with player blocks. Everything else keeps the game's rules.
+
+- **No refund.** `refund_build_hook` hides the material's volume from the refund builder
+  (restored afterwards); the mod's own dry runs still see it.
+- **Area delete.** Its dry runs note the volume per shape, so a shape holding only such
+  blocks counts as not empty and is committed. After the commit the log says
+  `wrong material removed (area): material 0xfa, <n> voxels, no refund`.
+- **Hammer.** The commit removes whatever the dry run's shape holds, so a shape on such a
+  block removes it. The hammer's cursor snaps to voxels the game counts as removable
+  (CursorConfig snapPositionToRemovableVoxel), so aimed at such a block it can sit in the
+  air in front of it. `hammer_remove`: when the aimed shape holds nothing, up to 4 shapes
+  along the view (camera to shape, at most 2 shapes away) are probed with dry runs that
+  make no refund entries; the first holding the wrong material is priced as the game would
+  and `remove_commit_hook` moves the commit there. Other material never moves the shape.
+  Not on a dedicated server (no camera of the player there). Log:
+  `wrong material removed (hammer): material 0xfa, <n> voxels, no refund[, shape moved along the view]`.
+  Area delete is the sure way (it removed these blocks in the dev1 test).
+- On a server the server decides: its copy of the mod must be 0.33.2 or newer.
 
 ## Sounds
 

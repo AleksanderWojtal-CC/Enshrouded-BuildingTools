@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.33.2-dev5"
+#define MOD_VERSION "0.33.2-dev6"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -918,19 +918,37 @@ static RefundBuildFn g_refundBuildOrig = nullptr;
 static float g_removedVolume = 0.f;
 static float g_remVols[256];
 static volatile DWORD g_volTapTid = 0;     // a player's dry run: note the volumes too, refund as normal
+// Material the 0.33.0 / 0.33.1 blueprint bug wrote instead of a real building block (#61:
+// the item lookup's fallback took a byte from data that was no item; the report's blocks
+// were 0xfa). The game's "may remove" table never allows it, so such blocks were stuck.
+// remove_table_hook always allows it (hammer, Area delete, connected delete) and the
+// refund builder gives nothing for it.
+static bool wrong_mat(int m) { return m == 0xfa; }
 static void refund_build_hook(void* list, void* ctx, VolList* vols) {
     if (g_volTapTid && g_volTapTid == GetCurrentThreadId() && vols && vols->data)
         for (uint64_t i = 1; i < vols->count && i < 0x100; i++) { float v = vols->data[i]; g_remVols[i] += v < 0 ? -v : v; }
+    // no refund for the wrong material: its volume is hidden from the refund builder
+    // (the mod's own dry runs still see it in g_remVols)
+    float wrongV[256]; bool cut[256] = {};
+    if (vols && vols->data)
+        for (uint64_t i = 0x80; i < vols->count && i < 0x100; i++)
+            if (wrong_mat((int)i) && vols->data[i] != 0.f) { wrongV[i] = vols->data[i]; vols->data[i] = 0.f; cut[i] = true; }
+    auto wrong_back = [&]() {
+        if (vols && vols->data) for (uint64_t i = 0x80; i < vols->count && i < 0x100; i++) if (cut[i]) vols->data[i] = wrongV[i];
+    };
     if (g_ownRemoveTid == GetCurrentThreadId()) {
+        for (int i = 0x80; i < 0x100; i++) if (cut[i]) g_remVols[i] += wrongV[i] < 0 ? -wrongV[i] : wrongV[i];
         // the mod's removal dry run: note what is removable, create no refund entries
         if (vols && vols->data)
             for (uint64_t i = 1; i < vols->count && i < 0x100; i++) {
                 float v = vols->data[i]; v = v < 0 ? -v : v;
                 g_remVols[i] += v; g_removedVolume += v;
             }
+        wrong_back();
         return;
     }
     g_refundBuildOrig(list, ctx, vols);
+    wrong_back();
 }
 
 
@@ -3217,6 +3235,8 @@ static volatile LONG g_onlyRemove = 0;
 static volatile DWORD g_onlyRemoveTid = 0;
 static void* remove_table_hook(uint8_t* out, void* ctx, void* state) {
     void* r = g_removeTableOrig(out, ctx, state);
+    if (out && !g_modOff)                     // blocks of the wrong material (#61): always removable
+        for (int m = 0x80; m < 0x100; m++) if (wrong_mat(m)) out[m] = 1;
     const int only = g_onlyRemove;
     if (only && out && g_onlyRemoveTid == GetCurrentThreadId())
         for (int m = 1; m < 0x100; m++) if (m != only) out[m] = 0;
@@ -3224,6 +3244,8 @@ static void* remove_table_hook(uint8_t* out, void* ctx, void* state) {
 }
 // The dry run (RemoveShape) of an Area remove shape, as the game, its volumes noted:
 // *hit = the shape holds something to remove (a shape that is all air is not committed).
+static float g_dryWrong = 0.f;               // remove_dry: volume of the wrong material (#61) in the shape
+static float g_rpendWrong = 0.f;             // Area remove: the wrong material's volume over the box
 static uint8_t remove_dry(CostList* list, void* ctx, void* state, Aabb* box, IntXf* xf, void* filter, uint8_t check, bool* hit) {
     memset(g_remVols, 0, sizeof(g_remVols));
     g_volTapTid = GetCurrentThreadId();
@@ -3231,7 +3253,96 @@ static uint8_t remove_dry(CostList* list, void* ctx, void* state, Aabb* box, Int
     g_volTapTid = 0;
     float tot = 0.f;
     for (int m = 1; m < 0x100; m++) tot += g_remVols[m];
+    g_dryWrong = 0.f;
+    for (int m = 0x80; m < 0x100; m++) if (wrong_mat(m)) g_dryWrong += g_remVols[m];
     *hit = r || tot > 0.f;
+    return r;
+}
+// ---- blocks of the wrong material (#61) with the hammer
+// The dismantle's block path is RemoveShape (dry run) -> PayCost -> RemoveCommit, and the
+// commit runs whatever the dry run found; remove_table_hook lets both remove the wrong
+// material. But the hammer's cursor snaps to voxels the game counts as removable
+// (CursorConfig snapPositionToRemovableVoxel), so aimed at such a block it may sit in the
+// air in front of it. When the aimed shape holds nothing, up to 4 neighbouring shapes
+// along the view (camera to shape, at most 2 shapes away) are probed; the first holding
+// the wrong material is removed instead (remove_commit_hook moves the commit there).
+// Only the wrong material moves the shape: everything else stays as the game aims it.
+struct WrongHammer { void* ctx; DWORD tid, tick; int64_t d[3]; bool moved; float vol; };
+static WrongHammer g_wrongHam;
+static bool latest_cam(int64_t* cam) {
+    for (int tries = 0; tries < 4; tries++) {
+        const LONG n = g_camN;
+        if (n <= 0 || GetTickCount() - g_cursorCamTick > 2000) return false;
+        const CamSnap& c = g_camRing[(n - 1) & 15];
+        const LONG s0 = c.seq;
+        if (s0 & 1) continue;
+        memcpy(cam, c.cam, 24);
+        if (c.seq == s0) return true;
+    }
+    return false;
+}
+// volume of the wrong material in a shape: a dry run without refund entries
+static float probe_wrong(void* ctx, void* state, Aabb* box, IntXf* xf, void* filter, uint8_t check) {
+    static CostEntry scratchBuf[256];
+    CostList scratch = { scratchBuf, 0, 256, nullptr };
+    memset(g_remVols, 0, sizeof(g_remVols));
+    const float keep = g_removedVolume;
+    g_ownRemoveTid = GetCurrentThreadId();
+    g_remove(&scratch, ctx, state, box, xf, filter, check);
+    g_ownRemoveTid = 0;
+    g_removedVolume = keep;
+    float w = 0.f;
+    for (int m = 0x80; m < 0x100; m++) if (wrong_mat(m)) w += g_remVols[m];
+    return w;
+}
+static uint8_t hammer_remove(CostList* list, void* ctx, void* state, Aabb* bx, IntXf* xf, void* filter, uint8_t check) {
+    g_wrongHam.ctx = nullptr;
+    bool hit = false;
+    uint8_t r = remove_dry(list, ctx, state, bx, xf, filter, check, &hit);
+    const DWORD tid = GetCurrentThreadId();
+    if (g_dryWrong > 0.f) {                 // the aimed shape holds the wrong material: the game's commit removes it
+        g_wrongHam = WrongHammer{ ctx, tid, GetTickCount(), {}, false, g_dryWrong };
+        return r;
+    }
+    if (hit || filter || g_modOff || g_dedicated) return r;     // a dedicated server has no camera of the player
+    int64_t cam[3];
+    if (!latest_cam(cam)) return r;
+    float step[3];
+    for (int a = 0; a < 3; a++) step[a] = bx->mx[a] - bx->mn[a];
+    double dir[3], len = 0.0;
+    for (int a = 0; a < 3; a++) { dir[a] = (double)(xf->pos[a] - cam[a]) / core::kFix; len += dir[a] * dir[a]; }
+    len = (double)core::core_sqrt((float)len);
+    float mins = step[0]; for (int a = 1; a < 3; a++) if (step[a] < mins) mins = step[a];
+    if (!(len > 0.01) || !(mins > 0.05f)) return r;
+    for (int a = 0; a < 3; a++) dir[a] /= len;
+    int64_t seen[4][3]; int ns = 0;
+    for (double t = 0.25 * mins; t <= 2.0 && ns < 4; t += 0.25 * mins) {
+        int64_t c[3]; bool zero = true, beyond = false;
+        for (int a = 0; a < 3; a++) {
+            c[a] = (int64_t)core::d_floor(dir[a] * t / step[a] + 0.5);
+            if (c[a]) zero = false;
+            if (c[a] > 2 || c[a] < -2) beyond = true;
+        }
+        if (zero || beyond) continue;
+        bool dup = false; for (int k = 0; k < ns; k++) if (!memcmp(seen[k], c, sizeof(c))) dup = true;
+        if (dup) continue;
+        memcpy(seen[ns++], c, sizeof(c));
+        IntXf ix = *xf; Aabb b2 = *bx; int64_t d[3];
+        for (int a = 0; a < 3; a++) {
+            d[a] = (int64_t)((double)c[a] * step[a] * core::kFix);
+            ix.pos[a] += d[a];
+            const float df = (float)d[a] * kInv; b2.mn[a] += df; b2.mx[a] += df;
+        }
+        const float w = probe_wrong(ctx, state, &b2, &ix, filter, check);
+        if (!(w > 0.f)) continue;
+        // as the game would have priced that shape (refund for its other blocks)
+        bool h2 = false;
+        r = remove_dry(list, ctx, state, &b2, &ix, filter, check, &h2);
+        g_wrongHam = WrongHammer{ ctx, tid, GetTickCount(), { d[0], d[1], d[2] }, true, w };
+        LOG(.str("wrong material (hammer): aimed shape empty, took the shape ").fix(d[0]).c(',').fix(d[1]).c(',').fix(d[2])
+            .str(" m along the view (").f(w).str(" voxels of the wrong material)"));
+        return r ? r : 1;
+    }
     return r;
 }
 static void only_remove(int material) { g_onlyRemoveTid = material ? GetCurrentThreadId() : 0; g_onlyRemove = material; }
@@ -3344,7 +3455,7 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
         return r;
     }
     if (g_mode != MODE_AREA)
-        return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
+        return hammer_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
     IntXf* xf = (IntXf*)xfp;
     Aabb* bx = (Aabb*)box;
     EnterCriticalSection(&g_stateLock);
@@ -3400,6 +3511,7 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
     g_rpend.suppress = false;
     memcpy(g_rpend.click, xf->pos, sizeof(g_rpend.click));
     uint8_t any = 0;
+    g_rpendWrong = 0.f;
     QueryPerformanceCounter(&g_rpendT0);
     for (int jj = 0; jj < pl.count[1]; jj++)          // top layer first
         for (int i = 0; i < pl.count[0]; i++)
@@ -3418,6 +3530,7 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
                 bool hit = false;
                 if (remove_dry((CostList*)list, ctx, state, &b2, &ix, filter, check, &hit)) any = 1;
                 g_rpendHit[g_rpend.n] = hit;
+                g_rpendWrong += g_dryWrong;
                 memcpy(g_rpendPos[g_rpend.n], ix.pos, 24); g_rpend.n++;
             }
     g_rpendCost[g_rpend.n] = list ? (uint32_t)((CostList*)list)->count : 0;
@@ -3433,7 +3546,20 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
 
 static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     bool mine = g_rpend.ctx == ctx && g_rpend.tid == GetCurrentThreadId() && GetTickCount() - g_rpend.tick < 3000;
-    if (!mine) return g_removeCommitOrig(ctx, c, shape);
+    if (!mine) {
+        // a hammer removal whose dry run found the wrong material (#61), maybe in a shape
+        // along the view (hammer_remove)
+        const WrongHammer w = g_wrongHam;
+        if (!c || w.ctx != ctx || w.tid != GetCurrentThreadId() || GetTickCount() - w.tick >= 3000)
+            return g_removeCommitOrig(ctx, c, shape);
+        g_wrongHam.ctx = nullptr;
+        Commit rc = *c;
+        if (w.moved) for (int a = 0; a < 3; a++) rc.pos[a] += (float)w.d[a] * kInv;
+        uint8_t r = g_removeCommitOrig(ctx, &rc, shape);
+        LOG(.str("wrong material removed (hammer): material 0xfa, ").f(w.vol).str(" voxels, no refund")
+            .str(w.moved ? ", shape moved along the view" : "").str(r ? "" : " (commit reported nothing)"));
+        return r;
+    }
     RemovePending rp = g_rpend;
     g_rpend.ctx = nullptr;
     if (rp.suppress) { LOG(.str("  corner click: dismantle commit skipped")); return 0; }
@@ -3457,6 +3583,8 @@ static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     undo_end(us);
     LOG(.str("remove commit: ").i(rp.n).str(" shapes, committed ").i(tried).str(" (").i(rp.n - tried).str(" empty skipped), removed ")
         .i(done).str(rp.only ? " (connected delete)" : "").str(", ").f((float)ms_since(t0)).str(" ms"));
+    if (!rp.only && g_rpendWrong > 0.f && done)
+        LOG(.str("wrong material removed (area): material 0xfa, ").f(g_rpendWrong).str(" voxels, no refund"));
     occ_refresh();
     Buf b; b.fmt(T(S_REMOVED), num(done).s);
     if (us.recorded < rp.n) b.str("  |  ").fmt(T(S_UNDO_COVERS), num(us.recorded).s);
