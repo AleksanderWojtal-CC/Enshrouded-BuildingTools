@@ -478,10 +478,18 @@ keeps the ghost valid).
 - **Build.** PlaceShape's 4th argument is the selected material's item definition (read-only
   game data: +0 item id, +4 the 16 bytes the cost entry copies, +0x454 the voxel material
   byte; writing it crashed 0.32.0-dev1). The mod maps every blueprint material back to a
-  material byte (the saved one if the refund builder gives the same item for it, else a
-  search of 0x80..0xff), finds that material's item definition in the same allocation (item
-  id at +0 and material byte at +0x454 match; a read-only scan, cached), and runs one dry run
-  per cell with it, so the game prices the right item. PlaceCommit builds the material the
+  material by its saved item id with the game's own item lookup (`BpItemById`, the item
+  registry at building context +0x28, as the objects use it) and builds it only when the
+  item is a building block (`item_kind` small shape, material byte 0x80..0xff at +0x454);
+  otherwise the material is left out. Without the registry it falls back to a read-only
+  scan of the held material's allocation (item id at +0 and material byte at +0x454 match,
+  the candidate must also pass the block check; cached). It runs one dry run per cell with
+  the item, so the game prices the right item. Issue #61: 0.33.0's scan, after missing
+  the saved byte, accepted any memory with the item id and a byte >= 0x80 at +0x454, and
+  built a game-internal material (0xfa in the report) that the hammer, Area delete and the
+  pickaxe cannot remove. `RemoveStuckBlocks=1` lets Area delete clear such blocks: while
+  Area delete dry-runs and commits on its thread, the removal table hook (48f1c0, the
+  same redirect as connected delete) sets every building material 0x80..0xff to removable. PlaceCommit builds the material the
   player picked (the dry run changes nothing in the placement context, tested), so the
   replace blit patch has a force byte: before each blueprint shape's commit it holds the
   shape's material, and the patch writes it into the blit parameters' material (+0xa1) for

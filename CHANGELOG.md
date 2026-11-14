@@ -3,6 +3,19 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.33.2
+
+- **Blueprints**: some blueprints built blocks that nothing could remove (hammer, Area
+  delete, explosives, pickaxe). When the game had a blueprint material under another
+  number, the mod could pick the wrong data and build a game-internal material instead.
+  Blueprint materials are now looked up the way the game does, and only real building
+  blocks are built; a material that cannot be found is left out (as before, with a
+  message). Thanks to Blaze1404 for the report and the blueprint (#61).
+- To clean up such blocks: set `RemoveStuckBlocks=1` in the `[Area]` section of
+  `BuildingTools.ini`, start the game and delete them with Area mode, then set it back
+  to 0. While it is on, Area delete also removes other blocks the hammer cannot remove,
+  such as ruin walls inside your base, and gives nothing back for them.
+
 ## 0.33.1
 
 - Creative building and Blueprint mode can be switched in single player before you first

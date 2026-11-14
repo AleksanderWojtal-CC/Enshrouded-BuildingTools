@@ -31,6 +31,7 @@ struct Blueprint {
     bool ok; core::BpHeader h; uint8_t cell[kBpMaxCells]; int filled;
     wchar_t path[MAX_PATH];
 };
+static bool bp_block_item(const uint8_t* it);     // a building block item (blueprint materials)
 static Blueprint g_bp;                           // the one picked in the window (UI thread; the server reads it once armed)
 static volatile LONG g_bpSub = BP_SAVE;          // what a click in Blueprint mode does
 static volatile LONG g_bpRot = 0;                // quarter turns about the vertical axis
@@ -347,6 +348,13 @@ static uint8_t bp_save_box(void* ctx, void* state, const CursorXf& tmpl) {
         uint32_t per = g_materialItem && reg ? g_materialItem(reg, h.m[q].mat, vox) : 0;
         h.m[q].items = per * h.m[q].cells;
         LOG(.str("  material ").x(h.m[q].mat).str(" item ").x(h.m[q].item).str(" cells ").u(h.m[q].cells).str(" items ").u(h.m[q].items));
+        // the build looks the item up by id (issue #61): note when it is not a block of this material
+        uint8_t* it = h.m[q].item && bp_item_registry(ctx, state) ? g_bpItemById(h.m[q].item, g_bpItemReg) : nullptr;
+        if (h.m[q].item && g_bpItemReg && !it)
+            LOG(.str("  material ").x(h.m[q].mat).str(": item ").x(h.m[q].item).str(" not found by id (the build will leave it out)"));
+        else if (it && readable(it, 0x4b8) && (!bp_block_item(it) || it[0x454] != h.m[q].mat))
+            LOG(.str("  material ").x(h.m[q].mat).str(": item ").x(h.m[q].item).str(" is kind ").i(item_kind(it))
+                .str(" material ").x(it[0x454]).str(" (the build uses the item's own material or leaves it out)"));
     }
     LOG(.str("blueprint save: ").i(filled).str(" blocks, ").i(partial).str(" cells less than half full left out, ")
         .i(h.nm).str(" materials, probed in ").u(GetTickCount() - t0).str(" ms"));
@@ -400,10 +408,22 @@ static int bp_map(void* ctx, int* mat, CostEntry* tmpl) {
 // byte), read-only game data (writing it crashed in 0.32.0-dev1). The mod finds the item
 // definition of every blueprint material in the same block of memory (item id at +0 and
 // material byte at +0x454 both match). Read-only scan, cached per item.
+//
+// Only a real building block item counts (issue #61): its equipment setup names a building
+// voxel shape and its material byte is a building material. 0.33.0 accepted any 8 bytes
+// starting with the item id and a byte >= 0x80 at +0x454; a blueprint whose item was not
+// found under its saved byte then built a game-internal material the hammer, Area remove
+// and the pickaxe cannot remove. With the item registry (as the objects use it) the item
+// is looked up by id, as the game does; the scan is only the fallback without it.
 struct BpItem { uint32_t id; uint8_t mat; uint8_t* p; };
 static BpItem g_bpItemCache[128]; static int g_bpItemN = 0;
+static bool bp_block_item(const uint8_t* it) {
+    return it && readable(it, 0x4b8) && item_kind(it) == ITEM_SHAPE && it[0x454] >= 0x80;
+}
 static uint8_t* bp_find_item(uint8_t* pdata, uint32_t id, uint8_t mat) {
-    auto match = [&](const uint8_t* c) { return *(const uint32_t*)c == id && (mat ? c[0x454] == mat : c[0x454] >= 0x80); };
+    auto match = [&](const uint8_t* c) {
+        return *(const uint32_t*)c == id && (mat ? c[0x454] == mat : c[0x454] >= 0x80) && bp_block_item(c);
+    };
     if (match(pdata)) return pdata;
     for (int q = 0; q < g_bpItemN; q++) if (g_bpItemCache[q].id == id && g_bpItemCache[q].mat == mat) return g_bpItemCache[q].p;
     MEMORY_BASIC_INFORMATION mi;
@@ -452,10 +472,17 @@ static uint8_t bp_fill(CostList* list, void* ctx, void* state, uint8_t* pdata, c
     // world, 0.32.0-dev4). Only a file without item ids goes through the refund builder.
     static int mat[core::BP_MAX_MATS]; static CostEntry tmpl[core::BP_MAX_MATS]; static uint8_t* item[core::BP_MAX_MATS];
     int missing = 0; bool mapped = false;
+    const bool reg = bp_item_registry(ctx, state);
     for (int q = 0; q < g_bp.h.nm; q++) {
         const core::BpMat& bm = g_bp.h.m[q];
         item[q] = nullptr; g_bpMatByte[q] = 0; mat[q] = -1;
-        if (bm.item) {
+        if (bm.item && reg) {
+            uint8_t* it = g_bpItemById(bm.item, g_bpItemReg);                  // as the game looks items up
+            if (bp_block_item(it)) item[q] = it;
+            else if (it) LOG(.str("  blueprint: item ").x(bm.item).str(" is not a building block (kind ").i(item_kind(it))
+                             .str(" material ").x(readable(it, 0x458) ? it[0x454] : 0).str("), left out"));
+            else LOG(.str("  blueprint: item ").x(bm.item).str(" not in the item registry, left out"));
+        } else if (bm.item) {
             item[q] = bp_find_item(pdata, bm.item, bm.mat);                     // the saved material byte
             if (!item[q]) item[q] = bp_find_item(pdata, bm.item, 0);           // the game renumbered it
         } else {
