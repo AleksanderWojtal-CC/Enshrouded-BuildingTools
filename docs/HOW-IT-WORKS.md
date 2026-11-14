@@ -239,42 +239,6 @@ region, at most 1.5 ms a frame) pauses 500 ms after each full pass over the box,
 2 s after the mod placed or removed something (`occ_refresh`), when the game is still
 applying the edit.
 
-## Remove anything (risky)
-
-Options > Remove anything (`RemoveAnything=1` under `[Risky]`; the 0.33.2-dev1 key
-`RemoveStuckBlocks=1` under `[Area]` is read as the same setting). Same table redirect as
-connected delete, the other way round: while a player's removal runs on this thread, every
-material 1..0xff is set to removable (terrain, ruin materials, game-internal materials such
-as the #61 stuck blocks). Each dry run (`remove_dry`, hammer and every Area remove cell) first
-runs widened with only its volumes noted (`g_ownRemoveTid`: the refund builder creates no
-entries), and `remove_table_hook` marks which materials the game's table had kept. That splits
-the shape's volume into air, kept material (terrain 1..0x7f, building 0x80..0xff such as ruin
-walls and stuck blocks) and normal material. Only when there is normal material does the dry
-run run again as the game into the real cost list, so the refund holds only what the game
-itself would give back. The log line `remove anything (area|hammer)` gives, per removal, the
-shapes holding kept material, its volume per kind and the biggest materials. The commit is
-widened for Area remove (its own commit loop) and for a hammer removal whose widened dry run
-found kept material on the same thread and context within 3 s.
-
-Hammer (`hammer_remove`, 0.33.2-dev4): the dismantle's block path (client 2d8da0) calls
-RemoveShape (2d9866), pays the refund (PayCost, 2d98bc) and then always RemoveCommit
-(48ef20, 2d9923); RemoveShape's result is not checked. The dismantle cursor snaps to voxels
-the game counts as removable (`CursorConfig.secondaryActionConfig.snapPositionToRemovableVoxel`,
-copied from ItemInfo+0x1a7 at 28ca06), so on material the game keeps the hammer's shape can
-sit in the air in front of it: the 0.33.2-dev3 test log showed hammer clicks on rock / lava
-whose widened dry run found nothing at all. With Remove anything, an empty aimed shape is
-followed along the view (latest cursor camera to the shape centre, steps of a quarter shape,
-at most 4 neighbouring shapes within 2 shapes per axis); the first that holds anything gets
-the real dry run, and `remove_commit_hook` moves the commit there (`g_hamShift`, same thread
-and context within 3 s). An empty shape is also probed once without the dry run's object
-check (`check` = 0, RemoveShape's 4932a0 collider query) for the log. Every hammer removal
-logs one `remove anything (hammer)` line: shape centre and size, the game's dry-run result,
-refund entries and the materials found (id, volume, terrain/building, kept). The Area line
-lists the materials too.
-Pieces dismantled by entity (filter set) and connected delete are not widened. Off on a dedicated server (`g_dedicated`) and in a remote session
-(`remote_session()`), where the server's table decides. In a world the player hosts the
-host's setting applies to every removal the host's server context runs.
-
 ## Magic chests of all bases
 
 With `GlobalMagicChests=1`, building and crafting use the magic chests of every base

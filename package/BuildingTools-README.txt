@@ -325,19 +325,6 @@ Magic chests of all bases
   On a dedicated server, set it in the server's BuildingTools.ini (the mod
   must be installed on the server too).
 
-Remove anything (risky / debug option)
-  Options > Remove anything (risky), off by default; saved as RemoveAnything=1
-  in the [Risky] section of BuildingTools.ini. Not on the tools wheel, no key.
-  While it is on, the hammer and Area delete remove every voxel in the shape
-  or box, also what the game keeps: terrain, ruin walls and roofs, and blocks
-  nothing else removes (such as the stuck blocks a 0.33.0 blueprint could
-  leave, #61). It can break your world (holes, floating ruins): back up your
-  save first and turn it off when done. Nothing is given back for what the
-  game would not let you remove. Only in a world you host; on a dedicated
-  server the game's rules stay. With the hammer, when the shape you aim at
-  sits in the air in front of material the game keeps (lava, some rock), the
-  next shape along your view is removed instead.
-
 Uninstall
   Close the game and delete dinput8.dll and the BuildingTools-Languages folder
   (the ini and log can go too).

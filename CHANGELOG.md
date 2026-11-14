@@ -10,18 +10,11 @@ changelog on Nexus Mods, so keep it short and written for players.
   number, the mod could pick the wrong data and build a game-internal material instead.
   Blueprint materials are now looked up the way the game does, and only real building
   blocks are built; a material that cannot be found is left out (as before, with a
-  message that now names the material). Thanks to Blaze1404 for the report and the
-  blueprint (#61).
+  message that now names the material). Blocks such a blueprint already built stay in the
+  world. Thanks to Blaze1404 for the report and the blueprint (#61).
 - **Blueprints**: a block material whose refund is a plain item (the #61 blueprint's stone
   wall blocks) was left out of the build. The mod now builds it with the building block of
   that material when the game has one, and new saves store the block itself.
-- **Remove anything (risky)**, new in Options, off by default: the hammer and Area delete
-  remove everything in the shape or box, also what the game keeps: terrain, ruin walls and
-  roofs, and stuck blocks like those above. It can leave holes or floating ruins, so back
-  up your save. Nothing is given back for what the game would not let you remove. Only in
-  a world you host; on a server the game's rules stay. Not on the tools wheel and no key.
-  With the hammer, when the shape you aim at lands in the air just in front of lava or rock
-  the game will not let you remove, the mod takes the next shape along your view instead.
 - **Area delete** is lighter: shapes of the box that hold nothing are no longer committed
   one by one (fewer stutters when the box is mostly air, and undo now covers more of the
   box), and the box preview no longer re-reads the blocks in it every frame.

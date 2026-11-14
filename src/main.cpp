@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.33.2-dev4"
+#define MOD_VERSION "0.33.2-dev5"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -189,7 +189,6 @@ struct Config {
     int keyOff       = VK_F5;  // the whole mod off / on (vanilla game while off)
     int fillLimit    = 500;    // most shapes one connected replace (fill bucket) may repaint
     int globalChests = 0;      // building and crafting use the magic chests of every base
-    int removeAnything = 0;    // risky: removal ignores the game's "may remove" rules (terrain, ruins, stuck blocks)
     int keyRadial    = VK_CAPITAL;  // hold: tools wheel (radial menu)
     int keyStyleFull = 0, keyStyleOverlap = 0, keyStyleConnected = 0;   // quick keys: set an option directly
     int keyFillSolid = 0, keyFillHollow = 0, keyFillWalls = 0, keyFillRoof = 0;
@@ -292,12 +291,6 @@ static void write_full_ini(const Config& c) {
      .t(";     areas), not only the one you stand in, also outside a base. The material picker\r\n")
      .t(";     and crafting menus count them. Loot deposit stays local. Off by default.\r\n")
      .t("GlobalMagicChests=").i(c.globalChests).t("\r\n")
-     .t("\r\n[Risky]\r\n")
-     .t("; 1 = Remove anything (Options tab): the hammer and Area remove remove every voxel in the\r\n")
-     .t(";     shape or box, also what the game keeps: terrain, ruin walls and roofs, stuck blocks.\r\n")
-     .t(";     It can break your world (holes, floating ruins); back up the save. Nothing is refunded\r\n")
-     .t(";     for what the hammer could not remove. Only in a world you host. Off by default.\r\n")
-     .t("RemoveAnything=").i(c.removeAnything).t("\r\n")
      .t("\r\n[Area]\r\n")
      .t("; 2 = two opposite corners, 3 = two base corners then the height,\r\n")
      .t(";     1 = exact: one click, then width, depth and height in a window\r\nCorners=").i(c.exact ? 1 : c.corners).t("\r\n")
@@ -390,9 +383,6 @@ static void load_config() {
     g_cfg.keyOff       = ini_int(L"Keys", L"ToggleMod", VK_F5);
     g_cfg.fillLimit    = ini_int(L"Limits", L"FillLimit", 500);
     g_cfg.globalChests = ini_int(L"Chests", L"GlobalMagicChests", 0) != 0;
-    g_cfg.removeAnything = ini_int(L"Risky", L"RemoveAnything", -1);
-    if (g_cfg.removeAnything < 0) g_cfg.removeAnything = ini_int(L"Area", L"RemoveStuckBlocks", 0);   // 0.33.2-dev1 name
-    g_cfg.removeAnything = g_cfg.removeAnything != 0;
     g_cfg.keyRadial    = ini_int(L"Keys", L"RadialMenu", VK_CAPITAL);
     g_cfg.keyStyleFull = ini_int(L"Keys", L"StyleFull", 0);
     g_cfg.keyStyleOverlap   = ini_int(L"Keys", L"StyleOverlap", 0);
@@ -469,8 +459,7 @@ static void load_config() {
         ini_int(L"Keys", L"RadialMenu", -1) == -1 || ini_int(L"Keys", L"HoldReplace", -1) == -1 ||
         ini_int(L"Area", L"DrawBoxBlocks", -1) == -1 || ini_int(L"Area", L"ExactWidth", -9999) == -9999 ||
         ini_int(L"Tools", L"AreaShapes", -1) == -1 || ini_int(L"Objects", L"Count", -1) == -1 ||
-        ini_int(L"Debug", L"Profile", -1) == -1 || ini_int(L"Blueprints", L"Objects", -1) == -1 ||
-        ini_int(L"Risky", L"RemoveAnything", -1) == -1)
+        ini_int(L"Debug", L"Profile", -1) == -1 || ini_int(L"Blueprints", L"Objects", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -3226,220 +3215,24 @@ static RemoveTableFn g_removeTableOrig = nullptr;
 static bool g_removeTableOk = false;          // both calls redirected
 static volatile LONG g_onlyRemove = 0;
 static volatile DWORD g_onlyRemoveTid = 0;
-// Remove anything (Options, risky; RemoveAnything=1 in [Risky]): while a player's removal
-// (hammer or Area remove) runs on this thread, every material may be removed, also what the
-// game keeps: terrain, ruin walls and roofs, blocks the hammer cannot remove (issue #61).
-// Only in a world this game hosts: a server decides removals itself.
-static bool remote_session();
-static volatile DWORD g_wideTid = 0;
-static uint8_t g_keptMat[256];           // materials the game's table kept (set by the widened table)
-static int g_keptMatN = 0;
 static void* remove_table_hook(uint8_t* out, void* ctx, void* state) {
     void* r = g_removeTableOrig(out, ctx, state);
     const int only = g_onlyRemove;
-    if (only && out && g_onlyRemoveTid == GetCurrentThreadId()) {
+    if (only && out && g_onlyRemoveTid == GetCurrentThreadId())
         for (int m = 1; m < 0x100; m++) if (m != only) out[m] = 0;
-    } else if (out && g_wideTid && g_wideTid == GetCurrentThreadId()) {
-        int added = 0;
-        for (int m = 1; m < 0x100; m++) { g_keptMat[m] = !out[m]; if (!out[m]) { out[m] = 1; added++; } }
-        g_keptMatN = added;
-    }
     return r;
 }
-static bool remove_anything_on() { return g_cfg.removeAnything && !g_modOff && !g_dedicated && !remote_session(); }
-static void wide_remove(bool on) { g_wideTid = on && remove_anything_on() ? GetCurrentThreadId() : 0; }
-// What Remove anything found in the dry runs of one removal (an Area remove box or a hammer
-// click): volume of material the game itself keeps, terrain (1..0x7f) and building
-// material (0x80..0xff: ruin walls and roofs, stuck blocks), per material too.
-struct KeptStats { int shapes, keptShapes, airShapes; float vol[2]; float mat[256]; float all[256]; uint8_t keptM[256]; int tableN; };
-static KeptStats g_kept;
-static void kept_reset() { memset(&g_kept, 0, sizeof(g_kept)); }
-// Every material a removal's dry runs found, biggest volume first; "kept" = the game's own
-// rules would leave it (only Remove anything removes it).
-static void mats_str(Buf& b, const float* all, const uint8_t* kept, int most) {
-    float done[256]; memcpy(done, all, sizeof(done));
-    int k = 0;
-    for (; k < most; k++) {
-        int best = 0; for (int m = 1; m < 0x100; m++) if (done[m] > done[best]) best = m;
-        if (!best || !(done[best] > 0.f)) break;
-        b.str(k ? ", " : "").x(best).c(' ').f(done[best]).str(best >= 0x80 ? " building" : " terrain").str(kept && kept[best] ? " kept" : "");
-        done[best] = 0.f;
-    }
-    if (!k) b.str("none");
-    int more = 0; for (int m = 1; m < 0x100; m++) if (done[m] > 0.f) more++;
-    if (more) b.str(" (+").i(more).str(" more)");
-}
-static void kept_log(const char* what) {
-    Buf b;
-    b.str("remove anything (").str(what).str("): ").i(g_kept.keptShapes).str(" of ").i(g_kept.shapes)
-     .str(" shapes held material the game keeps (table kept ").i(g_kept.tableN).str(" materials); volume terrain ")
-     .f(g_kept.vol[0]).str(", building (ruin / stuck) ").f(g_kept.vol[1]).str("; materials found: ");
-    mats_str(b, g_kept.all, g_kept.keptM, 10);
-    log_line(b);
-}
-// Remove anything's volume-only dry run of one shape (widened table, no refund entries, nothing
-// noted for the commit): total volume, per material into vols (256) when given.
-static float probe_wide(void* ctx, void* state, Aabb* box, IntXf* xf, void* filter, uint8_t check, float* vols) {
-    static CostEntry scratchBuf[256];
-    CostList scratch = { scratchBuf, 0, 256, nullptr };
+// The dry run (RemoveShape) of an Area remove shape, as the game, its volumes noted:
+// *hit = the shape holds something to remove (a shape that is all air is not committed).
+static uint8_t remove_dry(CostList* list, void* ctx, void* state, Aabb* box, IntXf* xf, void* filter, uint8_t check, bool* hit) {
     memset(g_remVols, 0, sizeof(g_remVols));
-    wide_remove(true); g_ownRemoveTid = GetCurrentThreadId();
-    g_remove(&scratch, ctx, state, box, xf, filter, check);
-    g_ownRemoveTid = 0; wide_remove(false);
+    g_volTapTid = GetCurrentThreadId();
+    uint8_t r = g_remove(list, ctx, state, box, xf, filter, check);
+    g_volTapTid = 0;
     float tot = 0.f;
-    for (int m = 1; m < 0x100; m++) tot += g_remVols[m] > 0.f ? g_remVols[m] : 0.f;
-    if (vols) memcpy(vols, g_remVols, 256 * sizeof(float));
-    return tot;
-}
-// The dry run (RemoveShape) of a removal. Plain: as the game, its volumes noted; *hit = the
-// shape holds something to remove (a shape that is all air is not committed).
-// With Remove anything: first widened, volumes only (no refund entries), which tells air,
-// material the game keeps and normal material apart; then as the game into the real list
-// only when there is normal material, so the refund is only what the game itself would give
-// back. A hammer removal whose widened dry run found kept material gets a widened commit.
-struct WideDry { void* ctx; DWORD tid, tick; };
-static WideDry g_wideDry;
-static uint8_t remove_dry(CostList* list, void* ctx, void* state, Aabb* box, IntXf* xf, void* filter, uint8_t check, bool* hit = nullptr) {
-    const DWORD tid = GetCurrentThreadId();
-    float tot = 0.f;
-    if (filter || !remove_anything_on()) {
-        memset(g_remVols, 0, sizeof(g_remVols));
-        g_volTapTid = tid;
-        uint8_t r = g_remove(list, ctx, state, box, xf, filter, check);
-        g_volTapTid = 0;
-        for (int m = 1; m < 0x100; m++) tot += g_remVols[m];
-        if (hit) *hit = r || tot > 0.f;
-        return r;
-    }
-    static CostEntry scratchBuf[256];
-    CostList scratch = { scratchBuf, 0, 256, nullptr };
-    memset(g_remVols, 0, sizeof(g_remVols));
-    memset(g_keptMat, 0, sizeof(g_keptMat));
-    wide_remove(true); g_ownRemoveTid = tid;
-    uint8_t w = g_remove(&scratch, ctx, state, box, xf, filter, check);
-    g_ownRemoveTid = 0; wide_remove(false);
-    float kept[2] = {}, normal = 0.f;
-    for (int m = 1; m < 0x100; m++) {
-        float v = g_remVols[m];
-        if (!(v > 0.f)) continue;
-        g_kept.all[m] += v;
-        if (g_keptMat[m]) { kept[m >= 0x80] += v; g_kept.mat[m] += v; g_kept.keptM[m] = 1; } else normal += v;
-    }
-    tot = kept[0] + kept[1] + normal;
-    g_kept.shapes++;
-    if (g_keptMatN > g_kept.tableN) g_kept.tableN = g_keptMatN;
-    if (kept[0] + kept[1] > 0.f) {
-        g_kept.keptShapes++; g_kept.vol[0] += kept[0]; g_kept.vol[1] += kept[1];
-        g_wideDry.ctx = ctx; g_wideDry.tid = tid; g_wideDry.tick = GetTickCount();
-    }
-    if (!(tot > 0.f) && !w) g_kept.airShapes++;
-    uint8_t r = 0;
-    if (normal > 0.f || (!(tot > 0.f) && w))           // something the game removes itself
-        r = g_remove(list, ctx, state, box, xf, filter, check);
-    if (hit) *hit = r || w || tot > 0.f;
-    return r || w || tot > 0.f ? 1 : 0;
-}
-// ---- the hammer with Remove anything
-// The dismantle's block path is RemoveShape (dry run) -> PayCost (refund) -> RemoveCommit, and
-// it commits whatever the dry run found. Its cursor snaps to voxels the game counts as
-// removable (CursorConfig secondaryActionConfig.snapPositionToRemovableVoxel), so on material
-// the game keeps (lava, some terrain) the cursor shape can sit in the air in front of it and
-// removes nothing. With Remove anything, an empty aimed shape is followed along the view (camera
-// to shape) for up to 4 neighbouring shapes; the first holding anything is removed instead
-// (remove_commit_hook moves the commit there). Every hammer removal is logged.
-struct HammerShift { void* ctx; DWORD tid, tick; int64_t d[3]; };
-static HammerShift g_hamShift;
-static volatile LONG g_hamLogs = 0; static DWORD g_hamLogTick = 0;
-static bool ham_log_ok() {             // a few lines a second at most
-    const DWORD now = GetTickCount();
-    if (now - g_hamLogTick > 10000) { g_hamLogTick = now; g_hamLogs = 0; }
-    return InterlockedIncrement(&g_hamLogs) <= 20;
-}
-static bool latest_cam(int64_t* cam) {
-    for (int tries = 0; tries < 4; tries++) {
-        const LONG n = g_camN;
-        if (n <= 0 || GetTickCount() - g_cursorCamTick > 2000) return false;
-        const CamSnap& c = g_camRing[(n - 1) & 15];
-        const LONG s0 = c.seq;
-        if (s0 & 1) continue;
-        memcpy(cam, c.cam, 24);
-        if (c.seq == s0) return true;
-    }
-    return false;
-}
-static uint8_t hammer_remove(CostList* list, void* ctx, void* state, Aabb* bx, IntXf* xf, void* filter, uint8_t check) {
-    kept_reset();
-    g_hamShift.ctx = nullptr;
-    bool hit = false;
-    uint8_t r = remove_dry(list, ctx, state, bx, xf, filter, check, &hit);
-    if (filter || !remove_anything_on()) return r;
-    float step[3];
-    for (int a = 0; a < 3; a++) step[a] = bx->mx[a] - bx->mn[a];
-    float found = 0.f; for (int m = 1; m < 0x100; m++) found += g_kept.all[m];
-    const bool log = ham_log_ok();
-    if (hit || found > 0.f) {
-        if (log) {
-            Buf b; b.str("remove anything (hammer): shape at (").fix(xf->pos[0]).c(',').fix(xf->pos[1]).c(',').fix(xf->pos[2])
-                .str(") size (").f(step[0]).c(',').f(step[1]).c(',').f(step[2]).str("), game dry run ").i(r).str(", refund entries ")
-                .u(list ? list->count : 0).str("; materials: ");
-            mats_str(b, g_kept.all, g_kept.keptM, 8);
-            log_line(b);
-        }
-        return r;
-    }
-    // the aimed shape holds nothing: a blocked dry run (no check) or the cursor beside the material?
-    const float nocheck = check ? probe_wide(ctx, state, bx, xf, filter, 0, nullptr) : -1.f;
-    int64_t cam[3]; int tried = 0; int64_t got[3] = {}; bool ok = false;
-    int64_t seen[4][3]; int ns = 0;
-    float vols[256];
-    if (latest_cam(cam)) {
-        double dir[3], len = 0.0;
-        for (int a = 0; a < 3; a++) { dir[a] = (double)(xf->pos[a] - cam[a]) / core::kFix; len += dir[a] * dir[a]; }
-        len = (double)core::core_sqrt((float)len);
-        float mins = step[0]; for (int a = 1; a < 3; a++) if (step[a] < mins) mins = step[a];
-        if (len > 0.01 && mins > 0.05f) {
-            for (int a = 0; a < 3; a++) dir[a] /= len;
-            for (double t = 0.25 * mins; t <= 2.0 && ns < 4 && !ok; t += 0.25 * mins) {
-                int64_t c[3]; bool zero = true, beyond = false;
-                for (int a = 0; a < 3; a++) {
-                    c[a] = (int64_t)core::d_floor(dir[a] * t / step[a] + 0.5);
-                    if (c[a]) zero = false;
-                    if (c[a] > 2 || c[a] < -2) beyond = true;
-                }
-                if (zero || beyond) continue;
-                bool dup = false; for (int k = 0; k < ns; k++) if (!memcmp(seen[k], c, sizeof(c))) dup = true;
-                if (dup) continue;
-                memcpy(seen[ns++], c, sizeof(c));
-                IntXf ix = *xf; Aabb b2 = *bx;
-                for (int a = 0; a < 3; a++) {
-                    const int64_t d = (int64_t)((double)c[a] * step[a] * core::kFix);
-                    ix.pos[a] += d; got[a] = d;
-                    const float df = (float)d * kInv; b2.mn[a] += df; b2.mx[a] += df;
-                }
-                tried++;
-                if (probe_wide(ctx, state, &b2, &ix, filter, check, vols) > 0.f) {
-                    ok = true;
-                    kept_reset();
-                    r = remove_dry(list, ctx, state, &b2, &ix, filter, check);
-                    g_hamShift.ctx = ctx; g_hamShift.tid = GetCurrentThreadId(); g_hamShift.tick = GetTickCount();
-                    memcpy(g_hamShift.d, got, sizeof(got));
-                }
-            }
-        }
-    }
-    if (log) {
-        Buf b; b.str("remove anything (hammer): aimed shape at (").fix(xf->pos[0]).c(',').fix(xf->pos[1]).c(',').fix(xf->pos[2])
-            .str(") size (").f(step[0]).c(',').f(step[1]).c(',').f(step[2]).str(") holds nothing, also with every material allowed");
-        if (nocheck >= 0.f) b.str(nocheck > 0.f ? "; without the game's object check it holds " : "; without the object check also ").f(nocheck);
-        if (ok) {
-            b.str("; took the shape ").fix(got[0]).c(',').fix(got[1]).c(',').fix(got[2]).str(" m away along the view, refund entries ")
-             .u(list ? list->count : 0).str(", materials: ");
-            mats_str(b, g_kept.all, g_kept.keptM, 8);
-        } else if (!tried) b.str("; no camera to follow the view, nothing removed");
-        else b.str("; ").i(tried).str(" shapes along the view hold nothing either (cursor not on voxels, or voxels removal cannot reach)");
-        log_line(b);
-    }
-    return ok ? 1 : r;
+    for (int m = 1; m < 0x100; m++) tot += g_remVols[m];
+    *hit = r || tot > 0.f;
+    return r;
 }
 static void only_remove(int material) { g_onlyRemoveTid = material ? GetCurrentThreadId() : 0; g_onlyRemove = material; }
 
@@ -3551,7 +3344,7 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
         return r;
     }
     if (g_mode != MODE_AREA)
-        return hammer_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
+        return g_remove((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
     IntXf* xf = (IntXf*)xfp;
     Aabb* bx = (Aabb*)box;
     EnterCriticalSection(&g_stateLock);
@@ -3607,7 +3400,6 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
     g_rpend.suppress = false;
     memcpy(g_rpend.click, xf->pos, sizeof(g_rpend.click));
     uint8_t any = 0;
-    kept_reset();
     QueryPerformanceCounter(&g_rpendT0);
     for (int jj = 0; jj < pl.count[1]; jj++)          // top layer first
         for (int i = 0; i < pl.count[0]; i++)
@@ -3641,31 +3433,14 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
 
 static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     bool mine = g_rpend.ctx == ctx && g_rpend.tid == GetCurrentThreadId() && GetTickCount() - g_rpend.tick < 3000;
-    if (!mine) {
-        // a hammer removal whose dry run found material only Remove anything allows, or whose
-        // aimed shape was empty and was moved along the view (hammer_remove)
-        const DWORD tid = GetCurrentThreadId(), now = GetTickCount();
-        const bool wide = g_wideDry.ctx == ctx && g_wideDry.tid == tid && now - g_wideDry.tick < 3000;
-        const bool moved = c && g_hamShift.ctx == ctx && g_hamShift.tid == tid && now - g_hamShift.tick < 3000;
-        if (!wide && !moved) return g_removeCommitOrig(ctx, c, shape);
-        g_wideDry.ctx = nullptr; g_hamShift.ctx = nullptr;
-        Commit rc = *c;
-        if (moved) for (int a = 0; a < 3; a++) rc.pos[a] += (float)g_hamShift.d[a] * kInv;
-        wide_remove(wide);
-        uint8_t r = g_removeCommitOrig(ctx, &rc, shape);
-        wide_remove(false);
-        LOG(.str("remove anything: hammer removal committed (").i(r).str(wide ? ", kept material" : "").str(moved ? ", shape moved along the view" : "").c(')'));
-        return r;
-    }
+    if (!mine) return g_removeCommitOrig(ctx, c, shape);
     RemovePending rp = g_rpend;
     g_rpend.ctx = nullptr;
     if (rp.suppress) { LOG(.str("  corner click: dismantle commit skipped")); return 0; }
     uint8_t any = 0; int done = 0, tried = 0;
     LARGE_INTEGER t0; QueryPerformanceCounter(&t0);
-    const bool wideCommit = !rp.only && remove_anything_on();
     UndoSplit us; undo_begin(us, ctx, rp.list, g_rpendCost, rp.n);
     only_remove(rp.only);                   // connected delete: only the clicked material
-    wide_remove(!rp.only);                  // Area remove: Remove anything (Options)
     for (int i = 0; i < rp.n; i++) {
         // connected delete probed only cells holding the clicked material; an Area remove
         // shape whose dry run found nothing is air: committing it costs time and removes nothing
@@ -3679,11 +3454,9 @@ static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
         undo_after(us);
     }
     only_remove(0);
-    wide_remove(false);
     undo_end(us);
     LOG(.str("remove commit: ").i(rp.n).str(" shapes, committed ").i(tried).str(" (").i(rp.n - tried).str(" empty skipped), removed ")
         .i(done).str(rp.only ? " (connected delete)" : "").str(", ").f((float)ms_since(t0)).str(" ms"));
-    if (wideCommit) kept_log("area");
     occ_refresh();
     Buf b; b.fmt(T(S_REMOVED), num(done).s);
     if (us.recorded < rp.n) b.str("  |  ").fmt(T(S_UNDO_COVERS), num(us.recorded).s);
@@ -5157,13 +4930,6 @@ static void draw_tool_rows() {
         g_cfg.globalChests = v != 0; write_full_ini(g_cfg);
         LOG(.str("magic chests of all bases -> ").i(v));
     }
-    // risky / debug: removal ignores the game's rules (Remove anything); saved, never on a key or the wheel
-    if (ui_option(T(S_OPT_REMOVE_ANY), offOn, 2, g_cfg.removeAnything ? 1 : 0, &v) && (v != 0) != (g_cfg.removeAnything != 0)) {
-        g_cfg.removeAnything = v != 0; write_full_ini(g_cfg);
-        LOG(.str("remove anything (risky) -> ").i(v));
-        flash(T(v ? S_REMOVE_ANY_ON : S_REMOVE_ANY_OFF));
-    }
-    ui_text(T(remote_known() ? S_OPT_REMOVE_ANY_REMOTE : S_OPT_REMOVE_ANY_HINT), STYLE_BODY);
     // language: as the game, or one by hand (saved as Language= in the ini)
     const char* langs[1 + kLanguageCount];
     langs[0] = T(S_OPT_LANGUAGE_GAME);
