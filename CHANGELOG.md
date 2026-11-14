@@ -20,6 +20,8 @@ changelog on Nexus Mods, so keep it short and written for players.
   roofs, and stuck blocks like those above. It can leave holes or floating ruins, so back
   up your save. Nothing is given back for what the game would not let you remove. Only in
   a world you host; on a server the game's rules stay. Not on the tools wheel and no key.
+  With the hammer, when the shape you aim at lands in the air just in front of lava or rock
+  the game will not let you remove, the mod takes the next shape along your view instead.
 - **Area delete** is lighter: shapes of the box that hold nothing are no longer committed
   one by one (fewer stutters when the box is mostly air, and undo now covers more of the
   box), and the box preview no longer re-reads the blocks in it every frame.

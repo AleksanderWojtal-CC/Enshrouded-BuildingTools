@@ -255,6 +255,22 @@ itself would give back. The log line `remove anything (area|hammer)` gives, per 
 shapes holding kept material, its volume per kind and the biggest materials. The commit is
 widened for Area remove (its own commit loop) and for a hammer removal whose widened dry run
 found kept material on the same thread and context within 3 s.
+
+Hammer (`hammer_remove`, 0.33.2-dev4): the dismantle's block path (client 2d8da0) calls
+RemoveShape (2d9866), pays the refund (PayCost, 2d98bc) and then always RemoveCommit
+(48ef20, 2d9923); RemoveShape's result is not checked. The dismantle cursor snaps to voxels
+the game counts as removable (`CursorConfig.secondaryActionConfig.snapPositionToRemovableVoxel`,
+copied from ItemInfo+0x1a7 at 28ca06), so on material the game keeps the hammer's shape can
+sit in the air in front of it: the 0.33.2-dev3 test log showed hammer clicks on rock / lava
+whose widened dry run found nothing at all. With Remove anything, an empty aimed shape is
+followed along the view (latest cursor camera to the shape centre, steps of a quarter shape,
+at most 4 neighbouring shapes within 2 shapes per axis); the first that holds anything gets
+the real dry run, and `remove_commit_hook` moves the commit there (`g_hamShift`, same thread
+and context within 3 s). An empty shape is also probed once without the dry run's object
+check (`check` = 0, RemoveShape's 4932a0 collider query) for the log. Every hammer removal
+logs one `remove anything (hammer)` line: shape centre and size, the game's dry-run result,
+refund entries and the materials found (id, volume, terrain/building, kept). The Area line
+lists the materials too.
 Pieces dismantled by entity (filter set) and connected delete are not widened. Off on a dedicated server (`g_dedicated`) and in a remote session
 (`remote_session()`), where the server's table decides. In a world the player hosts the
 host's setting applies to every removal the host's server context runs.

@@ -334,7 +334,9 @@ Remove anything (risky / debug option)
   leave, #61). It can break your world (holes, floating ruins): back up your
   save first and turn it off when done. Nothing is given back for what the
   game would not let you remove. Only in a world you host; on a dedicated
-  server the game's rules stay.
+  server the game's rules stay. With the hammer, when the shape you aim at
+  sits in the air in front of material the game keeps (lava, some rock), the
+  next shape along your view is removed instead.
 
 Uninstall
   Close the game and delete dinput8.dll and the BuildingTools-Languages folder
