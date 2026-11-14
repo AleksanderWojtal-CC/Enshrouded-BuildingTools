@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.33.2-dev2"
+#define MOD_VERSION "0.33.2-dev3"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -928,7 +928,10 @@ typedef void (*RefundBuildFn)(void* list, void* ctx, VolList* vols);
 static RefundBuildFn g_refundBuildOrig = nullptr;
 static float g_removedVolume = 0.f;
 static float g_remVols[256];
+static volatile DWORD g_volTapTid = 0;     // a player's dry run: note the volumes too, refund as normal
 static void refund_build_hook(void* list, void* ctx, VolList* vols) {
+    if (g_volTapTid && g_volTapTid == GetCurrentThreadId() && vols && vols->data)
+        for (uint64_t i = 1; i < vols->count && i < 0x100; i++) { float v = vols->data[i]; g_remVols[i] += v < 0 ? -v : v; }
     if (g_ownRemoveTid == GetCurrentThreadId()) {
         // the mod's removal dry run: note what is removable, create no refund entries
         if (vols && vols->data)
@@ -2273,10 +2276,11 @@ static uint32_t g_volSnap[kVolSnaps][256];
 // records undo only while the current step's own records clearly fit, commits the
 // rest without undo, and leaves the step only the cost entries of the recorded
 // shapes (undo refunds exactly what it takes back).
+static void occ_refresh();                    // the drawn blocks: read again now (the world changed)
 struct UndoSplit {
     uint8_t* ctx; uint8_t* storage; uint8_t* step0; CostList* list; const uint32_t* cost; int n;
     bool costsOk, stop, lost;
-    int recorded; uint64_t bytes, maxRec, headBefore;
+    int recorded, commits; uint64_t bytes, maxRec, headBefore;   // recorded: shapes 0..recorded-1 have undo
 };
 static UndoSplit* volatile g_activeSplit = nullptr;
 static volatile DWORD g_activeSplitTid = 0;
@@ -2305,21 +2309,23 @@ static void undo_begin(UndoSplit& u, void* ctx, CostList* list, const uint32_t* 
     } else if (n > 1) u.stop = true;               // cannot check the budget: first shape only
 }
 
-// before committing shape i: record undo for it only if it surely fits
-static void undo_before(UndoSplit& u, int i) {
+// before committing shape i: record undo for it only if it surely fits. commit = false: shape i
+// is not committed (empty), it adds no undo record but stays inside the recorded shapes
+static void undo_before(UndoSplit& u, int i, bool commit = true) {
     if (!u.step0) return;
-    if (u.stop && i > 0) { *(uint8_t**)(u.ctx + 0xf0) = nullptr; return; }
-    if (i > 0) {
+    if (u.stop && u.commits > 0) { *(uint8_t**)(u.ctx + 0xf0) = nullptr; return; }
+    if (!commit) { u.recorded++; return; }
+    if (u.commits > 0) {
         uint64_t stepRecs = *(uint64_t*)(u.step0 + 0x100) - *(uint64_t*)(u.step0 + 0x108);
         uint32_t poolUsed = *(uint32_t*)(u.storage + 0xa28), poolCap = *(uint32_t*)(u.storage + 0xa38);
         uint64_t memCap = *(uint64_t*)(u.storage + 0xa60);
         (void)poolUsed;
-        bool fits = stepRecs < 30 && (uint64_t)u.recorded + 2 < poolCap &&
+        bool fits = stepRecs < 30 && (uint64_t)u.commits + 2 < poolCap &&
                     u.bytes + 2 * u.maxRec + 64 < memCap / 2;
         if (!fits) { u.stop = true; *(uint8_t**)(u.ctx + 0xf0) = nullptr; return; }
     }
-    u.headBefore = *(uint64_t*)(u.storage + 0xa68);
-    u.recorded++;
+    u.headBefore = u.storage ? *(uint64_t*)(u.storage + 0xa68) : 0;
+    u.recorded++; u.commits++;
 }
 static void undo_after(UndoSplit& u) {
     if (!u.step0 || !u.storage || *(uint8_t**)(u.ctx + 0xf0) == nullptr) return;
@@ -2545,6 +2551,7 @@ static uint8_t place_commit_hook(void* ctx, Commit* c, uint32_t shape) {
     }
     if (g_caveForce) *g_caveForce = 0;
     undo_end(us);
+    occ_refresh();
     *g_caveMode = 0;
     if (pd.replace && us.step0 && !us.lost && us.recorded > 0 && GetTickCount() - g_paidTick < 3000 && g_paidN > 0) {
         CostEntry e[kMaxPaid]; int ne = 0;
@@ -3199,6 +3206,12 @@ struct RemovePending { void* ctx; DWORD tid, tick; int n; int64_t click[3]; bool
 static uint32_t g_rpendCost[kMaxPending + 1];
 static RemovePending g_rpend;
 static int64_t g_rpendPos[kMaxPending][3];
+static bool g_rpendHit[kMaxPending];          // Area remove: the dry run found something (else the shape is air: not committed)
+static LARGE_INTEGER g_rpendT0;               // Area remove: when pricing started (timing in the log)
+static double ms_since(const LARGE_INTEGER& t0) {
+    LARGE_INTEGER t, f; QueryPerformanceCounter(&t); QueryPerformanceFrequency(&f);
+    return (double)(t.QuadPart - t0.QuadPart) * 1000.0 / (double)f.QuadPart;
+}
 
 static bool is_server_ctx(void* ctx) { return ctx && *(void**)((uint8_t*)ctx + 0xf0) != nullptr; }
 
@@ -3219,7 +3232,8 @@ static volatile DWORD g_onlyRemoveTid = 0;
 // Only in a world this game hosts: a server decides removals itself.
 static bool remote_session();
 static volatile DWORD g_wideTid = 0;
-static int g_wideLogged = 0;
+static uint8_t g_keptMat[256];           // materials the game's table kept (set by the widened table)
+static int g_keptMatN = 0;
 static void* remove_table_hook(uint8_t* out, void* ctx, void* state) {
     void* r = g_removeTableOrig(out, ctx, state);
     const int only = g_onlyRemove;
@@ -3227,29 +3241,78 @@ static void* remove_table_hook(uint8_t* out, void* ctx, void* state) {
         for (int m = 1; m < 0x100; m++) if (m != only) out[m] = 0;
     } else if (out && g_wideTid && g_wideTid == GetCurrentThreadId()) {
         int added = 0;
-        for (int m = 1; m < 0x100; m++) if (!out[m]) { out[m] = 1; added++; }
-        if (added && g_wideLogged < 4) { g_wideLogged++; LOG(.str("remove anything: ").i(added).str(" materials the game keeps allowed")); }
+        for (int m = 1; m < 0x100; m++) { g_keptMat[m] = !out[m]; if (!out[m]) { out[m] = 1; added++; } }
+        g_keptMatN = added;
     }
     return r;
 }
 static bool remove_anything_on() { return g_cfg.removeAnything && !g_modOff && !g_dedicated && !remote_session(); }
 static void wide_remove(bool on) { g_wideTid = on && remove_anything_on() ? GetCurrentThreadId() : 0; }
-// The dry run (RemoveShape) of a removal: as the game into the real list, so the refund is only
-// what the game itself would give back; with Remove anything, once more with every material
-// allowed into a scratch list, so a shape holding only kept material still counts as something
-// to remove. The commit (RemoveCommit) of a dry run that found such material is widened too.
+// What Remove anything found in the dry runs of one removal (an Area remove box or a hammer
+// click): volume of material the game itself keeps, terrain (1..0x7f) and building
+// material (0x80..0xff: ruin walls and roofs, stuck blocks), per material too.
+struct KeptStats { int shapes, keptShapes, airShapes; float vol[2]; float mat[256]; int tableN; };
+static KeptStats g_kept;
+static void kept_reset() { memset(&g_kept, 0, sizeof(g_kept)); }
+static void kept_log(const char* what) {
+    Buf b;
+    b.str("remove anything (").str(what).str("): ").i(g_kept.keptShapes).str(" of ").i(g_kept.shapes)
+     .str(" shapes held material the game keeps (table kept ").i(g_kept.tableN).str(" materials); volume terrain ")
+     .f(g_kept.vol[0]).str(", building (ruin / stuck) ").f(g_kept.vol[1]);
+    float done[256]; memcpy(done, g_kept.mat, sizeof(done));
+    for (int k = 0; k < 6; k++) {                      // the biggest few
+        int best = 0; for (int m = 1; m < 0x100; m++) if (done[m] > done[best]) best = m;
+        if (!best || !(done[best] > 0.f)) break;
+        b.str(k ? ", " : "; materials ").x(best).c(' ').f(done[best]); done[best] = 0.f;
+    }
+    log_line(b);
+}
+// The dry run (RemoveShape) of a removal. Plain: as the game, its volumes noted; *hit = the
+// shape holds something to remove (a shape that is all air is not committed).
+// With Remove anything: first widened, volumes only (no refund entries), which tells air,
+// material the game keeps and normal material apart; then as the game into the real list
+// only when there is normal material, so the refund is only what the game itself would give
+// back. A hammer removal whose widened dry run found kept material gets a widened commit.
 struct WideDry { void* ctx; DWORD tid, tick; };
 static WideDry g_wideDry;
-static uint8_t remove_dry(CostList* list, void* ctx, void* state, Aabb* box, IntXf* xf, void* filter, uint8_t check) {
-    uint8_t r = g_remove(list, ctx, state, box, xf, filter, check);
-    if (filter || !remove_anything_on()) return r;
+static uint8_t remove_dry(CostList* list, void* ctx, void* state, Aabb* box, IntXf* xf, void* filter, uint8_t check, bool* hit = nullptr) {
+    const DWORD tid = GetCurrentThreadId();
+    float tot = 0.f;
+    if (filter || !remove_anything_on()) {
+        memset(g_remVols, 0, sizeof(g_remVols));
+        g_volTapTid = tid;
+        uint8_t r = g_remove(list, ctx, state, box, xf, filter, check);
+        g_volTapTid = 0;
+        for (int m = 1; m < 0x100; m++) tot += g_remVols[m];
+        if (hit) *hit = r || tot > 0.f;
+        return r;
+    }
     static CostEntry scratchBuf[256];
     CostList scratch = { scratchBuf, 0, 256, nullptr };
-    wide_remove(true);
+    memset(g_remVols, 0, sizeof(g_remVols));
+    memset(g_keptMat, 0, sizeof(g_keptMat));
+    wide_remove(true); g_ownRemoveTid = tid;
     uint8_t w = g_remove(&scratch, ctx, state, box, xf, filter, check);
-    wide_remove(false);
-    if (w) { g_wideDry.ctx = ctx; g_wideDry.tid = GetCurrentThreadId(); g_wideDry.tick = GetTickCount(); }
-    return r | w;
+    g_ownRemoveTid = 0; wide_remove(false);
+    float kept[2] = {}, normal = 0.f;
+    for (int m = 1; m < 0x100; m++) {
+        float v = g_remVols[m];
+        if (!(v > 0.f)) continue;
+        if (g_keptMat[m]) { kept[m >= 0x80] += v; g_kept.mat[m] += v; } else normal += v;
+    }
+    tot = kept[0] + kept[1] + normal;
+    g_kept.shapes++;
+    if (g_keptMatN > g_kept.tableN) g_kept.tableN = g_keptMatN;
+    if (kept[0] + kept[1] > 0.f) {
+        g_kept.keptShapes++; g_kept.vol[0] += kept[0]; g_kept.vol[1] += kept[1];
+        g_wideDry.ctx = ctx; g_wideDry.tid = tid; g_wideDry.tick = GetTickCount();
+    }
+    if (!(tot > 0.f) && !w) g_kept.airShapes++;
+    uint8_t r = 0;
+    if (normal > 0.f || (!(tot > 0.f) && w))           // something the game removes itself
+        r = g_remove(list, ctx, state, box, xf, filter, check);
+    if (hit) *hit = r || w || tot > 0.f;
+    return r || w || tot > 0.f ? 1 : 0;
 }
 static void only_remove(int material) { g_onlyRemoveTid = material ? GetCurrentThreadId() : 0; g_onlyRemove = material; }
 
@@ -3360,8 +3423,10 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
         if (r) beep(MB_ICONASTERISK);
         return r;
     }
-    if (g_mode != MODE_AREA)
+    if (g_mode != MODE_AREA) {
+        kept_reset();
         return remove_dry((CostList*)list, ctx, state, (Aabb*)box, (IntXf*)xfp, filter, check);
+    }
     IntXf* xf = (IntXf*)xfp;
     Aabb* bx = (Aabb*)box;
     EnterCriticalSection(&g_stateLock);
@@ -3417,7 +3482,8 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
     g_rpend.suppress = false;
     memcpy(g_rpend.click, xf->pos, sizeof(g_rpend.click));
     uint8_t any = 0;
-    g_wideLogged = 0;
+    kept_reset();
+    QueryPerformanceCounter(&g_rpendT0);
     for (int jj = 0; jj < pl.count[1]; jj++)          // top layer first
         for (int i = 0; i < pl.count[0]; i++)
             for (int k = 0; k < pl.count[2]; k++) {
@@ -3432,13 +3498,17 @@ static uint8_t remove_hook_body(void* list, void* ctx, void* state, void* box, v
                 }
                 if (g_rpend.n >= kMaxPending) continue;
                 g_rpendCost[g_rpend.n] = list ? (uint32_t)((CostList*)list)->count : 0;
-                if (remove_dry((CostList*)list, ctx, state, &b2, &ix, filter, check)) any = 1;
+                bool hit = false;
+                if (remove_dry((CostList*)list, ctx, state, &b2, &ix, filter, check, &hit)) any = 1;
+                g_rpendHit[g_rpend.n] = hit;
                 memcpy(g_rpendPos[g_rpend.n], ix.pos, 24); g_rpend.n++;
             }
     g_rpendCost[g_rpend.n] = list ? (uint32_t)((CostList*)list)->count : 0;
     g_rpend.list = (CostList*)list;
     g_rpend.tick = GetTickCount();
-    LOG(.str("remove fill: priced ").i(g_rpend.n).str(" shapes, refund entries ").u(list ? ((CostList*)list)->count : 0));
+    int hits = 0; for (int i = 0; i < g_rpend.n; i++) hits += g_rpendHit[i];
+    LOG(.str("remove fill: priced ").i(g_rpend.n).str(" shapes (").i(hits).str(" not empty), refund entries ")
+        .u(list ? ((CostList*)list)->count : 0).str(", ").f((float)ms_since(g_rpendT0)).str(" ms"));
     LeaveCriticalSection(&g_stateLock);
     beep(MB_ICONASTERISK);
     return any;
@@ -3455,26 +3525,37 @@ static uint8_t remove_commit_hook(void* ctx, Commit* c, uint32_t shape) {
         uint8_t r = g_removeCommitOrig(ctx, c, shape);
         wide_remove(false);
         LOG(.str("remove anything: hammer removal committed (").i(r).c(')'));
+        kept_log("hammer");
         return r;
     }
     RemovePending rp = g_rpend;
     g_rpend.ctx = nullptr;
     if (rp.suppress) { LOG(.str("  corner click: dismantle commit skipped")); return 0; }
-    uint8_t any = 0; int done = 0;
+    uint8_t any = 0; int done = 0, tried = 0;
+    LARGE_INTEGER t0; QueryPerformanceCounter(&t0);
+    const bool wideCommit = !rp.only && remove_anything_on();
     UndoSplit us; undo_begin(us, ctx, rp.list, g_rpendCost, rp.n);
     only_remove(rp.only);                   // connected delete: only the clicked material
     wide_remove(!rp.only);                  // Area remove: Remove anything (Options)
     for (int i = 0; i < rp.n; i++) {
-        undo_before(us, i);
+        // connected delete probed only cells holding the clicked material; an Area remove
+        // shape whose dry run found nothing is air: committing it costs time and removes nothing
+        const bool hit = rp.only || g_rpendHit[i];
+        undo_before(us, i, hit);
+        if (!hit) continue;
         Commit rc = *c;
         for (int a = 0; a < 3; a++) rc.pos[a] += (float)(g_rpendPos[i][a] - rp.click[a]) * kInv;
+        tried++;
         if (g_removeCommitOrig(ctx, &rc, shape)) { any = 1; done++; }
         undo_after(us);
     }
     only_remove(0);
     wide_remove(false);
     undo_end(us);
-    LOG(.str("remove commit: ").i(rp.n).str(" shapes, removed ").i(done).str(rp.only ? " (connected delete)" : ""));
+    LOG(.str("remove commit: ").i(rp.n).str(" shapes, committed ").i(tried).str(" (").i(rp.n - tried).str(" empty skipped), removed ")
+        .i(done).str(rp.only ? " (connected delete)" : "").str(", ").f((float)ms_since(t0)).str(" ms"));
+    if (wideCommit) kept_log("area");
+    occ_refresh();
     Buf b; b.fmt(T(S_REMOVED), num(done).s);
     if (us.recorded < rp.n) b.str("  |  ").fmt(T(S_UNDO_COVERS), num(us.recorded).s);
     flash(b.z());
@@ -4103,8 +4184,15 @@ static uint8_t g_voxOnes[kOccReg * kOccReg * kOccReg];
 static int32_t g_voxHits[kOccReg * kOccReg * kOccReg][3];
 static int32_t g_occV0[3]; static int g_occN[3], g_occStepV[3], g_occCpr[3], g_occRegN[3], g_occNext = 0;
 static bool g_occValid = false;
+// Counters of the current box (reset when the box changes). A full pass over the box is read
+// again only after a pause (kOccRestMs) or right after the mod changed the world (occ_refresh):
+// rereading unchanged cells every frame cost up to the 1.5 ms budget each frame for nothing.
 static LONG g_occCalls = 0, g_occHitsTot = 0, g_occPasses = 0;
-static int64_t g_occTicks = 0;
+static int64_t g_occTicks = 0, g_occWorst = 0;
+static volatile DWORD g_occRestUntil = 0, g_occFastUntil = 0;
+static const DWORD kOccRestMs = 500;
+// the game applies voxel edits over the next frames: read without pauses for a while
+static void occ_refresh() { g_occRestUntil = 0; g_occFastUntil = GetTickCount() + 2000; }
 static bool occ_wanted() {
     LONG op = g_scOp == OP_REMOVE ? 2 : g_replace ? 1 : 0;
     return g_voxQuery && g_cfg.drawBoxCells && draw_box_on() && (op == 2 || (op == 1 && g_replaceStyle != STYLE_FULL));
@@ -4135,10 +4223,12 @@ static void occ_update(uint8_t* ctx) {
         memset((void*)g_occBits, 0, sizeof(g_occBits));
         memcpy(g_occV0, v0, 12); memcpy(g_occN, n, 12); memcpy(g_occStepV, st, 12);
         for (int a = 0; a < 3; a++) { g_occCpr[a] = kOccReg / st[a]; g_occRegN[a] = (n[a] + g_occCpr[a] - 1) / g_occCpr[a]; }
-        g_occNext = 0; g_occValid = true;
+        g_occNext = 0; g_occValid = true; g_occRestUntil = 0;
+        g_occCalls = 0; g_occHitsTot = 0; g_occPasses = 0; g_occTicks = 0; g_occWorst = 0;
         if (!g_voxOnes[0]) memset(g_voxOnes, 1, sizeof(g_voxOnes));
     }
     int regs = g_occRegN[0] * g_occRegN[1] * g_occRegN[2];
+    if (g_occNext == 0 && g_occReady && (LONG)(g_occRestUntil - GetTickCount()) > 0) return;   // read lately, nothing changed
     LARGE_INTEGER f, t0, t1;
     QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t0);
     const int64_t budget = f.QuadPart / 667;                       // 1.5 ms a frame
@@ -4177,17 +4267,21 @@ static void occ_update(uint8_t* ctx) {
             uint32_t bit = 1u << (id & 31);
             if (taken[x + cn[0] * (y + cn[1] * z)]) g_occBits[id >> 5] |= bit; else g_occBits[id >> 5] &= ~bit;
         }
-        if (++g_occNext >= regs) { g_occNext = 0; g_occReady = 1; g_occPasses++; }
+        if (++g_occNext >= regs) { g_occNext = 0; g_occReady = 1; g_occPasses++;
+            if ((LONG)(g_occFastUntil - GetTickCount()) <= 0) g_occRestUntil = GetTickCount() + kOccRestMs;
+            break; }
         QueryPerformanceCounter(&t1);
         if (t1.QuadPart - t0.QuadPart > budget) break;
     }
     QueryPerformanceCounter(&t1);
     g_occTicks += t1.QuadPart - t0.QuadPart;
+    if (t1.QuadPart - t0.QuadPart > g_occWorst) g_occWorst = t1.QuadPart - t0.QuadPart;
     static DWORD next = 0;
     if (g_cfg.log && GetTickCount() > next) {
         next = GetTickCount() + 3000;
         LOG(.str("block bits: ").i(n[0]).c('x').i(n[1]).c('x').i(n[2]).str(" cells, ").i(regs).str(" regions, passes ").i(g_occPasses)
-            .str(", calls ").i(g_occCalls).str(", taken voxels ").i(g_occHitsTot).str(", ms total ").i((int)(g_occTicks * 1000 / f.QuadPart)));
+            .str(", calls ").i(g_occCalls).str(", taken voxels ").i(g_occHitsTot).str(", ms total ").f((float)((double)g_occTicks * 1000.0 / f.QuadPart))
+            .str(", worst frame ms ").f((float)((double)g_occWorst * 1000.0 / f.QuadPart)).str(" (this box)"));
     }
 }
 

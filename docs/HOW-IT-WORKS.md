@@ -230,19 +230,32 @@ found cell is then dry-run in the dismantle's own context (so the game builds th
 refund for the clicked material only) and committed with one `RemoveCommit` per cell,
 with the same undo budget as Area remove.
 
+Area remove commits only the shapes whose dry run found something (`g_rpendHit`, from the
+dry run's result or its volumes via the refund builder tap `g_volTapTid`); a shape of air
+would cost a `RemoveCommit` and remove nothing. Skipped shapes add no undo record, so the
+undo budget covers more of the box. The log gives the time of pricing and of the commit.
+The box preview's block read (`occ_update`, the game's blueprint-blocked query per 16-voxel
+region, at most 1.5 ms a frame) pauses 500 ms after each full pass over the box, except for
+2 s after the mod placed or removed something (`occ_refresh`), when the game is still
+applying the edit.
+
 ## Remove anything (risky)
 
 Options > Remove anything (`RemoveAnything=1` under `[Risky]`; the 0.33.2-dev1 key
 `RemoveStuckBlocks=1` under `[Area]` is read as the same setting). Same table redirect as
 connected delete, the other way round: while a player's removal runs on this thread, every
 material 1..0xff is set to removable (terrain, ruin materials, game-internal materials such
-as the #61 stuck blocks). Each dry run (`remove_dry`, hammer and every Area remove cell) runs
-twice: once as the game into the real cost list, so the refund holds only what the game
-itself would give back, and once widened into a scratch list, so a shape holding only kept
-material still counts as something to remove. The commit is widened for Area remove (its own
-commit loop) and for a hammer removal whose widened dry run found something on the same
-thread and context within 3 s. Pieces dismantled by entity (filter set) and connected delete
-are not widened. Off on a dedicated server (`g_dedicated`) and in a remote session
+as the #61 stuck blocks). Each dry run (`remove_dry`, hammer and every Area remove cell) first
+runs widened with only its volumes noted (`g_ownRemoveTid`: the refund builder creates no
+entries), and `remove_table_hook` marks which materials the game's table had kept. That splits
+the shape's volume into air, kept material (terrain 1..0x7f, building 0x80..0xff such as ruin
+walls and stuck blocks) and normal material. Only when there is normal material does the dry
+run run again as the game into the real cost list, so the refund holds only what the game
+itself would give back. The log line `remove anything (area|hammer)` gives, per removal, the
+shapes holding kept material, its volume per kind and the biggest materials. The commit is
+widened for Area remove (its own commit loop) and for a hammer removal whose widened dry run
+found kept material on the same thread and context within 3 s.
+Pieces dismantled by entity (filter set) and connected delete are not widened. Off on a dedicated server (`g_dedicated`) and in a remote session
 (`remote_session()`), where the server's table decides. In a world the player hosts the
 host's setting applies to every removal the host's server context runs.
 
