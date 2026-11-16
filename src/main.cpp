@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.33.2"
+#define MOD_VERSION "0.34.0-dev1"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -5667,6 +5667,15 @@ static void draw_hud_rows() {
     static const Str styles[] = { S_HUD_STYLE_FULL, S_HUD_STYLE_OVERLAP, S_HUD_STYLE_CONNECTED };
     static const Str fills[] = { S_HUD_FILL_SOLID, S_HUD_FILL_HOLLOW, S_HUD_FILL_WALLS, S_HUD_FILL_ROOF, S_HUD_FILL_ROUND, S_HUD_FILL_DIAG };
     bool sw = ui.hudSwitch || ui.imageCtx;
+    // an object in hand (the game draws the same box): only the rows that work with objects
+    const bool obj = prop_now() && g_cfg.toolObjects;
+    if (obj) {
+        if (g_cfg.keyObjMode > 0) {
+            Buf m; m.str(T(S_WHEEL_OBJ_MODE)).str(": ").str(T(kObjModeName[g_cfg.objMode % core::OBJ_MODE_COUNT]));
+            hud_key_row(g_cfg.keyObjMode, m.z());
+        }
+        goto free_rows;
+    }
     if (g_cfg.toolArea) hud_key_row(g_cfg.keyStructure, T(sw ? S_HUD_AREA : g_mode == MODE_AREA ? S_HUD_AREA_ON : S_HUD_AREA_OFF), g_mode == MODE_AREA);
     if (g_mode == MODE_AREA) {
         hud_key_row(g_cfg.keyFill, T(fills[g_fill % core::FILL_COUNT]));
@@ -5695,6 +5704,7 @@ static void draw_hud_rows() {
         int st = g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0;
         hud_key_row(g_cfg.keyStyle, T(styles[st]));
     }
+free_rows:
     if (g_cfg.toolFree) hud_key_row(g_cfg.keyHover, T(sw ? S_HUD_FREE : g_hover ? S_HUD_FREE_ON : S_HUD_FREE_OFF), g_hover != 0);
     if (g_hover && g_cfg.wheelKey > 0) {
         Buf h; h.fmt(T(S_HUD_WHEEL), tenths((int)(g_hoverDist * 10.f + 0.5f)).s); hud_key_row(g_cfg.wheelKey, h.z());
@@ -6149,6 +6159,7 @@ static int wheel_entries(int* act) {
         act[n++] = ACT_OBJ_MODE;
         act[n++] = ACT_OBJ_MENU;
         if (g_objPtN) act[n++] = ACT_OBJ_CLEAR;
+        act[n++] = ACT_FREE;                 // objects that need a surface can then be placed in the air
         act[n++] = ACT_MENU;
         int k = 0;
         for (int i = 0; i < m; i++) if (act_allowed(all[i]) && k < kWheelSlots) out[k++] = all[i];
