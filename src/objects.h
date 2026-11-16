@@ -37,6 +37,7 @@ static bool prop_item(const uint8_t* it) {
     return true;
 }
 static volatile LONG g_overlapLogged = 0;          // the first object let through since the option changed is logged
+static volatile LONG g_overlapGen = 0;             // bumped when the option changes (restarts the leftover-flag log)
 typedef uint64_t (*CursorFlagsFn)(uint32_t* flags, uint8_t* sys, uint8_t* q, uint8_t* xf, uint64_t a5, uint64_t a6, float a7);
 static CursorFlagsFn g_cursorFlagsOrig = nullptr;  // overlap objects (install_overlap)
 static void obj_set_overlap(bool on, bool save);
@@ -536,6 +537,7 @@ static void obj_window_closed() {
 static void obj_set_overlap(bool on, bool save) {
     g_cfg.objOverlap = on ? 1 : 0;
     g_overlapLogged = 0;
+    InterlockedIncrement(&g_overlapGen);
     if (save) write_full_ini(g_cfg);
     Buf b; b.fmt(T(obj_remote() ? S_OBJ_OVERLAP_REMOTE : S_OBJ_OVERLAP_MSG), T(on ? S_OPT_ON : S_OPT_OFF)); flash(b.z());
     LOG(.str("objects: overlap -> ").i(g_cfg.objOverlap).str(obj_remote() ? " (session remote: the server decides)" : ""));
@@ -746,15 +748,60 @@ static void install_undo_key() {
 // only for an object: ItemInfo at query +0x60) on both sides: the ghost turns valid and the
 // server (single player, a hosted game, or a dedicated server running the mod with the option
 // on) takes the click. A server without it still refuses (its own collision test).
-static const uint32_t kFlagAreaOccupied = 1u << 8;
+// 0.34.0-dev3: AreaOccupied alone was not enough. The placement check also sets bit 10
+// InvalidSurfaceNormal when the aimed surface's angle is not one the object may attach to
+// (its CursorConfig.attachAngleConfig: ceilingAngle / wallAngle / floorAngle, each Disabled /
+// Narrow / Wide; 291010 -> 2926f0), e.g. a chest aimed at a wall or at the side of another
+// object, and turns that into AreaOccupied when the cursor hit another entity (299b5c..299b9d).
+// It is a placement rule only (no physics, no save data), and the server copies the client's
+// bit 10 into its own flags, so with the option on both bits are cleared for objects.
+// Any bits left are logged by name (each new combination, up to 30 lines per option change).
+static const uint32_t kFlagAreaOccupied = 1u << 8, kFlagSurfaceNormal = 1u << 10;
+static const char* const kCursorFlagNames[20] = {
+    "InvalidCursorTransform", "OutsideBuildingZone", "InsideFogZone", "TooFarAway", "LenientBuildInhibitorZone",
+    "StrictBuildInhibitorZone", "MaxAltarCount", "MaxWaterSourceCount", "AreaOccupied", "EnemiesNearby",
+    "InvalidSurfaceNormal", "InvalidCursorVoxelMaterial", "MissingMaterials", "ItemNotUnlocked", "NoPermission",
+    "DisableCursor", "MaxTameAnimalCount", "InsideWater", "SaveMemoryBudgetExhausted", "FactoriesBudgetExhausted" };
+static void cursor_flag_names(Buf& b, uint32_t f) {
+    bool first = true;
+    for (int i = 0; i < 32; i++) if (f & (1u << i)) {
+        if (!first) b.c(' ');
+        first = false;
+        if (i < 20) b.str(kCursorFlagNames[i]); else b.str("bit").i(i);
+    }
+    if (first) b.str("none");
+}
 static uint64_t cursor_flags_hook(uint32_t* flags, uint8_t* sys, uint8_t* q, uint8_t* xf, uint64_t a5, uint64_t a6, float a7) {
     const uint64_t r = g_cursorFlagsOrig(flags, sys, q, xf, a5, a6, a7);
-    if (!g_cfg.objOverlap || !g_cfg.toolObjects || g_modOff || !flags || !(*flags & kFlagAreaOccupied)) return r;
+    if (!g_cfg.objOverlap || !g_cfg.toolObjects || g_modOff || !flags || !(*flags & (kFlagAreaOccupied | kFlagSurfaceNormal))) return r;
     uint8_t* it = q && readable(q + 0x60, 8) ? *(uint8_t**)(q + 0x60) : nullptr;
     if (!prop_item(it)) return r;
-    *flags &= ~kFlagAreaOccupied;
-    if (!InterlockedExchange(&g_overlapLogged, 1))
-        LOG(.str("objects: overlap allowed (area occupied ignored), item ").x(*(uint32_t*)it).str(", flags left ").x(*flags));
+    const uint32_t was = *flags;
+    *flags &= ~(kFlagAreaOccupied | kFlagSurfaceNormal);
+    if (!InterlockedExchange(&g_overlapLogged, 1)) {
+        Buf b; b.str("objects: overlap allowed, item ").x(*(uint32_t*)it).str(", cleared ");
+        cursor_flag_names(b, was & (kFlagAreaOccupied | kFlagSurfaceNormal));
+        b.str(", flags left ").x(*flags).str(" (");
+        cursor_flag_names(b, *flags);
+        b.c(')');
+        log_line(b);
+    }
+    // what still makes the ghost red (each new combination once)
+    static uint32_t seen[16]; static LONG nSeen = 0, nLogs = 0; static LONG gen = -1;
+    if (gen != g_overlapGen) { gen = g_overlapGen; nSeen = 0; nLogs = 0; }
+    const uint32_t left = *flags & ~(1u << 15);                    // DisableCursor: nothing aimed
+    if (left && nLogs < 30) {
+        bool known = false;
+        for (LONG i = 0; i < nSeen; i++) if (seen[i] == left) known = true;
+        if (!known) {
+            if (nSeen < 16) seen[nSeen++] = left;
+            nLogs++;
+            Buf b; b.str("objects: overlap on, still refused by ").x(left).str(" (");
+            cursor_flag_names(b, left);
+            b.str("), item ").x(*(uint32_t*)it);
+            log_line(b);
+        }
+    }
     return r;
 }
 static void install_overlap() {
