@@ -370,7 +370,7 @@ bp.objects_later = オブジェクトも保存されます：使える物（ド�
 
 # Object placement (an object in hand)
 obj.xf_title = 正確な回転と微調整（サーバー参加時も）
-obj.xf_help = ゲームの回転に追加されます。キーはキーページで設定。Ctrlを押しながらで1ずつ。
+obj.xf_help_fine = ゲームの回転に追加されます。キーはキーページで設定（テンキー）。テンキー0を押しながらで1ずつ。オブジェクトを手に持っている間、キャラクターは動きません。
 obj.xf_turn = 上方向の軸で回転（度）
 obj.xf_tilt = X軸で傾け（度）
 obj.xf_roll = Z軸でロール（度）
@@ -399,3 +399,4 @@ obj.key_nudge_down = 手に持ったオブジェクト：下へ移動
 obj.key_nudge_z_plus = 手に持ったオブジェクト：奥へ移動
 obj.key_nudge_z_minus = 手に持ったオブジェクト：手前へ移動
 obj.key_xf_reset = 手に持ったオブジェクト：回転と移動をリセット
+obj.key_fine_step = 手に持ったオブジェクト：押している間 1度 / 1 cm ずつ

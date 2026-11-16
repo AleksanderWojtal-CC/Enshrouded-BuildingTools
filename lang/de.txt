@@ -370,7 +370,7 @@ bp.objects_later = Auch Objekte werden gespeichert: Benutzbares (Türen, Truhen,
 
 # Object placement (an object in hand)
 obj.xf_title = Genaue Drehung und Verschieben (auch auf einem Server)
-obj.xf_help = Zusätzlich zur Drehung des Spiels. Tasten auf der Seite Tasten; Strg halten für Schritte von 1.
+obj.xf_help_fine = Zusätzlich zur Drehung des Spiels. Tasten auf der Seite Tasten (Ziffernblock); Ziffernblock 0 halten für Schritte von 1. Mit einem Objekt in der Hand bewegen sie dich nicht.
 obj.xf_turn = Drehen um die eigene Hochachse (Grad)
 obj.xf_tilt = Kippen um die eigene X-Achse (Grad)
 obj.xf_roll = Rollen um die eigene Z-Achse (Grad)
@@ -399,3 +399,4 @@ obj.key_nudge_down = Objekt in der Hand: nach unten verschieben
 obj.key_nudge_z_plus = Objekt in der Hand: weg verschieben
 obj.key_nudge_z_minus = Objekt in der Hand: näher verschieben
 obj.key_xf_reset = Objekt in der Hand: Drehung und Verschieben zurücksetzen
+obj.key_fine_step = Objekt in der Hand: halten für Schritte von 1 Grad / 1 cm

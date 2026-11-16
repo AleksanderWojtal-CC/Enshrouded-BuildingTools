@@ -370,7 +370,7 @@ bp.objects_later = Objetos também são salvos: o que se usa (portas, baús, cam
 
 # Object placement (an object in hand)
 obj.xf_title = Rotação exata e deslocamento (também em servidor)
-obj.xf_help = Somados à rotação do jogo. Teclas na página Teclas; segure Ctrl para passos de 1.
+obj.xf_help_fine = Somados à rotação do jogo. Teclas na página Teclas (teclado numérico); segure num 0 para passos de 1. Com um objeto na mão elas não movem você.
 obj.xf_turn = Girar no próprio eixo vertical (graus)
 obj.xf_tilt = Inclinar no próprio eixo X (graus)
 obj.xf_roll = Rolar no próprio eixo Z (graus)
@@ -399,3 +399,4 @@ obj.key_nudge_down = Objeto na mão: deslocar para baixo
 obj.key_nudge_z_plus = Objeto na mão: afastar
 obj.key_nudge_z_minus = Objeto na mão: aproximar
 obj.key_xf_reset = Objeto na mão: zerar rotação e deslocamento
+obj.key_fine_step = Objeto na mão: segure para passos de 1 grau / 1 cm

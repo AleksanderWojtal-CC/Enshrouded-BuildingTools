@@ -68,8 +68,9 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   default; on a dedicated server the server needs the mod with the option on).
 - **Exact rotation and nudge of objects** (by FreyaFreed, #59): turn, tilt and roll an object
   in hand by exact degrees on top of the game's rotation, and nudge it by cm along its own
-  axes or the world's (numpad and arrow keys while an object is in hand, Num Lock on, all
-  changeable on the Keys page; or the Object settings window). Also in the air with Free
+  axes or the world's (numpad keys while an object is in hand, Num Lock on, numpad 0 held for steps
+  of 1; all changeable on the Keys page, and the game does not get them while an object is
+  in hand, so they never move you; or the Object settings window). Also in the air with Free
   placement and on a server you join; with Overlap objects a nudge can push an object into
   another. In Object lines the rotation goes on every object and the nudge moves the line.
 - **Tools wheel** (hold Caps Lock): a blurred wheel drawn with the game's own wheel;

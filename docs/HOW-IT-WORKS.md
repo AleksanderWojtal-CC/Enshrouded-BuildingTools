@@ -345,7 +345,18 @@ needs nothing on the server.
   and sends the moved ghost. The check does not store a transform every frame (an invalid
   ghost): the mod keeps the game's last one and puts the turns and the nudge on it again,
   so a key pressed meanwhile shows at once.
-- **Keys.** The nudge arrows follow the camera: right / left and away / closer step the
+- **Keys kept from the game.** The game reads the keyboard only through raw input
+  (`WM_INPUT` -> its import of `GetRawInputData` -> its keyboard handler, which skips a key
+  whose `MakeCode` is 0xff). The mod points that import at `raw_input_hook`: while an object
+  is in hand (no menu, settings window or other screen) a key whose scan code is bound to an
+  object action (also the fine-step key; never Shift / Ctrl / Alt alone or mouse buttons)
+  reaches the game as 0xff, so the player does not walk or crouch. The mod reads its keys
+  with `GetAsyncKeyState`, which this does not touch. No stuck keys: a release is kept back
+  only when its press was, and a key the game saw go down also gets its release; a key still
+  held after the object left the hand reaches the game with its next repeat. Default keys are all on the numpad (0.34.0-dev5); an ini
+  without `ObjectKeysLayout=2` whose object keys are all the dev4 defaults (arrows, Ctrl) moves
+  to them once.
+- **Keys.** The nudge keys follow the camera: right / left and away / closer step the
   axis of the nudge's frame (the object's or the world's) that points most that way,
   level (`core::prop_nudge_axis`); numpad + / - the one most up. The placement check (red ghost) has already run on the
   game's spot, so a nudge can push an object into a wall.

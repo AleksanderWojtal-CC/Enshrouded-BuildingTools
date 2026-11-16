@@ -370,7 +370,7 @@ bp.objects_later = 물건도 저장됩니다: 사용할 수 있는 것(문, 상�
 
 # Object placement (an object in hand)
 obj.xf_title = 정확한 회전과 미세 이동 (서버 참가 시에도)
-obj.xf_help = 게임의 회전에 더해집니다. 키는 키 페이지에서; Ctrl을 누르면 1씩.
+obj.xf_help_fine = 게임의 회전에 더해집니다. 키는 키 페이지에서 (숫자 키패드); 키패드 0을 누르면 1씩. 오브젝트를 들고 있는 동안 캐릭터가 움직이지 않습니다.
 obj.xf_turn = 위쪽 축으로 회전 (도)
 obj.xf_tilt = X축으로 기울이기 (도)
 obj.xf_roll = Z축으로 롤 (도)
@@ -399,3 +399,4 @@ obj.key_nudge_down = 손에 든 오브젝트: 아래로 이동
 obj.key_nudge_z_plus = 손에 든 오브젝트: 멀리 이동
 obj.key_nudge_z_minus = 손에 든 오브젝트: 가까이 이동
 obj.key_xf_reset = 손에 든 오브젝트: 회전과 이동 초기화
+obj.key_fine_step = 손에 든 오브젝트: 누르고 있으면 1도 / 1 cm씩

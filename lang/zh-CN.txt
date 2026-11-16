@@ -370,7 +370,7 @@ bp.objects_later = 物品也会保存：可使用的（门、箱子、床、工�
 
 # Object placement (an object in hand)
 obj.xf_title = 精确旋转与微调（加入服务器时也可用）
-obj.xf_help = 叠加在游戏的旋转之上。按键在按键页设置；按住 Ctrl 每次 1。
+obj.xf_help_fine = 叠加在游戏的旋转之上。按键在按键页设置（小键盘）；按住小键盘 0 每次 1。手持物体时这些键不会让角色移动。
 obj.xf_turn = 绕自身竖直轴转动（度）
 obj.xf_tilt = 绕自身 X 轴倾斜（度）
 obj.xf_roll = 绕自身 Z 轴翻滚（度）
@@ -399,3 +399,4 @@ obj.key_nudge_down = 手持物体：向下微调
 obj.key_nudge_z_plus = 手持物体：向远处微调
 obj.key_nudge_z_minus = 手持物体：向近处微调
 obj.key_xf_reset = 手持物体：重置旋转与微调
+obj.key_fine_step = 手持物体：按住时每次 1 度 / 1 厘米

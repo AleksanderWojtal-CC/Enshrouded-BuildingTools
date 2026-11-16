@@ -18,12 +18,12 @@ changelog on Nexus Mods, so keep it short and written for players.
   wall or on the side of another object).
 - **Exact rotation and nudge for objects** (#59), by FreyaFreed: with an object in hand,
   turn, tilt and roll it by exact degrees on top of the game's own rotation, and nudge it
-  in cm along its own axes or the world's. Keys while an object is in hand: numpad 4 / 6
-  turn, 8 / 2 tilt, 7 / 9 roll, the arrows nudge right / left and away / closer (as you
-  look), numpad + / - up / down, numpad 5 resets; one press is 15 degrees or 5 cm (both
-  settable), with Ctrl 1. Keep Num Lock on. All keys can be changed or cleared on the Keys
-  page; they do nothing without an object in hand (if you walk with the arrow keys, clear
-  or change the nudge keys). The values, the steps and the axes are also in Object
+  in cm along its own axes or the world's. Keys while an object is in hand, all on the
+  numpad: 6 / 4 nudge right / left and 8 / 2 away / closer (as you look), + / - up / down,
+  9 / 7 turn, 3 / 1 tilt, * / / roll, 5 resets; one press is 15 degrees or 5 cm (both
+  settable), with numpad 0 held 1. Keep Num Lock on. All keys can be changed or cleared on
+  the Keys page; they do nothing without an object in hand, and while an object is in hand
+  the game does not get them, so they never move your character. The values, the steps and the axes are also in Object
   settings. Works in the air with Free placement, and on a server you join (the server
   places the object where your ghost is). With Overlap objects on, a nudge can push an
   object into another one. **Object lines**: the rotation goes on every object of the

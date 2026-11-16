@@ -106,8 +106,9 @@ mod with [Objects] AllowOverlap=1).
 
 [b]Exact rotation and nudge of objects[/b] (by FreyaFreed)
 With an object in hand, turn, tilt and roll it by exact degrees on top of the game's
-rotation and nudge it by cm: numpad 4 / 6, 8 / 2, 7 / 9 turn, tilt and roll, the arrows and
-numpad + / - nudge, numpad 5 resets, Ctrl for steps of 1 (Num Lock on; all keys changeable).
+rotation and nudge it by cm, all on the numpad: 6 / 4, 8 / 2 and + / - nudge, 9 / 7, 3 / 1 and
+* / / turn, tilt and roll, 5 resets, 0 held for steps of 1 (Num Lock on; all keys changeable).
+While an object is in hand these keys do not reach the game, so they never move your character.
 Also in the air, in Object lines and on a server you join.
 
 [b]Blueprints[/b] (Blueprint mode, next to Prefab and Area)

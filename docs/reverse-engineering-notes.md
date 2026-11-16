@@ -1303,3 +1303,18 @@ Options:
   handled exactly as the game's tear-down. Nothing simpler exists for full chests: there is
   no "pick up with contents" in the game (the carry-with-contents design would need the
   item to hold an inventory, which items don't).
+
+### Keyboard input (0.34.0-dev5, client exe sha 5d9ef2f1)
+- The game imports no GetAsyncKeyState / GetKeyState / GetKeyboardState and installs no
+  hooks: the keyboard comes only through raw input. RegisterRawInputDevices at faa193 (fn
+  faa114) registers usage page 1 / usage 6 (keyboard), flags 0 (legacy messages still made).
+- WM_INPUT handler fa37b0: GetRawInputData (IAT slot 13cfb38) twice (size, then data,
+  header 0x18) at fa37fc / fa38e8; dwType 0 mouse (inline), 1 keyboard -> fa3550, 2 HID
+  (device list at +0x30).
+- fa3550 (RAWKEYBOARD at r8): MakeCode == 0xff (overrun) -> return; E0 / E1 flags make
+  0xe0xx / 0xe1xx, fake shifts (e02a, e0aa, e036, e0b6) skipped; f4cdc0 maps it to the
+  engine key, then the key's bit at [state+0x40] is set (make) or cleared (break) and an
+  event sent (fa5840).
+- Mod (props.h `raw_input_hook`): the game's IAT slot points at the hook; with an object in
+  hand a bound object key's MakeCode becomes 0xff; per scan code it remembers whether the
+  game saw the press (its release passes) or not (its release is kept back too).

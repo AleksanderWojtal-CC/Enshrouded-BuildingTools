@@ -358,7 +358,7 @@
     X(S_BP_OBJECTS_LATER, "bp.objects_later", "Objects are saved too: what you can use (doors, chests, beds, stations), what gives comfort (furniture, lights) and ladders.") \
     /* exact rotation and nudge of the object in hand (props.h) */ \
     X(S_PROP_TITLE, "obj.xf_title", "Exact rotation and nudge (also when you join a server)") \
-    X(S_PROP_HELP, "obj.xf_help", "On top of the game's rotation. Keys on the Keys page; hold Ctrl for steps of 1.") \
+    X(S_PROP_HELP, "obj.xf_help_fine", "On top of the game's rotation. Keys on the Keys page (numpad); hold numpad 0 for steps of 1. With an object in hand they do not move you.") \
     X(S_PROP_TURN, "obj.xf_turn", "Turn about its up axis (degrees)") \
     X(S_PROP_TILT, "obj.xf_tilt", "Tilt about its X axis (degrees)") \
     X(S_PROP_ROLL, "obj.xf_roll", "Roll about its Z axis (degrees)") \
@@ -386,7 +386,8 @@
     X(S_ACT_PROP_Y_M, "obj.key_nudge_down", "Object in hand: nudge down") \
     X(S_ACT_PROP_Z_P, "obj.key_nudge_z_plus", "Object in hand: nudge away") \
     X(S_ACT_PROP_Z_M, "obj.key_nudge_z_minus", "Object in hand: nudge closer") \
-    X(S_ACT_PROP_RESET, "obj.key_xf_reset", "Object in hand: reset rotation and nudge")
+    X(S_ACT_PROP_RESET, "obj.key_xf_reset", "Object in hand: reset rotation and nudge") \
+    X(S_ACT_PROP_FINE, "obj.key_fine_step", "Object in hand: hold for steps of 1 degree / 1 cm")
 
 enum Str {
 #define BT_STR_ID(id, key, en) id,

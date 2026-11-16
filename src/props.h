@@ -72,7 +72,96 @@ static uint64_t prop_check_hook(void* flags, uint8_t* xf, void* a3, void* a4, vo
     if (xf && (ret == g_propCheckRet[0] || ret == g_propCheckRet[1])) prop_ghost(xf, ret == g_propCheckRet[1]);
     return r;
 }
+// ---- the object keys stay away from the game while an object is in hand (0.34.0-dev5)
+// The game reads the keyboard only through raw input: WM_INPUT -> GetRawInputData (its import,
+// called at 1 place, fa37b0) -> the keyboard branch fa3550, which skips a key whose MakeCode is
+// 0xff (KEYBOARD_OVERRUN_MAKE_CODE) and otherwise sets / clears the key's bit in its key state.
+// The mod reads its keys with GetAsyncKeyState, which this does not touch. While an object is in
+// hand (and no menu, settings window or other screen is up) a key bound to an object action
+// (turn, tilt, roll, nudge, reset, fine step) reaches the game as MakeCode 0xff, so the player
+// does not walk or crouch. Never stuck: a key the game saw go down also gets its release, and a
+// release is only kept back when its press was. A key held on after the object left the hand
+// reaches the game with its next repeat (a fresh press for the game; its release then passes).
+typedef UINT (WINAPI* GetRawInputDataFn)(HRAWINPUT, UINT, LPVOID, PUINT, UINT);
+static GetRawInputDataFn g_rawInputOrig = nullptr;
+static uint8_t g_rawKey[0x200];                     // by scan code (| 0x100 for E0): 1 = the game has it down, 2 = kept back
+static volatile LONG g_rawKeptN = 0;
+static bool prop_keys_block_now() {
+    if (!obj_tool_on() || !prop_now() || g_objWin || g_menuOpen) return false;
+    return wheel_screen(g_hudScreen) && GetTickCount() - g_hudScreenTick < 500;
+}
+// the key's scan code (0x1xx = E0 prefix) is bound to an object action
+static bool prop_key_sc(unsigned sc) {
+    int* const keys[] = { &g_cfg.keyPropTurnP, &g_cfg.keyPropTurnM, &g_cfg.keyPropTiltP, &g_cfg.keyPropTiltM,
+                          &g_cfg.keyPropRollP, &g_cfg.keyPropRollM, &g_cfg.keyPropXP, &g_cfg.keyPropXM,
+                          &g_cfg.keyPropYP, &g_cfg.keyPropYM, &g_cfg.keyPropZP, &g_cfg.keyPropZM,
+                          &g_cfg.keyPropReset, &g_cfg.keyPropFine };
+    for (int* k : keys) {
+        const int vk = *k & 0xff;
+        if (*k <= 0 || vk < 8 || vk == VK_SHIFT || vk == VK_CONTROL || vk == VK_MENU || (vk >= VK_LSHIFT && vk <= VK_RMENU) ||
+            vk == VK_LWIN || vk == VK_RWIN) continue;    // mouse buttons and modifiers stay the game's
+        const UINT m = MapVirtualKeyW((UINT)vk, 4 /* MAPVK_VK_TO_VSC_EX */);
+        if (m && ((m & 0xff) | ((m & 0xff00) == 0xe000 ? 0x100 : 0)) == sc) return true;
+    }
+    return false;
+}
+static UINT WINAPI raw_input_hook(HRAWINPUT h, UINT cmd, LPVOID data, PUINT size, UINT hdr) {
+    const UINT r = g_rawInputOrig(h, cmd, data, size, hdr);
+    if (cmd != RID_INPUT || !data || r == (UINT)-1 || r < sizeof(RAWINPUTHEADER) + sizeof(RAWKEYBOARD)) return r;
+    RAWINPUT* ri = (RAWINPUT*)data;
+    if (ri->header.dwType != RIM_TYPEKEYBOARD) return r;
+    RAWKEYBOARD& kb = ri->data.keyboard;
+    if (kb.MakeCode == 0 || kb.MakeCode >= 0x100 || (kb.Flags & RI_KEY_E1)) return r;
+    const unsigned sc = kb.MakeCode | ((kb.Flags & RI_KEY_E0) ? 0x100 : 0);
+    uint8_t& st = g_rawKey[sc];
+    if (kb.Flags & RI_KEY_BREAK) {                  // let go: kept back only if the press was
+        if (st == 2) kb.MakeCode = 0xff;
+        st = 0;
+        return r;
+    }
+    if (st == 1) return r;                          // held (repeats) since before: the game has it
+    if (prop_keys_block_now() && prop_key_sc(sc)) {
+        if (st != 2) {
+            const LONG n = InterlockedIncrement(&g_rawKeptN);
+            if (n <= 20 || n % 500 == 0) LOG(.str("object keys: key ").x(sc).str(" (vk ").i(kb.VKey).str(") kept from the game while the object is in hand (").i(n).c(')'));
+        }
+        st = 2; kb.MakeCode = 0xff;
+    } else {
+        st = 1;
+    }
+    return r;
+}
+// points the game's import of GetRawInputData (USER32) at raw_input_hook
+static void install_raw_keys() {
+    uint8_t* base = (uint8_t*)GetModuleHandleW(nullptr);
+    IMAGE_NT_HEADERS* nt = (IMAGE_NT_HEADERS*)(base + ((IMAGE_DOS_HEADER*)base)->e_lfanew);
+    const IMAGE_DATA_DIRECTORY& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    void* real = (void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetRawInputData");
+    int done = 0;
+    for (IMAGE_IMPORT_DESCRIPTOR* d = dir.VirtualAddress ? (IMAGE_IMPORT_DESCRIPTOR*)(base + dir.VirtualAddress) : nullptr;
+         d && d->Name; d++) {
+        if (lstrcmpiA((const char*)(base + d->Name), "user32.dll")) continue;
+        IMAGE_THUNK_DATA* names = (IMAGE_THUNK_DATA*)(base + (d->OriginalFirstThunk ? d->OriginalFirstThunk : d->FirstThunk));
+        IMAGE_THUNK_DATA* slots = (IMAGE_THUNK_DATA*)(base + d->FirstThunk);
+        for (int k = 0; slots[k].u1.Function; k++) {
+            bool hit = d->OriginalFirstThunk && !IMAGE_SNAP_BY_ORDINAL(names[k].u1.Ordinal) &&
+                       !lstrcmpA((const char*)((IMAGE_IMPORT_BY_NAME*)(base + names[k].u1.AddressOfData))->Name, "GetRawInputData");
+            if (!hit && real && (void*)slots[k].u1.Function == real) hit = true;
+            if (!hit) continue;
+            DWORD old;
+            if (!VirtualProtect(&slots[k].u1.Function, 8, PAGE_READWRITE, &old)) continue;
+            if (!g_rawInputOrig) g_rawInputOrig = (GetRawInputDataFn)slots[k].u1.Function;
+            slots[k].u1.Function = (ULONG_PTR)(void*)&raw_input_hook;
+            VirtualProtect(&slots[k].u1.Function, 8, old, &old);
+            done++;
+        }
+    }
+    LOG(.str("object keys: ").str(done ? "kept from the game while an object is in hand (raw input)" : "NOT kept from the game (GetRawInputData import not found)"));
+}
+
 static void install_props() {
+    if (!g_dedicated) install_raw_keys();
+    if (g_objKeysMigrated) LOG(.str("object keys: the dev4 defaults (arrows, numpad 4/6/8/2/7/9) moved to the numpad layout"));
     auto rel = [](uint8_t* at) -> uint8_t* { return at && at[0] == 0xE8 ? at + 5 + *(int32_t*)(at + 1) : nullptr; };
     uint8_t* sig = g_cxClientRet ? find_unique("PropCheckCall", SIG_PROP_CHECK_CALL) : nullptr;
     uint8_t* sites[2] = { sig ? sig + 0x17 : nullptr, sig ? sig + 0x57 : nullptr };
@@ -212,7 +301,7 @@ static bool prop_repeats(int a) { return a >= ACT_PROP_TURN_P && a < ACT_PROP_RE
 static void prop_act(int a) {
     if (!obj_tool_on() || !prop_now()) return;
     if (a == ACT_PROP_RESET) { prop_reset(); flash(T(S_PROP_RESET_MSG)); beep(MB_ICONQUESTION); return; }
-    const bool fine = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    const bool fine = g_cfg.keyPropFine > 0 && (GetAsyncKeyState(g_cfg.keyPropFine & 0xff) & 0x8000) != 0;   // held, numpad 0
     const int deg = fine ? 1 : g_cfg.propTurnStep, cm = fine ? 1 : g_cfg.propNudgeStep;
     const int k = a - ACT_PROP_TURN_P, sign = k % 2 ? -1 : 1;
     if (k < 6) {

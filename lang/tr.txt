@@ -370,7 +370,7 @@ bp.objects_later = Nesneler de kaydedilir: kullanılabilenler (kapılar, sandık
 
 # Object placement (an object in hand)
 obj.xf_title = Tam dönüş ve kaydırma (sunucuya katılınca da)
-obj.xf_help = Oyunun dönüşüne eklenir. Tuşlar Tuşlar sayfasında; 1'lik adımlar için Ctrl'yi basılı tut.
+obj.xf_help_fine = Oyunun dönüşüne eklenir. Tuşlar Tuşlar sayfasında (sayısal tuş takımı); 1'lik adımlar için Num 0'ı basılı tut. Elde nesne varken seni hareket ettirmezler.
 obj.xf_turn = Kendi dikey ekseni etrafında döndür (derece)
 obj.xf_tilt = Kendi X ekseni etrafında eğ (derece)
 obj.xf_roll = Kendi Z ekseni etrafında yuvarla (derece)
@@ -399,3 +399,4 @@ obj.key_nudge_down = Elde nesne: aşağı kaydır
 obj.key_nudge_z_plus = Elde nesne: uzaklaştır
 obj.key_nudge_z_minus = Elde nesne: yaklaştır
 obj.key_xf_reset = Elde nesne: dönüşü ve kaydırmayı sıfırla
+obj.key_fine_step = Elde nesne: 1 derece / 1 cm adımlar için basılı tut

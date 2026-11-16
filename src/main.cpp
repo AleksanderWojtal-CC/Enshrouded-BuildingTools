@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.34.0-dev4"
+#define MOD_VERSION "0.34.0-dev5"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -215,13 +215,16 @@ struct Config {
     int objMode = 0, objCount = 10, objSpacing = 0, objRot = 0, objElev = 0, objRef = 0, objTurn = 1, objSeed = 1, objOverlap = 0;
     // exact rotation (degrees) and nudge (cm) of the object in hand (props.h), their key steps and keys
     int propTurn = 0, propTilt = 0, propRoll = 0, propNudge[3] = { 0, 0, 0 }, propWorld = 0, propTurnStep = 15, propNudgeStep = 5;
-    int keyPropTurnP = VK_NUMPAD6, keyPropTurnM = VK_NUMPAD4, keyPropTiltP = VK_NUMPAD8, keyPropTiltM = VK_NUMPAD2;
-    int keyPropRollP = VK_NUMPAD9, keyPropRollM = VK_NUMPAD7;
-    int keyPropXP = VK_RIGHT, keyPropXM = VK_LEFT, keyPropYP = VK_ADD, keyPropYM = VK_SUBTRACT, keyPropZP = VK_UP, keyPropZM = VK_DOWN;
+    // all on the numpad (0.34.0-dev5): the game moves the player with the arrows, Shift and Ctrl
+    int keyPropTurnP = VK_NUMPAD9, keyPropTurnM = VK_NUMPAD7, keyPropTiltP = VK_NUMPAD3, keyPropTiltM = VK_NUMPAD1;
+    int keyPropRollP = VK_MULTIPLY, keyPropRollM = VK_DIVIDE;
+    int keyPropXP = VK_NUMPAD6, keyPropXM = VK_NUMPAD4, keyPropYP = VK_ADD, keyPropYM = VK_SUBTRACT, keyPropZP = VK_NUMPAD8, keyPropZM = VK_NUMPAD2;
     int keyPropReset = VK_NUMPAD5;
+    int keyPropFine = VK_NUMPAD0;                // held: the object keys step 1 degree / 1 cm
     char language[16] = "auto";  // text language: auto (as the game), or a file code (pl, de, ...)
 };
 static Config g_cfg;
+static bool g_objKeysMigrated = false;           // the dev4 object keys moved to the numpad layout (logged by props.h)
 
 static int ini_int(const wchar_t* sec, const wchar_t* key, int def) {
     wchar_t p[MAX_PATH];
@@ -232,7 +235,7 @@ static int ini_int(const wchar_t* sec, const wchar_t* key, int def) {
 // Writes the whole ini with comments and the given values (first start, or an ini
 // from an older version that lacks newer options: its values are kept).
 struct IniText {
-    char s[12288]; int n = 0;
+    char s[16384]; int n = 0;
     IniText& t(const char* x) { while (*x && n < (int)sizeof(s) - 1) s[n++] = *x++; return *this; }
     IniText& i(int v) { char b[16]; int k = 0; bool neg = v < 0; unsigned u = neg ? 0u - (unsigned)v : (unsigned)v;
         do { b[k++] = (char)('0' + u % 10); u /= 10; } while (u && k < 15);
@@ -280,15 +283,18 @@ static void write_full_ini(const Config& c) {
      .t("\r\nObjectSettings=").i(c.keyObjMenu).t("\r\n")
      .t("; Blueprint mode on / off, and its action save <-> place (0 = no key)\r\nBlueprintMode=").i(c.keyBlueprint)
      .t("\r\nBlueprintAction=").i(c.keyBpSub).t("\r\n")
-     .t("; Object in hand: turn, tilt and roll +/- (one key step, with Ctrl 1 degree), nudge along X, Y (up) and Z +/-\r\n")
-     .t(";     (one key step, with Ctrl 1 cm), reset both (numpad 96..105, arrows 37..40, numpad + 107, numpad - 109)\r\n")
+     .t("; Object in hand: turn, tilt and roll +/- (one key step), nudge right/left, up/down, away/closer\r\n")
+     .t(";     (one key step), reset both, and the key held for steps of 1 degree / 1 cm (ObjectFineStep).\r\n")
+     .t(";     While an object is in hand these keys do not reach the game (no walking, crouching...).\r\n")
+     .t(";     Numpad 0..9 = 96..105, * 106, + 107, - 109, / 111 (NumLock on); arrows 37..40\r\n")
      .t("ObjectTurnPlus=").i(c.keyPropTurnP).t("\r\nObjectTurnMinus=").i(c.keyPropTurnM)
      .t("\r\nObjectTiltPlus=").i(c.keyPropTiltP).t("\r\nObjectTiltMinus=").i(c.keyPropTiltM)
      .t("\r\nObjectRollPlus=").i(c.keyPropRollP).t("\r\nObjectRollMinus=").i(c.keyPropRollM)
      .t("\r\nObjectNudgeXPlus=").i(c.keyPropXP).t("\r\nObjectNudgeXMinus=").i(c.keyPropXM)
      .t("\r\nObjectNudgeUp=").i(c.keyPropYP).t("\r\nObjectNudgeDown=").i(c.keyPropYM)
      .t("\r\nObjectNudgeZPlus=").i(c.keyPropZP).t("\r\nObjectNudgeZMinus=").i(c.keyPropZM)
-     .t("\r\nObjectResetRotation=").i(c.keyPropReset).t("\r\n")
+     .t("\r\nObjectResetRotation=").i(c.keyPropReset).t("\r\nObjectFineStep=").i(c.keyPropFine)
+     .t("\r\n; 2 = the object keys above are the numpad layout's (0.34.0-dev5); older defaults move to it once\r\nObjectKeysLayout=2\r\n")
      .t("\r\n[Tools]\r\n")
      .t("; Tools in use (1) or not (0). A tool that is off does nothing: its keys are free for the\r\n")
      .t(";     game and it leaves the building box hints and the tools wheel. AreaShapes = the roof,\r\n")
@@ -473,19 +479,31 @@ static void load_config() {
         g_cfg.propTurnStep  = clampv(ini_int(L"Objects", L"TurnStep", 15), 1, 90, 15);
         g_cfg.propNudgeStep = clampv(ini_int(L"Objects", L"NudgeStep", 5), 1, 100, 5);
     }
-    g_cfg.keyPropTurnP = ini_int(L"Keys", L"ObjectTurnPlus", VK_NUMPAD6);
-    g_cfg.keyPropTurnM = ini_int(L"Keys", L"ObjectTurnMinus", VK_NUMPAD4);
-    g_cfg.keyPropTiltP = ini_int(L"Keys", L"ObjectTiltPlus", VK_NUMPAD8);
-    g_cfg.keyPropTiltM = ini_int(L"Keys", L"ObjectTiltMinus", VK_NUMPAD2);
-    g_cfg.keyPropRollP = ini_int(L"Keys", L"ObjectRollPlus", VK_NUMPAD9);
-    g_cfg.keyPropRollM = ini_int(L"Keys", L"ObjectRollMinus", VK_NUMPAD7);
-    g_cfg.keyPropXP    = ini_int(L"Keys", L"ObjectNudgeXPlus", VK_RIGHT);
-    g_cfg.keyPropXM    = ini_int(L"Keys", L"ObjectNudgeXMinus", VK_LEFT);
-    g_cfg.keyPropYP    = ini_int(L"Keys", L"ObjectNudgeUp", VK_ADD);
-    g_cfg.keyPropYM    = ini_int(L"Keys", L"ObjectNudgeDown", VK_SUBTRACT);
-    g_cfg.keyPropZP    = ini_int(L"Keys", L"ObjectNudgeZPlus", VK_UP);
-    g_cfg.keyPropZM    = ini_int(L"Keys", L"ObjectNudgeZMinus", VK_DOWN);
-    g_cfg.keyPropReset = ini_int(L"Keys", L"ObjectResetRotation", VK_NUMPAD5);
+    {   // the object keys; the dev4 defaults (arrows, numpad 4/6/8/2/7/9) move to the numpad layout once
+        static const wchar_t* const kName[13] = { L"ObjectTurnPlus", L"ObjectTurnMinus", L"ObjectTiltPlus", L"ObjectTiltMinus",
+            L"ObjectRollPlus", L"ObjectRollMinus", L"ObjectNudgeXPlus", L"ObjectNudgeXMinus", L"ObjectNudgeUp", L"ObjectNudgeDown",
+            L"ObjectNudgeZPlus", L"ObjectNudgeZMinus", L"ObjectResetRotation" };
+        static const int kOld[13] = { VK_NUMPAD6, VK_NUMPAD4, VK_NUMPAD8, VK_NUMPAD2, VK_NUMPAD9, VK_NUMPAD7,
+            VK_RIGHT, VK_LEFT, VK_ADD, VK_SUBTRACT, VK_UP, VK_DOWN, VK_NUMPAD5 };
+        static const int kNew[13] = { VK_NUMPAD9, VK_NUMPAD7, VK_NUMPAD3, VK_NUMPAD1, VK_MULTIPLY, VK_DIVIDE,
+            VK_NUMPAD6, VK_NUMPAD4, VK_ADD, VK_SUBTRACT, VK_NUMPAD8, VK_NUMPAD2, VK_NUMPAD5 };
+        int* const dst[13] = { &g_cfg.keyPropTurnP, &g_cfg.keyPropTurnM, &g_cfg.keyPropTiltP, &g_cfg.keyPropTiltM,
+            &g_cfg.keyPropRollP, &g_cfg.keyPropRollM, &g_cfg.keyPropXP, &g_cfg.keyPropXM, &g_cfg.keyPropYP, &g_cfg.keyPropYM,
+            &g_cfg.keyPropZP, &g_cfg.keyPropZM, &g_cfg.keyPropReset };
+        // ObjectKeysLayout=2 is written with the ini; without it the keys are dev4's (or Freya's
+        // fork's) and, if every one is still that default, they move to the numpad layout
+        const bool layout2 = ini_int(L"Keys", L"ObjectKeysLayout", 0) >= 2;
+        int v[13]; bool allOld = true, any = false;
+        for (int k = 0; k < 13; k++) {
+            v[k] = ini_int(L"Keys", kName[k], layout2 ? kNew[k] : kOld[k]);
+            if (v[k] != kOld[k]) allOld = false;
+            if (ini_int(L"Keys", kName[k], -12345) != -12345) any = true;
+        }
+        const bool migrate = !layout2 && allOld;
+        for (int k = 0; k < 13; k++) *dst[k] = migrate ? kNew[k] : v[k];
+        g_cfg.keyPropFine = ini_int(L"Keys", L"ObjectFineStep", VK_NUMPAD0);
+        g_objKeysMigrated = migrate && any;         // logged and saved once the log is open
+    }
     bool noLanguage;
     {
         wchar_t p[MAX_PATH], w[16];
@@ -510,7 +528,7 @@ static void load_config() {
         ini_int(L"Area", L"DrawBoxBlocks", -1) == -1 || ini_int(L"Area", L"ExactWidth", -9999) == -9999 ||
         ini_int(L"Tools", L"AreaShapes", -1) == -1 || ini_int(L"Objects", L"Count", -1) == -1 ||
         ini_int(L"Debug", L"Profile", -1) == -1 || ini_int(L"Blueprints", L"Objects", -1) == -1 ||
-        ini_int(L"Objects", L"TurnStep", -1) == -1)
+        ini_int(L"Objects", L"TurnStep", -1) == -1 || ini_int(L"Keys", L"ObjectKeysLayout", -1) == -1)
         write_full_ini(g_cfg);
 }
 
@@ -4446,7 +4464,8 @@ static int* const g_allKeys[] = { &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg
                                   &g_cfg.keyFillDiag, &g_cfg.keyExact, &g_cfg.keyObjUndo,
                                   &g_cfg.keyPropTurnP, &g_cfg.keyPropTurnM, &g_cfg.keyPropTiltP, &g_cfg.keyPropTiltM,
                                   &g_cfg.keyPropRollP, &g_cfg.keyPropRollM, &g_cfg.keyPropXP, &g_cfg.keyPropXM,
-                                  &g_cfg.keyPropYP, &g_cfg.keyPropYM, &g_cfg.keyPropZP, &g_cfg.keyPropZM, &g_cfg.keyPropReset };
+                                  &g_cfg.keyPropYP, &g_cfg.keyPropYM, &g_cfg.keyPropZP, &g_cfg.keyPropZM, &g_cfg.keyPropReset,
+                                  &g_cfg.keyPropFine };
 // Down with exactly its modifiers. A key without modifiers ignores held modifiers (Shift
 // while sprinting), unless another setting uses the same key with the held ones.
 static bool key_down(int code) {
@@ -5181,6 +5200,7 @@ static KeyAction g_keyActions[] = {
     { S_ACT_PROP_Z_P, &g_cfg.keyPropZP, 0 },
     { S_ACT_PROP_Z_M, &g_cfg.keyPropZM, 0 },
     { S_ACT_PROP_RESET, &g_cfg.keyPropReset, 0 },
+    { S_ACT_PROP_FINE, &g_cfg.keyPropFine, 0 },
     { S_ACT_CLEAR, &g_cfg.keyCancel, 0 },
     { S_ACT_FREE, &g_cfg.keyHover, 0 },
     { S_ACT_FARTHER, &g_cfg.keyFarther, 0 },

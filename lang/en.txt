@@ -373,7 +373,7 @@ bp.objects_later = Objects are saved too: what you can use (doors, chests, beds,
 
 # Object placement (an object in hand)
 obj.xf_title = Exact rotation and nudge (also when you join a server)
-obj.xf_help = On top of the game's rotation. Keys on the Keys page; hold Ctrl for steps of 1.
+obj.xf_help_fine = On top of the game's rotation. Keys on the Keys page (numpad); hold numpad 0 for steps of 1. With an object in hand they do not move you.
 obj.xf_turn = Turn about its up axis (degrees)
 obj.xf_tilt = Tilt about its X axis (degrees)
 obj.xf_roll = Roll about its Z axis (degrees)
@@ -402,3 +402,4 @@ obj.key_nudge_down = Object in hand: nudge down
 obj.key_nudge_z_plus = Object in hand: nudge away
 obj.key_nudge_z_minus = Object in hand: nudge closer
 obj.key_xf_reset = Object in hand: reset rotation and nudge
+obj.key_fine_step = Object in hand: hold for steps of 1 degree / 1 cm

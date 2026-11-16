@@ -226,26 +226,31 @@ Object placement (an object in hand)
 
 Exact rotation and nudge (an object in hand; by FreyaFreed, #59)
   On top of the game's own rotation, also when you join a server (Num Lock on):
-    Numpad 6 / 4     turn about the object's up axis + / -
-    Numpad 8 / 2     tilt about its X axis + / -
-    Numpad 9 / 7     roll about its Z axis + / -
-    Right / Left     nudge right / left (as you look)
-    Up / Down        nudge away / closer
+    Numpad 6 / 4     nudge right / left (as you look)
+    Numpad 8 / 2     nudge away / closer
     Numpad + / -     nudge up / down
+    Numpad 9 / 7     turn about the object's up axis + / -
+    Numpad 3 / 1     tilt about its X axis + / -
+    Numpad * / /     roll about its Z axis + / -
     Numpad 5         reset rotation and nudge
-  One press turns 15 degrees or nudges 5 cm; with Ctrl held, 1. Held keys repeat.
+    Numpad 0 (held)  steps of 1 degree / 1 cm
+  One press turns 15 degrees or nudges 5 cm; with numpad 0 held, 1. Held keys
+  repeat. (Until 0.34.0-dev4 the nudge was on the arrows and Ctrl gave steps of
+  1; an ini that still has those old defaults moves to this layout by itself.)
   The ghost shows the result, the text under the crosshair the values. They stay
   until you reset them (also for the next objects). Object settings (Caps Lock
   wheel) has the same values to set by number, the key steps, and whether the
-  nudge follows the object's axes (turned with it) or the world's. The arrows
+  nudge follows the object's axes (turned with it) or the world's. The nudge keys
   step the axis that points most that way from the camera; the turns turn the
   object where it is, nudged or not. Saved in
   [Objects] of the ini (Turn, Tilt, Roll, NudgeX/Y/Z, NudgeWorldAxes, TurnStep,
-  NudgeStep); keys ObjectTurnPlus ... ObjectResetRotation in [Keys].
-  The keys do nothing without an object in hand, and the game still gets them:
-  if you walk with the arrow keys, change or clear the nudge keys on the Keys
-  page (Delete clears). With Num Lock off the numpad sends the arrow, Home and
-  Page keys instead (numpad 7 = Home opens the menu).
+  NudgeStep); keys ObjectTurnPlus ... ObjectResetRotation, ObjectFineStep in
+  [Keys]. The keys do nothing without an object in hand. While an object is in
+  hand they do not reach the game, so they never walk, crouch or sprint you,
+  whatever you bind them to (Shift, Ctrl and Alt alone always stay the game's).
+  Without an object in hand, in a menu or the settings window the game gets them
+  as usual. With Num Lock off the numpad sends the arrow, Home and Page keys
+  instead (numpad 7 = Home opens the menu).
   With Free placement the nudge and the turns go on the ghost in the air. With
   Overlap objects on, a nudge can push an object into another object (without
   it the ghost turns red there). Object lines (Line, Curve, Circle...): the
