@@ -100,6 +100,15 @@ click places them all. Set the number of objects, random spacing, rotation and h
 reference plane (ground under each object, level or slope) and whether they turn with the
 line. In worlds you host. Undo works for objects too: Y with the object in hand (or the
 hammer's undo) takes back the last object or the whole line and gives them back.
+The object wheel also has Free placement (objects hanging in the air) and Overlap objects
+(an object inside or against another object; on a dedicated server the server needs the
+mod with [Objects] AllowOverlap=1).
+
+[b]Exact rotation and nudge of objects[/b] (by FreyaFreed)
+With an object in hand, turn, tilt and roll it by exact degrees on top of the game's
+rotation and nudge it by cm: numpad 4 / 6, 8 / 2, 7 / 9 turn, tilt and roll, the arrows and
+numpad + / - nudge, numpad 5 resets, Ctrl for steps of 1 (Num Lock on; all keys changeable).
+Also in the air, in Object lines and on a server you join.
 
 [b]Blueprints[/b] (Blueprint mode, next to Prefab and Area)
 Save: click a block, set the box in a window like Exact mode's (reference, its offset, width,

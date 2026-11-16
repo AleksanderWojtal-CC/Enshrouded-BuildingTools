@@ -49,6 +49,7 @@ static bool obj_remote() { return g_dedicated || g_remoteKnown == 1; }
 // the click's spot is next to this game's own ghost of the held object (moved by props.h, or as
 // the game had it before the move).
 static bool prop_at_base(const float* pos);
+static double prop_nudge_dy();                     // props.h: how far the exact nudge lifts the ghost (m)
 static bool own_click(const float* pos) {
     if (!pos || !prop_now() || !g_ghost.valid || GetTickCount() - g_ghost.tick > 1500) return false;
     double d2 = 0;
@@ -214,17 +215,22 @@ static void obj_plan_body(bool probe) {
         return;
     }
     p.pts = n; p.clicked = clicked; memcpy(p.pt, pt, sizeof pt); p.opts = o;
-    // Ground: only when the clicks sit on the ground (an object on a wall keeps the line's height)
+    // Ground: only when the clicks sit on the ground (an object on a wall keeps the line's height).
+    // The exact nudge's height (props.h) lifts the whole line: the clicks are nudged already, the
+    // ground is tested without it, and the spots on the ground get it back.
     ObjOpts lo = o;
     bool onWall = false;
+    const double dy = prop_nudge_dy();
     if (lo.ref == core::OBJ_REF_GROUND && !core::obj_upright(mode))
         for (int k = 0; k < n; k++) {
-            double g;
-            if (!obj_ground(nullptr, pt[k][0], pt[k][2], pt[k][1], &g) || g - pt[k][1] > 0.6 || pt[k][1] - g > 0.6) { onWall = true; break; }
+            double g, y = pt[k][1] - dy;
+            if (!obj_ground(nullptr, pt[k][0], pt[k][2], y, &g) || g - y > 0.6 || y - g > 0.6) { onWall = true; break; }
         }
     if (onWall) lo.ref = core::OBJ_REF_SLOPE;
+    const bool lift = lo.ref == core::OBJ_REF_GROUND && !core::obj_upright(mode) && dy != 0;
     GroundCtx gc = { true };
     p.n = n >= 2 ? core::obj_layout(lo, pt, n, obj_ground_note, &gc, p.spot, kObjMax) : 0;
+    if (lift) for (int i = 0; i < p.n; i++) p.spot[i].p[1] += dy;
     p.ground = gc.all;
     p.tick = now;
     EnterCriticalSection(&g_stateLock);
@@ -234,7 +240,7 @@ static void obj_plan_body(bool probe) {
     static double path[kPathMax][3];
     static int64_t pf[kPathMax][3], mf[kObjMax][3];
     int np = n >= 2 ? core::obj_path(lo, pt, n, obj_ground, nullptr, path, kPathMax) : 0;
-    for (int i = 0; i < np; i++) { pf[i][0] = (int64_t)(path[i][0] * core::kFix); pf[i][1] = (int64_t)((path[i][1] + 0.06) * core::kFix); pf[i][2] = (int64_t)(path[i][2] * core::kFix); }
+    for (int i = 0; i < np; i++) { pf[i][0] = (int64_t)(path[i][0] * core::kFix); pf[i][1] = (int64_t)((path[i][1] + 0.06 + (lift ? dy : 0)) * core::kFix); pf[i][2] = (int64_t)(path[i][2] * core::kFix); }
     for (int i = 0; i < p.n; i++) { mf[i][0] = (int64_t)(p.spot[i].p[0] * core::kFix); mf[i][1] = (int64_t)((p.spot[i].p[1] + 0.12) * core::kFix); mf[i][2] = (int64_t)(p.spot[i].p[2] * core::kFix); }
     set_draw_path(pf, np, mf, p.n);
     static DWORD logAt = 0;

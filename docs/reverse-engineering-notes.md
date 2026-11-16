@@ -1045,7 +1045,7 @@ all tested mod signatures match the file, so the disk image is plain).
   blend mode, offscreen (layer allocated), passId and the window.
 - Released as 0.33.1 with BlurStyle 0 (offscreen layer) as the default.
 
-## 0.34.0-dev1: objects in the air, overlap, move (1.0.1.2 Hotfix #5 client RVAs)
+## 0.34.0-dev1: objects in the air, overlap (1.0.1.2 Hotfix #5 client RVAs)
 
 Analysed offline (tools/re, capstone 4.0.2) on the client exe sha 5d9ef2f1 and the
 dedicated server exe from 2026-11-12.
@@ -1106,8 +1106,56 @@ dedicated server exe from 2026-11-12.
   files (whole-file conflicts, fixed by tools/lang.py sync). props.h, core.h and strings.h
   apply cleanly. Behaviour overlaps: input_encode_hook (exact mode patches the same cursor
   slots), numpad / arrow default keys, hud_info.
+- Done in 0.34.0-dev4 by cherry-picking 73dea26, fe1797b, 3ccc457 (authorship kept;
+  9647750 was only the 0.33.0 rebase's version and changelog). Lang conflicts came from CRLF
+  in the fork's lang files: resolved by applying each commit's lang diff without CR.
 
-### Move (investigation only)
+## 0.34.0-dev3: overlap bit 10 (1.0.1.2 Hotfix #5 client RVAs)
+
+Analysed offline (tools/re) on the client exe sha 5d9ef2f1.
+
+### Overlap: bit 10 InvalidSurfaceNormal (dev2 test: "flags left 0x400")
+- `0x400` = CursorFlag bit 10 **InvalidSurfaceNormal**. Set in the placement check 2994d0 at
+  299b57..299b5c: `29c250(flags, 10, set)` with set = 1 when the surface test failed
+  (`[rbp+0x20188] == 0`) or, at 299a29..299a41, when an axis rotation config byte of the
+  query (+0x15 / +0x17 / +0x19) is above the snapping result.
+- The surface test is `291010(out, &valid, xf, query, ...)`: valid = 1 when the query's
+  +0x20 byte is set, else `2926f0(query + 0x28, angle)`, the item's
+  `CursorConfig.attachAngleConfig` (keen::AttachAngleConfig: +0 ceilingAngle, +1 wallAngle,
+  +2 floorAngle, each AttachAngleRange 0 Disabled / 1 Narrow / 2 Wide; +3 / +4 attach
+  directions, +6 forceUprightNormal) against the hit surface's angle. All three Wide = always
+  valid (2926f8..2926ff). So bit 10 = "this object may not stand on a surface at this angle"
+  (a chest aimed at a wall or at the side of another object).
+- Right after (299b61..299b9d) the check clears bit 8 and sets it again when bit 10 is set
+  and the cursor hit another entity (`[r15+0x60]` +0x10 / +0x18) unless item +0x5d8 & 0x2000.
+  So a bad angle on another object shows as both 8 and 10.
+- Pure placement rule: no physics, nothing stored with the entity. The server cursor ORs the
+  client's bits 0, 8, 10, 15 into its own flags (298ab0..298b51), so the client must clear 10
+  too. dev3 clears bits 8 and 10 for objects (same hook on all 29bfb0 calls, client and
+  server) and logs any bits still left with names (each new combination once, 30 lines per
+  option change). Not cleared on purpose: 0 InvalidCursorTransform, 1/3 zone and distance,
+  4/5 inhibitor zones, 11 InvalidCursorVoxelMaterial, 12 MissingMaterials, 14 NoPermission,
+  17 CursorInsideWater, 18/19 budgets.
+- Expected look: with the normal invalid, 291010 builds the rotation from its fallback (the
+  object stays upright for floor objects); to be confirmed in game.
+
+### CursorFlag names (keen::ecs::CursorFlag, for the log)
+0 InvalidCursorTransform, 1 CursorOutsideBuildingZone, 2 CursorInsideFogZone,
+3 CursorTooFarAway, 4 CursorInsideLenientBuildInhibitorZone, 5 CursorInsideStrictBuildInhibitorZone,
+6 MaxAltarCountReached, 7 MaxWaterSourceCountReached, 8 AreaOccupied, 9 EnemiesNearby,
+10 InvalidSurfaceNormal, 11 InvalidCursorVoxelMaterial, 12 MissingMaterials, 13 ItemNotUnlocked,
+14 NoPermission, 15 DisableCursor, 16 MaxTameAnimalCountReached, 17 CursorInsideWater,
+18 SaveMemoryBudgetExhausted, 19 FactoriesBudgetExhausted.
+
+## Move (investigated, shelved 2026-11-16)
+
+Built in 0.34.0-dev2 / dev3 (key G: the game's own pick-up of the aimed object, then
+"carrying" until it is placed again; dev3 only for objects the game tears down, with the
+pick-up refund) and removed again in 0.34.0-dev4: in game it was no better than the game's
+Remove + place. The code is kept on the VM repo branch `move-shelved` (603e070 = dev3; e42559c code,
+6988d25 docs). These notes stay for a later attempt.
+
+### First look (0.34.0-dev1)
 - Use prompt: the entity's `InteractionOffer` (verbLoca, defaultAction actor sequence) and
   `InteractionOfferRuntime` (0x38: verb ids, offerId, isOffered...). Remove prompt: the
   dismantle hint, loca FbUiLocaGameplayActionLabels.buildingDismantle /
@@ -1131,3 +1179,127 @@ dedicated server exe from 2026-11-12.
   Placed props are static: StaticCollider, scene cells (SceneCellEntity: id, float3
   position, template index), saved by position. Writing WorldTransform (9b3cb0) in place
   would leave the collider, the scene cell, the clients' copies and the save behind.
+
+### Client dismantle request and server pick-up (0.34.0-dev2, client RVAs, exe sha 5d9ef2f1)
+Analysed offline (tools/re) on the client exe sha 5d9ef2f1.
+
+- **Client dismantle request** `2cc180(sys)`, called only at 2df44f in
+  player_control_action_sequence, right after the undo key 2c7390 (2df43e): first the
+  hammer branch (input 4 SecondaryBuildingAction pressed, 2cc1d7), then the object branch
+  at 2cc582: input **7 ContextualAction_Hold** pressed (479cd0 -> 473a80: bit set in set+8,
+  clear in set+0; set = [sys+0x2f8]), ability 0xb (21bc50 on [sys+0xb8]), ServerCursor
+  ([sys+0x90]) +0x69 bit 0 IsBlueprintSelected clear, the selected object from 2a4fd0
+  ([sys+0x2c8]), 9c3cf0 check, +0x69 bit 1 **IsDismantleAllowed**, +0x68 method != 0;
+  then 219a30 requests the action sequence (trigger word 0xe Dismantle, input byte 7, hash
+  0xe3ddce5b), copies the ServerCursor item instance (+0x28) and the selected object
+  (+0x80) into the sequence data and takes input 7 (2c1da0 / 479910). Returns al = 1.
+- `keen::ecs::ServerCursorFlag`: 0 IsBlueprintSelected, 1 IsDismantleAllowed, 2
+  IsNearBuildingZone, 3 CanUndoBuildingAction, 4 IsMaxTameAnimalCountReached.
+  `PlayerInputType` (input actions): 4 SecondaryBuildingAction, 5..7 ContextualAction
+  (/Tap/Hold), 14..21 QuickUse0..7, 40 BuildingUndo ... `ActionSequenceTrigger` 14 Dismantle.
+- **Server pick-up** (dismantle system, entity branch 2d9eb1): undo storage 499790 /
+  498a40, then ServerCursor ([rbp+0x200]) +0x68 method; refund list 492830(list rbp+0x660,
+  ctx rbp+0x50, method, ebx); **PayCost 495f20** at 2d9fde (mode rbp-0x60, consume 0; on 0
+  it jumps to 2da0c4 and skips the removal); undo step list copy; **RemoveProp 490a30** at
+  2da0bb (ctx rbp+0x50, {u32 entity = ebx, u8 method}, item edi). Item registry
+  [rbp+0x290]; the frame's aim state [rbp+0x1d8], GameObjectId at +0x78.
+- Signatures: SIG_MOVE_REMOVE 2da0a9 (call +0x12), SIG_MOVE_PAY 2d9fc4 (call +0x1a), the
+  request = SIG_UNDO_KEY_CALL 2df43a + 0x15 (2cc180 starts with lea rsi,[rcx+0x2f8] at +0x15).
+- Putting an item in hand (not solved offline): `ClientPlayerInputData` +0x60
+  actionbarSelectionAction {VersionedData, ActionbarSlotSelection (InventorySlotIndex)},
+  +0x1c0 changeEquipmentAction {InventorySlotId {entity, slot index}, VersionedData +8,
+  EquipmentSlot +0xc (25 MainHand), ChangeEquipment +0xd (0 Equip, 1 Unequip)}. A refund
+  CostEntry starts with an `ItemInstanceInfo` {InventorySlotId, itemId +8, pide +0xc,
+  stateMask +0x10}, count at +0x14. dev2 logs the refund entries before / after the payment
+  and the client's actionbar / equipment actions while carrying, and (MoveAutoHand) sends
+  one Equip-to-MainHand for the refund's slot when the game filled it in.
+- Not used: `ClientCursorInput.isCursorAttachedToProp` (+0xa0) and
+  `NetworkCursor.isInPropVariationSequence` (+0x32) look like the prop variation picker,
+  not a carry mode.
+
+### Dismantle refund and RemoveProp (0.34.0-dev3)
+- Refund list **492830**(list rcx, ctx rdx = rbp+0x50, method r8b, entity r9d), called at
+  2d9fa5 (SIG_MOVE_PAY 2d9fc4 - 0x1f):
+  - method 1 PickUp (4928ee): component `[ctx+0x18]` of the entity (9bfb80 world, 9b2b50
+    get component); its first dword is the object's **item id**; `e94470(id, [ctx+0x28])` ->
+    ItemInfo; refund {item, count 1} only if ItemInfo +0x43c = `EquipmentSetup`
+    (+0x104) +0x338 **placementConsume**.
+  - method 2 TearDown (49286b): component `[ctx+0xa0]` (9b3b60) and `3b8a20` build the
+    partial material refund.
+  - List entries are 0x18 bytes (CostEntry); the list is copied into the undo step
+    ([rbp+0x140] +0x110) after the payment.
+- RemoveProp 490a30({u32 entity, u8 method}, item): the item argument (edi) is the
+  **player's held tool item** from the action sequence data ([rbp+0x1d8] +0x38 = the copied
+  ServerCursor currentBuildingItemInstance), not the object's item. The method only selects
+  the event: 1 -> BuildingPickUpEvent (type hash 0x795389e9, 0x48 bytes, has
+  pickedEntityId), 2 -> 4975c0 (BuildingTearDownEvent). The entity is destroyed through
+  9602d0 in both cases.
+- dev3 Move: for the moved TearDown object the mod calls 492830 with method 1, accepts only
+  exactly one entry {item, 1}, else pays nothing (the game then skips RemoveProp).
+  RemoveProp keeps method 2.
+- `keen::ecs::DismantleOverride` (0x6): +0 overrideMethod, +1 method, +2 overrideVolumeClass,
+  +3 volumeClass, +4 ignoreBuildZoneChecks, +5 preventDismantlingWithFilledInventory. Loca
+  `FbUiLocaGameplayActionLabels` +0x560 buildingDismantleNotPossible, +0x570
+  **runningFactoryDismantleNotPossible** (a station that is producing can't be removed).
+  Where the server cursor writes +0x68 / +0x69 bit 1 was not found in 29788b (it writes
+  bits 2, 3, 4 there: 297bf1..297c9b).
+- dev2's "no pick-up within 4 s" (entities 0xa0b, 0xa07): the client request was taken but
+  the server never paid / removed. dev3 logs the aimed object's method and flags on every
+  new aim, so the next log tells which objects those were.
+
+### Moving chests and stations with their contents (investigation, not built)
+State of such objects:
+- `keen::ecs::Inventory` (0x60) and `InventorySetup` (0x54): +0 linksEntities
+  StaticArray<EntityId,16>, +0x40 linksCategories, +0x50 inventoryFlags (InventoryFlags:
+  0 IsPlayer, 1 IsNpc, 2 ShowContentPreview, **3 IndestructibleWhileNotEmpty**), +0x51
+  genericSlotCount, +0x52 availableSlotCount. `InventoryEmptyState` {toggleVFX, isEmpty}.
+  `InventoryLink` {entityId, category}. Items are stacks (`ItemStack` 0xc) addressed by
+  `InventorySlotId` {entity, slot index}.
+- Stations: `Crafting` (0x14), `CraftingInteraction` (0x20), `DynamicInventoryCraftingStock`,
+  `InventoryCraftingStock`, `FuelCraftingStock`; fuel `Fuel` {dataStorage sint32[2]},
+  `FuelSetup` (maxFuelCharges, initialFuelPercentage, refill), `NetworkFuel` {fuel, fuelMax},
+  `SpawnFuelOnDestroy`. Station "upgrades" are separate placed objects near the station.
+
+Options:
+- **(a) relocate the entity**: no game path. Systems that move entities are for dynamic
+  ones (move_colliders a1cfe0, actor_teleport 274b50, render_transform_with_teleport 315210,
+  lerp 2ac910); `TeleportPlayerEvent` / `AdminTeleportAction` / `actor::TeleportToTargetEvent`
+  move players and actors. A prop's spot lives in WorldTransform (9b3cb0), its
+  StaticCollider, its scene cell (SceneCellEntity: id, float3 position, template index),
+  every client's replicated copy and the save. Writing the transform would leave the rest
+  behind (invisible collider at the old spot, wrong position after reload). Not recommended.
+- **(b) new object + the game's own transfer + pick up the empty old one** (recommended):
+  the client already sends inventory moves to the server in
+  `ClientPlayerInputData` **+0x0 inventoryTransferAction** (`InventoryTransferAction`,
+  0x20: +0 VersionedData, +4 sourceEntityId, +8 targetEntityId, +0xc sourceSlotId, +0x14
+  targetSlotId (InventorySlotId), +0x1c type (InventoryActionType 0 One, 1 Half, 2 All,
+  3 CustomAmount, 4 Destroy), +0x1d flags (TransferItemToInventoryFlag 0 Gifting,
+  1 RefillStacks, **2 MoveAllStacks**, 3 ToActionbar, 4 ToBackpack), +0x1e amount). The
+  server turns it into `TransferItemToInventoryEvent` (0x28, type hash 0x5215c226; player,
+  target / source inventory and slot, type, flags, amount). The mod already writes into the
+  same input packet (input_encode_hook, changeEquipmentAction +0x1c0), so it can send the
+  game's own transfers: items are moved by the server's transaction, never copied or made
+  by the mod. Flow: the player places a second chest / station of the same kind (normal
+  placement, their own item), aims at it and presses Move -> the mod remembers it as the
+  target, then the player aims at the old one and presses Move -> the mod sends one
+  transfer per non-empty slot (or one MoveAllStacks) from the old inventory to the new one,
+  waits for the old one to report empty (`InventoryEmptyState.isEmpty`, or the game's
+  IsDismantleAllowed turning on), then runs the game's pick-up of the empty old one (the
+  dev2 request), which gives its item back. Net: contents moved, one object item back,
+  nothing created. Risks: (1) the server may require the source / target to be open or in
+  range (unknown: the handler of `consumedInventoryTransferAction` is not found yet), then
+  some transfers are refused and the old chest is simply not empty (the mod stops, nothing
+  lost); (2) a full target leaves the rest in the old one (same); (3) fuel and running
+  production are not inventory stacks: for a station, require it idle and accept the fuel
+  rule the game uses for pick-up (the game itself blocks a running station). Item loss is
+  only possible if the mod removed a non-empty object, which (b) never does: the removal is
+  the game's own pick-up, which refuses non-empty storage.
+  Diagnostics needed (dev3 logs them): `move: client transfer v... from ... slot ... to
+  ... type ... flags ... amount ...` while the player moves items by hand (drag one stack,
+  "take all", quick stack) between a chest and the inventory. That shows the entity ids
+  (chest entity vs. its linked inventory entity), slot ids and the flags the game uses.
+- **(c) simpler**: for objects the game only tears down (fires, braziers), swap the refund
+  for the pick-up refund (built in dev3, above): the object comes back whole, contents are
+  handled exactly as the game's tear-down. Nothing simpler exists for full chests: there is
+  no "pick up with contents" in the game (the carry-with-contents design would need the
+  item to hold an inventory, which items don't).

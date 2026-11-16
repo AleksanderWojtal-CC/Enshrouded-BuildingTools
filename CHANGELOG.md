@@ -13,7 +13,22 @@ changelog on Nexus Mods, so keep it short and written for players.
   plant in a pot...), when the only thing that turns the ghost red is the other object.
   Other reasons (too far, no build permission, no surface) still apply. Works in your own
   world and in a world you host; on a dedicated server the server must run Building Tools
-  with the option on (`[Objects] AllowOverlap=1` in its ini). Off by default.
+  with the option on (`[Objects] AllowOverlap=1` in its ini). Off by default. It also lets
+  an object stand where the game says the surface has the wrong angle (a chest against a
+  wall or on the side of another object).
+- **Exact rotation and nudge for objects** (#59), by FreyaFreed: with an object in hand,
+  turn, tilt and roll it by exact degrees on top of the game's own rotation, and nudge it
+  in cm along its own axes or the world's. Keys while an object is in hand: numpad 4 / 6
+  turn, 8 / 2 tilt, 7 / 9 roll, the arrows nudge right / left and away / closer (as you
+  look), numpad + / - up / down, numpad 5 resets; one press is 15 degrees or 5 cm (both
+  settable), with Ctrl 1. Keep Num Lock on. All keys can be changed or cleared on the Keys
+  page; they do nothing without an object in hand (if you walk with the arrow keys, clear
+  or change the nudge keys). The values, the steps and the axes are also in Object
+  settings. Works in the air with Free placement, and on a server you join (the server
+  places the object where your ghost is). With Overlap objects on, a nudge can push an
+  object into another one. **Object lines**: the rotation goes on every object of the
+  line (on top of Turn with the line), the nudge moves the whole line (also its height
+  when the objects stand on the ground).
 - With an object in hand the building box at the bottom right shows only the keys that
   work with objects (object mode, Free placement, the wheel, the menu).
 

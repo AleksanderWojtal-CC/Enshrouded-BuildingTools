@@ -355,6 +355,22 @@ needs nothing on the server.
 - **Single player.** The place hook does the same for the click's place info, in case the
   in-process server got the ghost from before the move.
 
+With the other object features:
+
+- **Overlap objects.** 29bfb0 runs after the placement check, on the moved transform (on
+  the client and again on the server). Without the option a nudge into another object
+  turns the ghost red (bit 8); with it the bit is cleared and the objects can merge. A
+  nudge into voxels passes either way (the collider query does not test voxels).
+- **Free placement.** The free cursor replaces the cursor transform before the placement
+  check, so the turns and the nudge go on the ghost in the air the same way.
+- **Object lines.** The click's place info is moved to the moved ghost
+  (`prop_place_fix`) before Object lines reads it, and `prop_ghost` moves the lines'
+  ghost (`g_ghost`) by the same nudge. So the clicked points carry the nudge (the whole
+  line moves) and every object gets the click's rotation with the turns, then the line's
+  own turn (`obj_spot_rot`). With the reference plane Ground the spots stand on the
+  ground, so `obj_plan_body` tests the ground without the nudge's height
+  (`prop_nudge_dy`) and adds it back to the spots and the drawn path.
+
 The values are plain settings (`[Objects]` Turn, Tilt, Roll, NudgeX/Y/Z,
 `NudgeWorldAxes`), changed by keys while an object is in hand (they stay the game's
 otherwise) or in the Object settings window; keys write the ini 2 s after the last press.
@@ -428,8 +444,10 @@ Any flag bit makes the ghost red and the click void. The function runs twice in 
 client's `client_cursor` (place cursor, aim) and twice in the server's
 `server_cursor_no_prediction`, which tests the transform the client sent and then ORs in
 the client's own bits 0, 8, 10 and 15. With `[Objects] AllowOverlap=1` the mod redirects
-every call of it (`hook_calls`) and clears only bit 8 when the query's item (+0x60) is an
-object. So the ghost turns valid and a server running the mod (single player, a hosted
+every call of it (`hook_calls`) and clears bit 8 and bit 10 `InvalidSurfaceNormal` (the
+item's attach-angle rule: floor / wall / ceiling; the placement check also turns it into
+bit 8 when the cursor hit another entity) when the query's item (+0x60) is an object.
+Bits still left are logged by name. So the ghost turns valid and a server running the mod (single player, a hosted
 game, or a dedicated server with the mod and the option) takes the click; a server
 without it still refuses. `PlaceProp` itself does no collision test.
 

@@ -66,9 +66,12 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   The wheel also has **Free placement** for objects (place them in the air) and **Overlap
   objects** (place an object inside another object; `[Objects] AllowOverlap`, off by
   default; on a dedicated server the server needs the mod with the option on).
-- **Exact rotation and nudge of objects**: turn, tilt and roll an object in hand by exact
-  degrees on top of the game's rotation, and nudge it by cm along its own axes or the
-  world's (numpad and arrow keys, or the Object settings window). Also on a server you join.
+- **Exact rotation and nudge of objects** (by FreyaFreed, #59): turn, tilt and roll an object
+  in hand by exact degrees on top of the game's rotation, and nudge it by cm along its own
+  axes or the world's (numpad and arrow keys while an object is in hand, Num Lock on, all
+  changeable on the Keys page; or the Object settings window). Also in the air with Free
+  placement and on a server you join; with Overlap objects a nudge can push an object into
+  another. In Object lines the rotation goes on every object and the nudge moves the line.
 - **Tools wheel** (hold Caps Lock): a blurred wheel drawn with the game's own wheel;
   point the mouse at an option and let go. It shows only what applies right now
   (Replace style while Replace is on, fill and corners in Area mode).

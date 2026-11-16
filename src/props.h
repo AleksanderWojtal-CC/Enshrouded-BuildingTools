@@ -108,6 +108,12 @@ static int prop_match(const double* pos, const float* rot, double tol, PropGhost
     }
     return best;
 }
+// how far the turns and the nudge lift the held object's ghost, metres (objects.h: Object lines on the
+// ground keep the nudge's height)
+static double prop_nudge_dy() {
+    const PropGhost g = prop_last();
+    return g.moved && prop_xf_now() ? (double)(g.movedPos[1] - g.pos[1]) / core::kFix : 0.0;
+}
 // the click's spot is next to this player's ghost from before the move (objects.h, own_click)
 static bool prop_at_base(const float* pos) {
     const PropGhost g = prop_last();

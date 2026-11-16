@@ -224,8 +224,8 @@ Object placement (an object in hand)
   line and gives them back (a line of more than 30 objects: its first 30). Saved
   in [Objects] of the ini; keys ObjectMode / ObjectSettings / ObjectUndo.
 
-Exact rotation and nudge (an object in hand)
-  On top of the game's own rotation, also when you join a server:
+Exact rotation and nudge (an object in hand; by FreyaFreed, #59)
+  On top of the game's own rotation, also when you join a server (Num Lock on):
     Numpad 6 / 4     turn about the object's up axis + / -
     Numpad 8 / 2     tilt about its X axis + / -
     Numpad 9 / 7     roll about its Z axis + / -
@@ -242,6 +242,16 @@ Exact rotation and nudge (an object in hand)
   object where it is, nudged or not. Saved in
   [Objects] of the ini (Turn, Tilt, Roll, NudgeX/Y/Z, NudgeWorldAxes, TurnStep,
   NudgeStep); keys ObjectTurnPlus ... ObjectResetRotation in [Keys].
+  The keys do nothing without an object in hand, and the game still gets them:
+  if you walk with the arrow keys, change or clear the nudge keys on the Keys
+  page (Delete clears). With Num Lock off the numpad sends the arrow, Home and
+  Page keys instead (numpad 7 = Home opens the menu).
+  With Free placement the nudge and the turns go on the ghost in the air. With
+  Overlap objects on, a nudge can push an object into another object (without
+  it the ghost turns red there). Object lines (Line, Curve, Circle...): the
+  rotation goes on every object of the line, on top of Turn with the line; the
+  nudge moves the clicked points, so the whole line moves (with the reference
+  plane Ground the objects stand on the ground, lifted by the up / down nudge).
 
 Tools wheel (hold Caps Lock)
   With the hammer or a building material in hand: a blurred wheel in the middle of the screen, drawn with the game's own wheel.
