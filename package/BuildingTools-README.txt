@@ -194,7 +194,15 @@ Undo after area actions
 Object placement (an object in hand)
   Hold an object (chair, torch, plant, anything that is not a building material)
   and hold Caps Lock: the wheel shows Objects (the mode), Object settings, Clear
-  points and the menu.
+  points, Free placement, Overlap objects and the menu.
+    Free placement   the object hangs in front of you instead of needing a
+                     surface (Q + wheel or Page Up / Page Down: distance)
+    Overlap objects  place an object overlapping or inside another object
+                     (the game's "area occupied" is ignored for objects; other
+                     reasons like distance or build permission still apply).
+                     Off by default ([Objects] AllowOverlap). In your own or a
+                     hosted world; on a dedicated server only when the server
+                     runs Building Tools with AllowOverlap=1 in its ini.
     Single           as the game (with random rotation / height if set)
     Line             click the start, then the end
     Curve            start, end, then a point the line bends through

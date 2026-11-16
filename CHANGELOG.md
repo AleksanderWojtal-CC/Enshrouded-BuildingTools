@@ -3,6 +3,20 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
+## 0.34.0 (in development)
+
+- **Objects in the air**: with an object in hand, the tools wheel (Caps Lock) now has
+  Free placement, so objects that need a surface (most of them) can be placed hanging in
+  the air. Q + mouse wheel or Page Up / Page Down set the distance as with blocks.
+- **Overlap objects** (#59): a new option in the object wheel and in Object settings lets
+  you place an object overlapping or inside another object (a candle in a bookshelf, a
+  plant in a pot...), when the only thing that turns the ghost red is the other object.
+  Other reasons (too far, no build permission, no surface) still apply. Works in your own
+  world and in a world you host; on a dedicated server the server must run Building Tools
+  with the option on (`[Objects] AllowOverlap=1` in its ini). Off by default.
+- With an object in hand the building box at the bottom right shows only the keys that
+  work with objects (object mode, Free placement, the wheel, the menu).
+
 ## 0.33.2
 
 - **Blueprints**: some blueprints built blocks that nothing could remove (hammer, Area

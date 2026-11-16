@@ -379,6 +379,25 @@ on and a building shape selected, a post-hook replaces the position with
 snapped to the 0.5 m grid, with the last valid rotation, and marks the transform valid.
 The game then shows its normal ghost there and places at it.
 
+Objects use the same cursor (query mode 4), so free placement works with an object in
+hand too (for an object the transform's +0x18 is the surface normal the placement check
+turns into the object's rotation; the last valid one is kept). The object wheel has the
+Free placement entry, and the building box shows only the object rows then.
+
+## Overlap objects
+
+After the placement check, `29bfb0(flags, sys, query, transform, ...)` tests the held item's
+placement collider at the ghost against the physics and sets `CursorFlag` bit 8
+`AreaOccupied` on a hit (the placement check sets the same bit for an uneven surface).
+Any flag bit makes the ghost red and the click void. The function runs twice in the
+client's `client_cursor` (place cursor, aim) and twice in the server's
+`server_cursor_no_prediction`, which tests the transform the client sent and then ORs in
+the client's own bits 0, 8, 10 and 15. With `[Objects] AllowOverlap=1` the mod redirects
+every call of it (`hook_calls`) and clears only bit 8 when the query's item (+0x60) is an
+object. So the ghost turns valid and a server running the mod (single player, a hosted
+game, or a dedicated server with the mod and the option) takes the click; a server
+without it still refuses. `PlaceProp` itself does no collision test.
+
 ## Creative building
 
 With `CreativeBuilding=1`:

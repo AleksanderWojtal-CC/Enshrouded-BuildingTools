@@ -1008,3 +1008,90 @@ all tested mod signatures match the file, so the disk image is plain).
   Log: "blur <element> <n>" for the first 6 calls (3 frames, pass 1 and 4), with style,
   blend mode, offscreen (layer allocated), passId and the window.
 - Released as 0.33.1 with BlurStyle 0 (offscreen layer) as the default.
+
+## 0.34.0-dev1: objects in the air, overlap, move (1.0.1.2 Hotfix #5 client RVAs)
+
+Analysed offline (tools/re, capstone 4.0.2) on the client exe sha 5d9ef2f1 and the
+dedicated server exe from 2026-11-12.
+
+### Free placement with an object
+- client_cursor (294620) builds the query with q[3] == 4 for props as for blocks, so
+  cursor_xf_hook's free placement already moves the object ghost (the object's transform
+  +0x18 is the surface normal there; the placement check 2994d0 builds the rotation from it).
+  Only the wheel entry and the HUD rows were missing.
+
+### Cursor flags (keen::ecs::CursorFlag, reflected)
+- 0 InvalidCursorTransform, 1 CursorOutsideBuildingZone, 2 CursorInsideFogZone,
+  3 CursorTooFarAway, 4 CursorInsideLenientBuildInhibitorZone, 5 ...StrictBuildInhibitorZone,
+  6 MaxAltarCountReached, 7 MaxWaterSourceCountReached, **8 AreaOccupied**, 9 EnemiesNearby,
+  10 InvalidSurfaceNormal, 11 InvalidCursorVoxelMaterial, 12 MissingMaterials,
+  13 ItemNotUnlocked, 14 NoPermission, 15 DisableCursor, 16 MaxTameAnimalCountReached,
+  17 CursorInsideWater, 18 SaveMemoryBudgetExhausted, 19 FactoriesBudgetExhausted.
+- Stored in ClientCursor +0x80 / +0x84 (primary / secondary), ClientCursorInput +0x70 /
+  +0x74 (sent to the server), ServerCursor +0x0c / +0x10.
+- Placement check 2994d0(flags, xf, ...): 0x8001 / 0x8000 (disable) early outs; flags = 1
+  (InvalidCursorTransform) when the cursor transform is invalid or its normal is zero
+  (299720, 29ad59); bit 10 InvalidSurfaceNormal via 29c250(flags, 10, set) at 299b5c; then
+  AreaOccupied (bit 8) when bit 10 is set and the cursor hit another entity
+  ([r15+0x60]+0x10 / +0x18) unless item +0x5d8 & 0x2000 (299b99); and when
+  CursorConfig.checkSurfaceTopology (item +0x1b5 = ItemInfo +0x16c CursorConfig +0x49) is on
+  and 29cc30 fails (29ac6a).
+- **29bfb0**(flags, sys, query, xf, u8, u8, float), right after the check: 29ad70 (zone /
+  distance / permission bits), bit 0 from 21e4f0 / 496440 / 21d890 (player state), bit 12
+  MissingMaterials from 28ab60. Then, unless query +0x54, AreaOccupied already set, or item
+  +0x5d8 & 0x2000: builds the placement collider at xf (28a920) and runs a physics overlap
+  query 9a5510 with the cursor system's collider mask [sys+0x5c8]; any hit -> `or [flags],
+  0x100` (29c1fc). This is the "overlaps another object" test.
+- Callers: client_cursor 295a8c (primary, xf rsi+0x10) / 295b10 (secondary, rsi+0x48), and
+  the server cursor (fn 29788b, server_cursor_no_prediction) 2989f1 / 298a63 with the
+  transform the client sent (PlayerInput r15, r15+0x38). Right after, 298ab0..298b51 OR the
+  client's bits 0, 10, 15 and **8** (ClientCursorInput +0x70 / +0x74) into ServerCursor
+  +0x0c / +0x10. So the server does its own collision test on the client's transform and
+  also trusts the client's AreaOccupied.
+- Dedicated server: same function at rva 9fb20 (same 42-byte signature SIG_CURSOR_FLAGS),
+  called at 9dd71 / 9dde3; client bits ORed at 9de39..9ded1.
+- place_prop (2da2e0) does no collision test; PlaceProp (48ddd0) neither. A vanilla server
+  refuses an overlapping object through its ServerCursor flags.
+- Mod: hook_calls on every call of 29bfb0 (4 client, 2 server); clears bit 8 when
+  [Objects] AllowOverlap, Object lines tool on, mod on and query +0x60 is an object
+  (prop_item). The ghost colour and the click both follow the flags. Not tested in game yet.
+
+### FreyaFreed's props-exact-rotation (issue #59 fork, based on 0.33.0)
+- props.h hooks the two 2994d0 calls (SIG_PROP_CHECK_CALL) and turns / nudges the stored
+  transform after the check. 29bfb0 runs after that on the moved transform, so a nudge into
+  another **object** still gives AreaOccupied (red); a nudge into voxels (walls) passes
+  because the collider query does not test voxels and the topology test ran on the old
+  spot. AllowOverlap complements it.
+- Their "the server needs nothing" holds for the transform (39420 copies PlayerInput +0x300 /
+  +0x338), but not for overlap: the server re-runs 29bfb0 on that transform.
+- Port onto 0.34.0-dev1 (git apply --3way of a5524c1..9647750): 5 small additive conflicts
+  in main.cpp (version, Config fields, ini load, signature list, do_act), one in
+  tests/test_core.cpp (new test next to the magic chest test), CHANGELOG, and the 15 lang
+  files (whole-file conflicts, fixed by tools/lang.py sync). props.h, core.h and strings.h
+  apply cleanly. Behaviour overlaps: input_encode_hook (exact mode patches the same cursor
+  slots), numpad / arrow default keys, hud_info.
+
+### Move (investigation only)
+- Use prompt: the entity's `InteractionOffer` (verbLoca, defaultAction actor sequence) and
+  `InteractionOfferRuntime` (0x38: verb ids, offerId, isOffered...). Remove prompt: the
+  dismantle hint, loca FbUiLocaGameplayActionLabels.buildingDismantle /
+  buildingDismantlePickup (+0x540 / +0x550; FbUiBundle +0x2e50 + that), a hold input
+  (UiPlayerInput +0x10 dismantleHoldProgress, ClientCursor +0x8b
+  selectedObjectDismantleHoverDelay). Both are game-side actor sequences / the dismantle
+  action; a third native prompt would need a new offer and a server-side sequence. The mod
+  can draw its own key hint (hud_key_row / floating text) while the cursor's
+  selectedObjectId is a prop.
+- Server pick-up: dismantle system (fn 2d8ee4) reads ServerCursor ([rbp+0x200]) +0x68
+  selectedObjectDismantleMethod (1 PickUp, 2 TearDown), refund list 492830, PayCost-style
+  495f20, then RemoveProp 490a30({u32 entity, u8 method}, item) at 2da0bb. ServerCursor
+  +0x58 selectedObjectId, +0x48 hoveredObjectId (GameObjectId {u64, u8 type}).
+- Containers: InventorySetup +0x50 flags bit 3 IndestructibleWhileNotEmpty,
+  InventoryEmptyState (+1 isEmpty), DismantleOverride (0x6: +1 method, +5
+  preventDismantlingWithFilledInventory). 3dca71 tests the flag with isEmpty (the
+  indestructible state). The game keeps non-empty storage from being picked up; where the
+  server turns the method off for it was not found.
+- Systems that move entities exist only for dynamic ones (move_colliders a1cfe0,
+  actor_teleport 274b50, render_transform_with_teleport 315210, lerp_transform 2ac910).
+  Placed props are static: StaticCollider, scene cells (SceneCellEntity: id, float3
+  position, template index), saved by position. Writing WorldTransform (9b3cb0) in place
+  would leave the collider, the scene cell, the clients' copies and the save behind.
