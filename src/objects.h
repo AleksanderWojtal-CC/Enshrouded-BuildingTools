@@ -36,6 +36,10 @@ static bool prop_item(const uint8_t* it) {
     if (it[0x427]) return false;                                               // requiresAltarSlot (flame altar)
     return true;
 }
+static volatile LONG g_overlapLogged = 0;          // the first object let through since the option changed is logged
+typedef uint64_t (*CursorFlagsFn)(uint32_t* flags, uint8_t* sys, uint8_t* q, uint8_t* xf, uint64_t a5, uint64_t a6, float a7);
+static CursorFlagsFn g_cursorFlagsOrig = nullptr;  // overlap objects (install_overlap)
+static void obj_set_overlap(bool on, bool save);
 static bool prop_now() { return g_propItem && (GetTickCount() - g_propTick < 300 || g_objWin); }   // the window stops the cursor
 // Joined someone else's world (the host's game runs the placement): only when known for sure. A game
 // you host (also when alone) runs the world in this process, so the lines work there.
@@ -497,6 +501,10 @@ static void draw_obj_window() {
         if (many && ui_int(T(S_OBJ_SPACING), g_cfg.objSpacing, 0, 100, 5, &iv)) g_cfg.objSpacing = iv;
         if (ui_int(T(S_OBJ_ROT), g_cfg.objRot, 0, 180, 5, &iv)) g_cfg.objRot = iv;
         if (ui_int(T(S_OBJ_ELEV), g_cfg.objElev, 0, 300, 5, &iv)) g_cfg.objElev = iv;
+        if (g_cursorFlagsOrig) {
+            const char* const offOn[] = { T(S_OPT_OFF), T(S_OPT_ON) };
+            if (ui_option(T(S_OBJ_OVERLAP), offOn, 2, g_cfg.objOverlap ? 1 : 0, &v)) obj_set_overlap(v != 0, false);
+        }
         const char* refs[core::OBJ_REF_COUNT] = { T(S_OBJ_REF_GROUND), T(S_OBJ_REF_LEVEL), T(S_OBJ_REF_SLOPE) };
         const bool flat = many && !core::obj_upright(g_cfg.objMode);   // arch / standing circle: their own height
         if (flat && ui_option(T(S_OBJ_REF), refs, core::OBJ_REF_COUNT, g_cfg.objRef, &v)) g_cfg.objRef = v;
@@ -524,6 +532,15 @@ static void obj_window_closed() {
     LOG(.str("objects: settings window closed"));
 }
 
+// Overlap objects on / off (wheel, settings window); the ini is written now (wheel) or when the window closes
+static void obj_set_overlap(bool on, bool save) {
+    g_cfg.objOverlap = on ? 1 : 0;
+    g_overlapLogged = 0;
+    if (save) write_full_ini(g_cfg);
+    Buf b; b.fmt(T(obj_remote() ? S_OBJ_OVERLAP_REMOTE : S_OBJ_OVERLAP_MSG), T(on ? S_OPT_ON : S_OPT_OFF)); flash(b.z());
+    LOG(.str("objects: overlap -> ").i(g_cfg.objOverlap).str(obj_remote() ? " (session remote: the server decides)" : ""));
+}
+
 // ---- tool actions
 static void obj_act(int a) {
     if (!obj_tool_on()) return;
@@ -540,6 +557,8 @@ static void obj_act(int a) {
     } else if (a == ACT_OBJ_CLEAR) {
         obj_clear("key");
         flash(T(S_OBJ_CLEARED));
+    } else if (a == ACT_OBJ_OVERLAP) {
+        obj_set_overlap(!g_cfg.objOverlap, true);
     }
     beep(MB_ICONQUESTION);
 }
@@ -710,6 +729,42 @@ static void install_undo_key() {
     g_buildModeOrig = (BuildModeFn)bmFn;
     if (hook_calls(bmFn, (void*)&build_mode_hook, &bmSite, 1) != 1) { g_buildModeOrig = nullptr; g_undoKey = nullptr; }
     LOG(.str("object undo: undo key with an object in hand ").str(g_undoKey ? "on" : "not hooked"));
+}
+
+// ---- overlap objects ([Objects] AllowOverlap)
+// The cursor's flags (keen::ecs::CursorFlag, ClientCursor +0x80 / +0x84, ServerCursor +0xc / +0x10):
+// bit 0 InvalidCursorTransform, 1 OutsideBuildingZone, 3 TooFarAway, 8 AreaOccupied, 10
+// InvalidSurfaceNormal, 12 MissingMaterials, 14 NoPermission, 15 DisableCursor ... Any bit set: red
+// ghost, the click does nothing. 29bfb0(flags, sys, query, transform, u8, u8, float) runs after
+// the placement check: it builds the held item's placement collider at the ghost's transform and
+// asks the physics for anything in it (9a5510); a hit sets AreaOccupied. The placement check
+// (2994d0) also sets AreaOccupied for an uneven surface (CursorConfig.checkSurfaceTopology) and
+// for a bad surface normal on another object (then InvalidSurfaceNormal is set as well).
+// The same function runs twice in client_cursor (the ghost) and twice in the server's cursor
+// system (server_cursor_no_prediction), which checks the transform the client sent and then
+// adds the client's own bits 0, 8, 10 and 15. So the hook clears AreaOccupied (only that bit,
+// only for an object: ItemInfo at query +0x60) on both sides: the ghost turns valid and the
+// server (single player, a hosted game, or a dedicated server running the mod with the option
+// on) takes the click. A server without it still refuses (its own collision test).
+static const uint32_t kFlagAreaOccupied = 1u << 8;
+static uint64_t cursor_flags_hook(uint32_t* flags, uint8_t* sys, uint8_t* q, uint8_t* xf, uint64_t a5, uint64_t a6, float a7) {
+    const uint64_t r = g_cursorFlagsOrig(flags, sys, q, xf, a5, a6, a7);
+    if (!g_cfg.objOverlap || !g_cfg.toolObjects || g_modOff || !flags || !(*flags & kFlagAreaOccupied)) return r;
+    uint8_t* it = q && readable(q + 0x60, 8) ? *(uint8_t**)(q + 0x60) : nullptr;
+    if (!prop_item(it)) return r;
+    *flags &= ~kFlagAreaOccupied;
+    if (!InterlockedExchange(&g_overlapLogged, 1))
+        LOG(.str("objects: overlap allowed (area occupied ignored), item ").x(*(uint32_t*)it).str(", flags left ").x(*flags));
+    return r;
+}
+static void install_overlap() {
+    uint8_t* fn = find_unique("CursorFlags", SIG_CURSOR_FLAGS);
+    if (fn) {
+        g_cursorFlagsOrig = (CursorFlagsFn)fn;
+        const int n = hook_calls(fn, (void*)&cursor_flags_hook, nullptr, 0);
+        if (n < 1) g_cursorFlagsOrig = nullptr;
+        LOG(.str("overlap objects: ").str(g_cursorFlagsOrig ? "available (" : "not hooked (").i(n).str(" calls), ").str(g_cfg.objOverlap ? "on" : "off"));
+    } else LOG(.str("overlap objects: not available (cursor flags function not found)"));
 }
 
 static void install_objects() {

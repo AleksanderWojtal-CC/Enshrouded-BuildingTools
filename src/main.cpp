@@ -212,7 +212,7 @@ struct Config {
     int bpPlaceRef = 5;                          // place window: the blueprint's point at the aimed block (core::EXACT_*; 5 = front middle)
     int keyBpSub = 0;                            // Blueprint mode: save <-> place
     int bpObjects = 1;                           // build the blueprint's objects (else blocks only)
-    int objMode = 0, objCount = 10, objSpacing = 0, objRot = 0, objElev = 0, objRef = 0, objTurn = 1, objSeed = 1;
+    int objMode = 0, objCount = 10, objSpacing = 0, objRot = 0, objElev = 0, objRef = 0, objTurn = 1, objSeed = 1, objOverlap = 0;
     char language[16] = "auto";  // text language: auto (as the game), or a file code (pl, de, ...)
 };
 static Config g_cfg;
@@ -318,6 +318,9 @@ static void write_full_ini(const Config& c) {
      .t(";     2 = slope (straight from click to click)\r\nReference=").i(c.objRef).t("\r\n")
      .t("; 1 = objects turn with the line (circle: around the centre), 0 = all as the ghost\r\nTurnWithLine=").i(c.objTurn).t("\r\n")
      .t("; Random values (the settings window rolls new ones)\r\nSeed=").i(c.objSeed).t("\r\n")
+     .t("; 1 = objects can be placed overlapping or inside other objects (the game's \"area occupied\" is ignored).\r\n")
+     .t(";     Works where the world runs: your own game, or a dedicated server with Building Tools and this on.\r\n")
+     .t("AllowOverlap=").i(c.objOverlap).t("\r\n")
      .t("\r\n[Blueprints]\r\n")
      .t("; Saved in the BuildingTools-Blueprints folder next to enshrouded.exe.\r\n")
      .t("; 1 = build the part of a blueprint the materials cover, 0 = build nothing unless all are there\r\nAllowPartial=").i(c.bpPartial).t("\r\n")
@@ -435,6 +438,7 @@ static void load_config() {
         g_cfg.objRef     = clampv(ini_int(L"Objects", L"Reference", 0), 0, core::OBJ_REF_COUNT - 1, 0);
         g_cfg.objTurn    = ini_int(L"Objects", L"TurnWithLine", 1) != 0;
         g_cfg.objSeed    = ini_int(L"Objects", L"Seed", 1);
+        g_cfg.objOverlap = ini_int(L"Objects", L"AllowOverlap", 0) != 0;
     }
     bool noLanguage;
     {
@@ -814,6 +818,9 @@ static const char* SIG_RENDER_FRAME = "4C 89 44 24 18 48 89 4C 24 08 55 53 56 57
 static const char* SIG_CURSOR_XF = "48 8B C4 55 53 56 57 41 56 48 8D 6C 24 90 48 81 EC 70 01 00 00 0F 29 70 C8";
 // object placement (objects.h): place_prop's PlaceProp call (E8 at +0x11) and its two PayCost calls
 // (E8 at +0xf / +0x11); client_cursor's second cursor query call (E8 at +0x1a; its cursor transform call follows at +0x5c)
+// The cursor flags check after the placement check (29bfb0 on 1.0.1.2: the placement collider against
+// the physics -> AreaOccupied); 4 calls in the client (2 client_cursor, 2 server cursor), 2 in the server
+static const char* SIG_CURSOR_FLAGS = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 56 41 57 48 8D 6C 24 C0 48 81 EC 40 01 00 00 0F B6 85 88 00 00 00 4D 8B F1";
 static const char* SIG_PROP_PLACE_CALL = "44 8B 07 48 8D 95 20 01 00 00 48 8D 8D 70 01 00 00 E8 ?? ?? ?? ?? 0F B6 D8";
 static const char* SIG_PROP_PAY_A = "49 8D 90 10 01 00 00 45 0F B6 80 F8 01 00 00 E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ??";
 static const char* SIG_PROP_PAY_B = "41 B0 01 48 8D 95 C0 04 00 00 48 8D 8D D0 03 00 00 E8 ?? ?? ?? ?? 84 C0";
@@ -4576,6 +4583,7 @@ enum {
     ACT_KEYED,          // the actions above have their own key
     ACT_MENU = ACT_KEYED,             // the wheel's menu entry (the menu key is handled with the menu)
     ACT_OBJ_CLEAR,                    // the wheel's "clear points" of object placement
+    ACT_OBJ_OVERLAP,                  // the wheel's "overlap objects" ([Objects] AllowOverlap)
 };
 static int* const kActKey[ACT_KEYED] = {
     &g_cfg.keyStructure, &g_cfg.keyReplace, &g_cfg.keyCancel, &g_cfg.keyStyle, &g_cfg.keyHover,
@@ -4625,7 +4633,7 @@ static bool act_allowed(int a) {
     case ACT_OVERHANG: case ACT_ROUND_HOLLOW: case ACT_ROUND_LYING: return g_cfg.toolArea && g_cfg.toolShapes;
     case ACT_AREA: case ACT_CLEAR: case ACT_FILL: case ACT_FILL_SOLID: case ACT_FILL_HOLLOW: case ACT_FILL_WALLS:
     case ACT_PREFAB: case ACT_AREA_ON: case ACT_THICK: case ACT_EXACT: return g_cfg.toolArea != 0;
-    case ACT_OBJ_MODE: case ACT_OBJ_MENU: case ACT_OBJ_CLEAR: return g_cfg.toolObjects != 0;
+    case ACT_OBJ_MODE: case ACT_OBJ_MENU: case ACT_OBJ_CLEAR: case ACT_OBJ_OVERLAP: return g_cfg.toolObjects != 0;
     case ACT_BP: case ACT_BP_SUB: return g_cfg.toolBlueprint != 0;
     default: return true;
     }
@@ -4643,7 +4651,7 @@ static bool prop_now();
 static void obj_clear(const char* why);
 static void do_act(int a) {
     if (!act_allowed(a)) return;
-    if (a == ACT_OBJ_MODE || a == ACT_OBJ_MENU || a == ACT_OBJ_CLEAR) { obj_act(a); return; }
+    if (a == ACT_OBJ_MODE || a == ACT_OBJ_MENU || a == ACT_OBJ_CLEAR || a == ACT_OBJ_OVERLAP) { obj_act(a); return; }
     if (a == ACT_CLEAR && prop_now()) { obj_act(ACT_OBJ_CLEAR); return; }
     switch (a) {
     case ACT_BP: case ACT_BP_SUB: {
@@ -6160,6 +6168,7 @@ static int wheel_entries(int* act) {
         act[n++] = ACT_OBJ_MENU;
         if (g_objPtN) act[n++] = ACT_OBJ_CLEAR;
         act[n++] = ACT_FREE;                 // objects that need a surface can then be placed in the air
+        if (g_cursorFlagsOrig) act[n++] = ACT_OBJ_OVERLAP;
         act[n++] = ACT_MENU;
         int k = 0;
         for (int i = 0; i < m; i++) if (act_allowed(all[i]) && k < kWheelSlots) out[k++] = all[i];
@@ -6213,6 +6222,7 @@ static void wheel_texts(int a, char* name, char* value) {
     case ACT_OBJ_MODE: nm = T(S_WHEEL_OBJ_MODE); v = T(kObjModeName[g_cfg.objMode % core::OBJ_MODE_COUNT]); break;
     case ACT_OBJ_MENU: nm = T(S_WHEEL_OBJ_MENU); break;
     case ACT_OBJ_CLEAR: nm = T(S_WHEEL_OBJ_CLEAR); break;
+    case ACT_OBJ_OVERLAP: nm = T(S_WHEEL_OBJ_OVERLAP); v = T(g_cfg.objOverlap ? S_OPT_ON : S_OPT_OFF); break;
     case ACT_CREATIVE: nm = T(S_OPT_CREATIVE); v = T(g_cfg.creative ? S_OPT_ON : S_OPT_OFF); break;
     case ACT_STYLE: nm = T(S_OPT_STYLE); v = T(styles[g_replaceStyle == STYLE_OVERLAP ? 1 : g_replaceStyle == STYLE_CONNECTED ? 2 : 0]); break;
     case ACT_REPLACE: nm = T(S_OPT_REPLACE); v = T(g_replace ? S_OPT_ON : S_OPT_OFF); break;
@@ -6766,6 +6776,7 @@ static DWORD WINAPI init_thread(void*) {
     uint8_t* cxf = find_hookable("CursorTransform", SIG_CURSOR_XF, 5);
     if (cxf) g_cxOrig = (CursorXfFn)hook(cxf, 5, (void*)&cursor_xf_hook);
     if (g_cxOrig) g_cxFn = cxf;
+    install_overlap();                              // also on a dedicated server
     install_objects();
     if (!g_cxOrig) LOG(.str("free placement not available"));
     if (!g_dedicated) if (uint8_t* rf = find_hookable("RenderFrame", SIG_RENDER_FRAME, 5)) g_renderFrameOrig = hook(rf, 5, (void*)render_frame_thunk);

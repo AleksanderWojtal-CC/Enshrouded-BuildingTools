@@ -282,6 +282,10 @@
     X(S_WHEEL_OBJ_MODE, "obj.wheel_mode", "Objects") \
     X(S_WHEEL_OBJ_MENU, "obj.wheel_menu", "Object settings") \
     X(S_WHEEL_OBJ_CLEAR, "obj.wheel_clear", "Clear points") \
+    X(S_WHEEL_OBJ_OVERLAP, "obj.wheel_overlap", "Overlap objects") \
+    X(S_OBJ_OVERLAP, "obj.overlap", "Overlap objects (place inside other objects)") \
+    X(S_OBJ_OVERLAP_MSG, "obj.overlap_msg", "Overlap objects: {0}") \
+    X(S_OBJ_OVERLAP_REMOTE, "obj.overlap_remote", "Overlap objects: {0} (the server must run Building Tools with it on too)") \
     X(S_ACT_OBJ_MODE, "obj.key_mode", "Object placement: next mode (single, line, curve, circle, arch, standing circle)") \
     X(S_ACT_OBJ_MENU, "obj.key_menu", "Object placement: settings window") \
     X(S_ACT_OBJ_UNDO, "obj.key_undo", "Object placement: undo (object in hand)") \
