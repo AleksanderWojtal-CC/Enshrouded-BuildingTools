@@ -63,7 +63,8 @@ A mod for **Enshrouded 1.0, Patch #1, Hotfix #4 and Hotfix #5** (single player a
   optional random spacing, rotation and height, on the ground under each object, level
   or along a slope, turned with the line if you like. In worlds you host. Undo (Y with
   the object in hand, or the hammer's undo) takes back the last object or the whole line.
-  The wheel also has **Free placement** for objects (place them in the air) and **Overlap
+  The wheel also has **Free placement** for objects (place them in the air; on the 0.5 m
+  grid only while the game's snapping is on) and **Overlap
   objects** (place an object inside another object; `[Objects] AllowOverlap`, off by
   default; on a dedicated server the server needs the mod with the option on).
 - **Exact rotation and nudge of objects** (by FreyaFreed, #59): turn, tilt and roll an object

@@ -196,7 +196,9 @@ Object placement (an object in hand)
   and hold Caps Lock: the wheel shows Objects (the mode), Object settings, Clear
   points, Free placement, Overlap objects and the menu.
     Free placement   the object hangs in front of you instead of needing a
-                     surface (Q + wheel or Page Up / Page Down: distance)
+                     surface (Q + wheel or Page Up / Page Down: distance).
+                     It follows the game's snapping key: snapping on = the
+                     0.5 m grid, off = it moves smoothly with your view
     Overlap objects  place an object overlapping or inside another object
                      (the game's "area occupied" is ignored for objects; other
                      reasons like distance or build permission still apply).

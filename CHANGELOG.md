@@ -7,7 +7,9 @@ changelog on Nexus Mods, so keep it short and written for players.
 
 - **Objects in the air**: with an object in hand, the tools wheel (Caps Lock) now has
   Free placement, so objects that need a surface (most of them) can be placed hanging in
-  the air. Q + mouse wheel or Page Up / Page Down set the distance as with blocks.
+  the air. Q + mouse wheel or Page Up / Page Down set the distance as with blocks. The
+  object follows the game's own snapping key: with snapping on it sits on the 0.5 m grid,
+  with snapping off it moves smoothly with your view (blocks always stay on the grid).
 - **Overlap objects** (#59): a new option in the object wheel and in Object settings lets
   you place an object overlapping or inside another object (a candle in a bookshelf, a
   plant in a pot...), when the only thing that turns the ghost red is the other object.

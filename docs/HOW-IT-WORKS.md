@@ -446,6 +446,14 @@ hand too (for an object the transform's +0x18 is the surface normal the placemen
 turns into the object's rotation; the last valid one is kept). The object wheel has the
 Free placement entry, and the building box shows only the object rows then.
 
+An object snaps to the 0.5 m grid only when the game would snap it: the cursor query
+(28c430) sets its byte +0xe from the item's `CursorConfig.translationConfig`
+(`defaultSnapping`, `canToggleSnapping`) and, for items that can toggle, the player's
+`InVoxelGridSnappingMode` flag (the snapping key). With that byte clear the free position
+is `camera + forward × distance` unrounded, so the object moves smoothly. Blocks always
+stay on the grid. The object's rotation does not depend on the snapping key (its axis
+rotation configs come from the item alone), so nothing changes there.
+
 ## Overlap objects
 
 After the placement check, `29bfb0(flags, sys, query, transform, ...)` tests the held item's

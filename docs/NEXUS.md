@@ -100,7 +100,7 @@ click places them all. Set the number of objects, random spacing, rotation and h
 reference plane (ground under each object, level or slope) and whether they turn with the
 line. In worlds you host. Undo works for objects too: Y with the object in hand (or the
 hammer's undo) takes back the last object or the whole line and gives them back.
-The object wheel also has Free placement (objects hanging in the air) and Overlap objects
+The object wheel also has Free placement (objects hanging in the air, on the 0.5 m grid only while the game's snapping is on) and Overlap objects
 (an object inside or against another object; on a dedicated server the server needs the
 mod with [Objects] AllowOverlap=1).
 

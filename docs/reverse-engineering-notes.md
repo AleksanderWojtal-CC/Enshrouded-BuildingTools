@@ -1318,3 +1318,26 @@ Options:
 - Mod (props.h `raw_input_hook`): the game's IAT slot points at the hook; with an object in
   hand a bound object key's MakeCode becomes 0xff; per scan code it remembers whether the
   game saw the press (its release passes) or not (its release is kept back too).
+
+## 0.34.0-dev6: the game's snapping toggle (1.0.1.2 Hotfix #5 client RVAs)
+
+Analysed offline (tools/re) on the client exe sha 5d9ef2f1. Report: free placement put
+objects on the 0.5 m grid even with the game's snapping off.
+
+- The snapping key's state is a player flag: `ecs::PlayerFlags` 9 InBlueprintSnappingMode,
+  10 InVoxelGridSnappingMode, kept in `ecs::PlayerState.playerStateMask` (+0x34). The cursor
+  system reaches it as `[sys+0x120]+0x34` (bits 0x200 / 0x400). Input types:
+  `PlayerInputType` 41 BuildingBlueprintSnapping, 42 BuildingVoxelGridSnapping; config
+  action `GameplayAction` 71 BuildingSnapping.
+- The cursor query 28c430(q, sys, item, ...) turns it into the query: the item's
+  `CursorConfig` sits at item+0x16c, so `translationConfig` {defaultSnapping, canToggleSnapping}
+  is item+0x18f / +0x190 (attachAngleConfig item+0x19d -> q+0x28, axis rotation configs
+  item+0x191..0x196 -> q+0x14..0x19, all straight from the item). r9 = !canToggle &&
+  defaultSnapping, r10 = canToggle && (mask & 0x400). Object path (28c728): q[0xe] = q[0xf] =
+  r9 || r10 || (a template object case, dl == 2); q[0x10] = (mask & 0x200) && item+0x18e
+  (blueprint snapping). So q[0xe] = "snap to the voxel grid" as the game decides it.
+- The axis rotation configs (WorldGrid rotation snapping, 28b840 / 28c0a0 in 2994d0) do not
+  depend on the toggle: the snapping key does not change how an object turns.
+- dev6: the free placement post-hook rounds an object's position to 0.5 m only when q[0xe] is
+  set, else writes `camera + forward × distance` unrounded; blocks keep the grid. Logs
+  "free placement: object snapping on/off (query e/f/10 .., player state mask ..)" on change.

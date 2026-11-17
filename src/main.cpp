@@ -21,7 +21,7 @@ using core::Aabb;
 using core::I3;
 
 #define MOD_NAME    "Building Tools"
-#define MOD_VERSION "0.34.0-dev5"
+#define MOD_VERSION "0.34.0-dev6"
 
 // -------------------------------------------------------------- freestanding
 extern "C" {
@@ -1109,7 +1109,8 @@ static void drain_sounds() {
 // {int64 pos[3], float rot[4] @0x18, bool valid @0x28}. With free placement on and a
 // building shape selected (query mode 4) the cursor hovers in front of the camera at
 // g_hoverDist instead of attaching to the surface hit by the ray, snapped to the
-// 0.5 m building grid. sys+0x640 = camera position (fixed point), sys+0x658 = camera
+// 0.5 m building grid (an object only while the game's snapping is on for it).
+// sys+0x640 = camera position (fixed point), sys+0x658 = camera
 // rotation quaternion (forward = third matrix row, see 42880).
 static volatile LONG g_hover = 0;
 static volatile LONG g_fill = 0;              // core::FILL_*
@@ -1332,7 +1333,25 @@ static uint8_t* cursor_xf_hook(uint8_t* out, uint8_t* sys, uint8_t* q, uint8_t* 
     const double M = 4294967296.0, grid = 0.5 * M;
     int64_t* pos = (int64_t*)out;
     const float dist = g_hover ? g_hoverDist : 4.f;
-    for (int a = 0; a < 3; a++) pos[a] = round_grid((double)cam[a] + (double)f[a] * dist * M, grid);
+    // Blocks stay on the 0.5 m grid (voxels need it). An object follows the game's own snapping:
+    // the cursor query's byte +0xe (built by 28c430 from the item's CursorConfig.translationConfig
+    // and the player's InVoxelGridSnappingMode flag, PlayerState mask bit 10, the snapping key)
+    const bool obj = prop_now();
+    const bool snap = !obj || q[0xe] != 0;
+    if (obj) {
+        static LONG lastSnap = -1;
+        const LONG s = snap ? 1 : 0;
+        if (InterlockedExchange(&lastSnap, s) != s) {
+            const uint8_t* ps = readable(sys + 0x120, 8) ? *(uint8_t* const*)(sys + 0x120) : nullptr;
+            const uint32_t mask = ps && readable(ps + 0x34, 4) ? *(const uint32_t*)(ps + 0x34) : 0xffffffffu;
+            LOG(.str("free placement: object snapping ").str(snap ? "on" : "off").str(" (query e/f/10 ").u(q[0xe]).c('/').u(q[0xf]).c('/').u(q[0x10])
+                .str(", player state mask ").x(mask).c(')'));
+        }
+    }
+    for (int a = 0; a < 3; a++) {
+        const double v = (double)cam[a] + (double)f[a] * dist * M;
+        pos[a] = snap ? round_grid(v, grid) : (int64_t)(v < 0 ? v - 0.5 : v + 0.5);
+    }
     for (int k = 0; k < 4; k++) rot[k] = g_lastRot[k];
     out[0x28] = 1;
     return r;
