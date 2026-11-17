@@ -237,8 +237,7 @@ Exact rotation and nudge (an object in hand; by FreyaFreed, #59)
     Numpad 5         reset rotation and nudge
     Numpad 0 (held)  steps of 1 degree / 1 cm
   One press turns 15 degrees or nudges 5 cm; with numpad 0 held, 1. Held keys
-  repeat. (Until 0.34.0-dev4 the nudge was on the arrows and Ctrl gave steps of
-  1; an ini that still has those old defaults moves to this layout by itself.)
+  repeat.
   The ghost shows the result, the text under the crosshair the values. They stay
   until you reset them (also for the next objects). Object settings (Caps Lock
   wheel) has the same values to set by number, the key steps, and whether the

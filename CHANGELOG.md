@@ -3,7 +3,7 @@
 Each `## x.y.z` section is used as the release notes on GitHub and as the file
 changelog on Nexus Mods, so keep it short and written for players.
 
-## 0.34.0 (in development)
+## 0.34.0
 
 - **Objects in the air**: with an object in hand, the tools wheel (Caps Lock) now has
   Free placement, so objects that need a surface (most of them) can be placed hanging in
@@ -25,8 +25,8 @@ changelog on Nexus Mods, so keep it short and written for players.
   9 / 7 turn, 3 / 1 tilt, * / / roll, 5 resets; one press is 15 degrees or 5 cm (both
   settable), with numpad 0 held 1. Keep Num Lock on. All keys can be changed or cleared on
   the Keys page; they do nothing without an object in hand, and while an object is in hand
-  the game does not get them, so they never move your character. The values, the steps and the axes are also in Object
-  settings. Works in the air with Free placement, and on a server you join (the server
+  the game does not get them, so they never move your character. The values, the steps
+  and the axes are also in Object settings. Works in the air with Free placement, and on a server you join (the server
   places the object where your ghost is). With Overlap objects on, a nudge can push an
   object into another one. **Object lines**: the rotation goes on every object of the
   line (on top of Turn with the line), the nudge moves the whole line (also its height

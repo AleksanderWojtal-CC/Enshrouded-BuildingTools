@@ -353,8 +353,8 @@ needs nothing on the server.
   reaches the game as 0xff, so the player does not walk or crouch. The mod reads its keys
   with `GetAsyncKeyState`, which this does not touch. No stuck keys: a release is kept back
   only when its press was, and a key the game saw go down also gets its release; a key still
-  held after the object left the hand reaches the game with its next repeat. Default keys are all on the numpad (0.34.0-dev5); an ini
-  without `ObjectKeysLayout=2` whose object keys are all the dev4 defaults (arrows, Ctrl) moves
+  held after the object left the hand reaches the game with its next repeat. Default keys
+  are all on the numpad (since 0.34.0-dev5); an ini without `ObjectKeysLayout=2` whose object keys are all the dev4 defaults (arrows, Ctrl) moves
   to them once.
 - **Keys.** The nudge keys follow the camera: right / left and away / closer step the
   axis of the nudge's frame (the object's or the world's) that points most that way,
